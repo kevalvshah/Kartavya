@@ -1263,53 +1263,6 @@ function TaskEditor({ open, onOpenChange, editing, categories, teams, onSaved })
             </div>
           </div>
         </div>
-                    <div data-testid="task-editor-assign-members" className="grid gap-2 md:grid-cols-2">
-                      {teamMembers.length === 0 ? (
-                        <div data-testid="task-editor-assign-members-empty" className="text-sm text-muted-foreground">
-                          No active members found.
-                        </div>
-                      ) : (
-                        teamMembers.map((m) => {
-                          const checked = (form.assignee_user_ids || []).includes(m.user_id);
-                          return (
-                            <label
-                              key={m.user_id}
-                              data-testid={`task-editor-assign-member-${m.user_id}`}
-                              className={cn(
-                                "flex items-center gap-2 rounded-2xl border border-border/60 bg-background/40 px-3 py-2 text-sm",
-                                "transition-colors duration-150 hover:bg-muted/40",
-                              )}
-                            >
-                              <input
-                                data-testid={`task-editor-assign-member-checkbox-${m.user_id}`}
-                                type="checkbox"
-                                checked={checked}
-                                onChange={(e) => {
-                                  const isOn = e.target.checked;
-                                  setForm((p) => {
-                                    const cur = new Set(p.assignee_user_ids || []);
-                                    if (isOn) cur.add(m.user_id);
-                                    else cur.delete(m.user_id);
-                                    return { ...p, assignee_user_ids: Array.from(cur) };
-                                  });
-                                }}
-                              />
-                              <span className="truncate">{m.email}</span>
-                            </label>
-                          );
-                        })
-                      )}
-                    </div>
-                  ) : null}
-
-                  <div data-testid="task-editor-assign-hint" className="text-xs text-muted-foreground">
-                    Assignment triggers in-app + browser push notifications (if enabled).
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
 
         <div className="grid gap-3 md:grid-cols-2">
           <div>
