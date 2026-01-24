@@ -134,8 +134,17 @@ async def ensure_vapid_keys() -> Dict[str, str]:
 
     v = Vapid()
     v.generate_keys()
-    public_key = v.public_key.public_bytes().decode("utf-8")
-    private_key = v.private_key.private_bytes().decode("utf-8")
+
+    # py-vapid exposes helpers to write PEM. We'll capture PEM strings.
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as d:
+        priv_path = os.path.join(d, "vapid_private.pem")
+        pub_path = os.path.join(d, "vapid_public.pem")
+        v.save_key(priv_path)
+        v.save_public_key(pub_path)
+        private_key = Path(priv_path).read_text()
+        public_key = Path(pub_path).read_text()
 
     subject = os.environ.get("VAPID_SUBJECT", "mailto:admin@taskflow")
     await db.app_settings.update_one(
