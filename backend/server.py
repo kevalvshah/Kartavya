@@ -1315,4 +1315,9 @@ async def startup():
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
+    # Stop scheduler
+    task = getattr(app.state, "reminder_task", None)
+    if task:
+        task.cancel()
+
     client.close()
