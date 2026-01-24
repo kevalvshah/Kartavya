@@ -220,7 +220,7 @@ export default function TeamsPage() {
                   </div>
 
                   <div data-testid="teams-permissions-note" className="mt-4 text-xs text-muted-foreground">
-                    Note: You can promote/demote admins. "Owner" is the original creator, but you can transfer ownership by setting another member to Owner.
+                    Note: You can promote/demote admins. <span className="font-medium">Owner</span> is the original creator, but you can transfer ownership by setting another member to Owner.
                   </div>
                 </div>
               </>
