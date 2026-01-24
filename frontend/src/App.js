@@ -956,19 +956,30 @@ function TaskEditor({ open, onOpenChange, editing, categories, teams, onSaved })
     if (!form.team_id) {
       setTeamMembers([]);
       setYourRole("member");
+      setTeamPermLoading(false);
       return;
     }
 
+    let mounted = true;
+    setTeamPermLoading(true);
     (async () => {
       try {
         const res = await api.get(`/teams/${form.team_id}`);
+        if (!mounted) return;
         setTeamMembers((res.data.members || []).filter((m) => m.status === "active" && m.user_id));
         setYourRole(res.data.your_role || "member");
       } catch (e) {
+        if (!mounted) return;
         setTeamMembers([]);
         setYourRole("member");
+      } finally {
+        if (mounted) setTeamPermLoading(false);
       }
     })();
+
+    return () => {
+      mounted = false;
+    };
   }, [open, form.team_id]);
 
   const canEditAssignments = !isTeamTask || yourRole === "owner" || yourRole === "admin";
