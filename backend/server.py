@@ -1309,6 +1309,12 @@ async def startup():
     import asyncio
 
     if not getattr(app.state, "reminder_task", None):
+
+    # Stop scheduler
+    task = getattr(app.state, "reminder_task", None)
+    if task:
+        task.cancel()
+
         app.state.reminder_task = asyncio.create_task(reminder_scheduler_loop())
 
 
