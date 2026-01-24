@@ -1,38 +1,68 @@
-.App {
-    text-align: center;
+/* App-level styling is handled via Tailwind in most places.
+   Keep this file minimal and DO NOT center-align the entire app container. */
+
+:root {
+  --bg: 250 250 252;
+  --fg: 18 18 24;
+  --card: 255 255 255;
+  --muted: 240 241 246;
+  --border: 226 229 240;
 }
 
-.App-logo {
-    height: 40vmin;
-    pointer-events: none;
+.dark {
+  --bg: 13 13 18;
+  --fg: 244 244 248;
+  --card: 18 18 24;
+  --muted: 28 28 36;
+  --border: 44 44 56;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-    .App-logo {
-        animation: App-logo-spin infinite 20s linear;
-    }
+body {
+  background: rgb(var(--bg));
+  color: rgb(var(--fg));
 }
 
-.App-header {
-    background-color: #0f0f10;
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    font-size: calc(10px + 2vmin);
-    color: white;
+/* Tailwind helpers */
+.bg-app {
+  background: rgb(var(--bg));
 }
 
-.App-link {
-    color: #61dafb;
+.text-foreground {
+  color: rgb(var(--fg));
 }
 
-@keyframes App-logo-spin {
-    from {
-        transform: rotate(0deg);
-    }
-    to {
-        transform: rotate(360deg);
-    }
+.bg-card\/50 {
+  background: color-mix(in srgb, rgb(var(--card)) 50%, transparent);
+}
+
+.bg-card\/60 {
+  background: color-mix(in srgb, rgb(var(--card)) 60%, transparent);
+}
+
+.bg-card\/70 {
+  background: color-mix(in srgb, rgb(var(--card)) 70%, transparent);
+}
+
+.bg-background\/30 {
+  background: color-mix(in srgb, rgb(var(--bg)) 30%, transparent);
+}
+
+.bg-background\/35 {
+  background: color-mix(in srgb, rgb(var(--bg)) 35%, transparent);
+}
+
+.bg-background\/40 {
+  background: color-mix(in srgb, rgb(var(--bg)) 40%, transparent);
+}
+
+.text-muted-foreground {
+  color: color-mix(in srgb, rgb(var(--fg)) 62%, transparent);
+}
+
+.bg-muted {
+  background: rgb(var(--muted));
+}
+
+.border-border {
+  border-color: rgb(var(--border));
 }
