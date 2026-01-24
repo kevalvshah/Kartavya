@@ -602,9 +602,6 @@ async def dashboard_summary(user: Dict[str, Any] = Depends(get_current_user)):
     now = now_utc()
     due_24h_end = now + timedelta(hours=24)
 
-    def _count(q: Dict[str, Any]) -> int:
-        # motor count_documents is async; wrapper below
-        raise RuntimeError
 
     todo = await db.tasks.count_documents({"user_id": user_id, "status": "todo"})
     in_progress = await db.tasks.count_documents({"user_id": user_id, "status": "in_progress"})
