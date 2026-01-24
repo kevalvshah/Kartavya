@@ -516,16 +516,30 @@ class TaskFlowAPITester:
 
     def run_all_tests(self):
         """Run all backend tests"""
-        print("🚀 Starting TaskFlow Backend API Tests")
+        print("🚀 Starting TaskFlow Team Collaboration & Notifications Tests")
         print(f"Base URL: {self.base_url}")
         print(f"Session Token: {self.session_token}")
         
         try:
+            # Basic auth test
             self.test_auth_endpoints()
-            self.test_dashboard_endpoints()
+            
+            # Team collaboration features
+            self.test_teams_crud()
+            self.test_team_members()
+            self.test_team_invite_activation()
+            self.test_team_tasks()
+            self.test_task_permissions()
+            
+            # Notification system
+            self.test_notifications()
+            self.test_reminders()
+            self.test_push_integration()
+            
+            # Quick test of basic functionality (categories for team tasks)
             self.test_categories_crud()
-            self.test_tasks_crud()
-            self.test_task_filtering()
+            
+            # Cleanup
             self.cleanup_test_data()
             
         except Exception as e:
