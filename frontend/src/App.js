@@ -588,11 +588,13 @@ function TasksListPage() {
 
   const onCreate = () => {
     setEditing(null);
+    setEditorKey(`new_${Date.now()}`);
     setEditorOpen(true);
   };
 
   const onEdit = (task) => {
     setEditing(task);
+    setEditorKey(`edit_${task.task_id}`);
     setEditorOpen(true);
   };
 
