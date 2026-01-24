@@ -1305,6 +1305,13 @@ async def startup():
     except Exception:
         pass
 
+    # Start background reminder scheduler
+    import asyncio
+
+    if not getattr(app.state, "reminder_task", None):
+        app.state.reminder_task = asyncio.create_task(reminder_scheduler_loop())
+
+
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
