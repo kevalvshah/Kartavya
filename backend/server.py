@@ -1181,12 +1181,6 @@ async def mark_read(payload: MarkReadIn, user: Dict[str, Any] = Depends(get_curr
     return {"ok": True}
 
 
-    # Stop scheduler
-    task = getattr(app.state, "reminder_task", None)
-    if task:
-        task.cancel()
-
-
 @api_router.post("/notifications/process")
 async def process_notifications(user: Dict[str, Any] = Depends(get_current_user)):
     # Create reminder notifications for tasks where reminder time has passed and not sent.
