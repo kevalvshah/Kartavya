@@ -107,10 +107,19 @@ async def normalize_orders(scope: Dict[str, Any], status: str) -> None:
         .to_list(5000)
     )
 
+    for idx, t in enumerate(tasks):
+        if t.get("order") != idx:
+            await db.tasks.update_one(
+                {"task_id": t["task_id"]},
+                {"$set": {"order": idx, "updated_at": now_utc()}},
+            )
+
 
 async def reminder_scheduler_loop() -> None:
     # Background scheduler to generate reminders even when the user isn't actively browsing.
     # Runs every 60 seconds.
+    import asyncio
+
     while True:
         try:
             now = now_utc()
@@ -159,17 +168,7 @@ async def reminder_scheduler_loop() -> None:
         except Exception as e:
             logger.warning("reminder scheduler error: %s", str(e))
 
-        import asyncio
-
         await asyncio.sleep(60)
-
-
-    for idx, t in enumerate(tasks):
-        if t.get("order") != idx:
-            await db.tasks.update_one(
-                {"task_id": t["task_id"]},
-                {"$set": {"order": idx, "updated_at": now_utc()}},
-            )
 
 
 async def is_team_admin(team_id: str, user: Dict[str, Any]) -> bool:
