@@ -866,7 +866,7 @@ async def create_task(payload: TaskCreate, user: Dict[str, Any] = Depends(get_cu
         assigned_user_ids.update([u["user_id"] for u in users])
 
     for uid in assigned_user_ids:
-        n = await create_notification(
+        await create_notification(
             user_id=uid,
             notif_type="assigned",
             title="Task assigned",
@@ -875,7 +875,10 @@ async def create_task(payload: TaskCreate, user: Dict[str, Any] = Depends(get_cu
             team_id=doc.get("team_id"),
             url="/tasks",
         )
-        await send_web_push_to_user(uid, {"title": "TaskFlow", "body": f"Assigned: {doc['title']}", "data": {"url": "/tasks"}})
+        await send_web_push_to_user(
+            uid,
+            {"title": "TaskFlow", "body": f"Assigned: {doc['title']}", "data": {"url": "/tasks"}},
+        )
 
     return TaskOut(**doc)
 
