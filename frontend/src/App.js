@@ -748,6 +748,7 @@ function TasksListPage() {
       </div>
 
       <TaskEditor
+        key={editorKey}
         open={editorOpen}
         onOpenChange={setEditorOpen}
         editing={editing}
