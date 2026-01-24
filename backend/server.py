@@ -1,6 +1,7 @@
 import os
 import uuid
 import json
+import base64
 import logging
 from pathlib import Path
 from typing import Any, Dict, List, Literal, Optional
@@ -14,6 +15,7 @@ from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 from pymongo import ReturnDocument
 
+from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 from py_vapid import Vapid
 from pywebpush import webpush, WebPushException
 
@@ -127,24 +129,33 @@ async def require_team_admin(team_id: str, user: Dict[str, Any]) -> None:
         raise HTTPException(status_code=403, detail="Team admin required")
 
 
+def _b64url(data: bytes) -> str:
+    return base64.urlsafe_b64encode(data).decode("utf-8").rstrip("=")
+
+
 async def ensure_vapid_keys() -> Dict[str, str]:
     doc = await db.app_settings.find_one({"key": "vapid"}, {"_id": 0})
-    if doc and doc.get("public_key") and doc.get("private_key"):
-        return {"public_key": doc["public_key"], "private_key": doc["private_key"], "subject": doc.get("subject", "mailto:admin@taskflow")}
+    if doc and doc.get("public_key_b64") and doc.get("private_key_pem"):
+        return {
+            "public_key_b64": doc["public_key_b64"],
+            "private_key_pem": doc["private_key_pem"],
+            "subject": doc.get("subject", "mailto:admin@taskflow"),
+        }
 
     v = Vapid()
     v.generate_keys()
 
-    # py-vapid exposes helpers to write PEM. We'll capture PEM strings.
+    # Client needs base64url VAPID public key (UncompressedPoint)
+    public_key_bytes = v.public_key.public_bytes(Encoding.X962, PublicFormat.UncompressedPoint)
+    public_key_b64 = _b64url(public_key_bytes)
+
+    # py-vapid can write PEM for private key; pywebpush accepts PEM.
     import tempfile
 
     with tempfile.TemporaryDirectory() as d:
         priv_path = os.path.join(d, "vapid_private.pem")
-        pub_path = os.path.join(d, "vapid_public.pem")
         v.save_key(priv_path)
-        v.save_public_key(pub_path)
-        private_key = Path(priv_path).read_text()
-        public_key = Path(pub_path).read_text()
+        private_key_pem = Path(priv_path).read_text()
 
     subject = os.environ.get("VAPID_SUBJECT", "mailto:admin@taskflow")
     await db.app_settings.update_one(
@@ -152,8 +163,8 @@ async def ensure_vapid_keys() -> Dict[str, str]:
         {
             "$set": {
                 "key": "vapid",
-                "public_key": public_key,
-                "private_key": private_key,
+                "public_key_b64": public_key_b64,
+                "private_key_pem": private_key_pem,
                 "subject": subject,
                 "updated_at": now_utc(),
             },
@@ -161,7 +172,7 @@ async def ensure_vapid_keys() -> Dict[str, str]:
         },
         upsert=True,
     )
-    return {"public_key": public_key, "private_key": private_key, "subject": subject}
+    return {"public_key_b64": public_key_b64, "private_key_pem": private_key_pem, "subject": subject}
 
 
 async def create_notification(
@@ -206,11 +217,10 @@ async def send_web_push_to_user(user_id: str, payload: Dict[str, Any]) -> None:
             webpush(
                 subscription_info,
                 data=json.dumps(payload),
-                vapid_private_key=keys["private_key"],
+                vapid_private_key=keys["private_key_pem"],
                 vapid_claims=vapid_claims,
             )
         except WebPushException as e:
-            # Remove invalid subscription if gone
             logger.warning("WebPush failed: %s", str(e))
             if getattr(e, "response", None) is not None and e.response.status_code in (404, 410):
                 await db.push_subscriptions.delete_one({"subscription_id": sub["subscription_id"]})
@@ -524,7 +534,7 @@ async def logout(request: Request, response: Response):
 @api_router.get("/push/vapid-public-key")
 async def get_vapid_public_key(user: Dict[str, Any] = Depends(get_current_user)):
     keys = await ensure_vapid_keys()
-    return {"public_key": keys["public_key"]}
+    return {"public_key": keys["public_key_b64"]}
 
 
 @api_router.post("/push/subscribe")
