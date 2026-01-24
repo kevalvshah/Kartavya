@@ -1162,13 +1162,6 @@ async def list_notifications(unread_only: bool = False, user: Dict[str, Any] = D
     return [NotificationOut(**n) for n in items]
 
 
-
-    # Start background reminder scheduler
-    import asyncio
-
-    if not getattr(app.state, "reminder_task", None):
-        app.state.reminder_task = asyncio.create_task(reminder_scheduler_loop())
-
 @api_router.post("/notifications/mark-read")
 async def mark_read(payload: MarkReadIn, user: Dict[str, Any] = Depends(get_current_user)):
     if payload.mark_all:
