@@ -3,6 +3,7 @@
 import requests
 import sys
 import json
+import time
 from datetime import datetime, timedelta
 from typing import Dict, Any, Optional
 
@@ -18,6 +19,11 @@ class TaskFlowAPITester:
         # Test data storage
         self.created_category_id = None
         self.created_task_id = None
+        self.created_team_id = None
+        self.created_member_id = None
+        self.created_team_task_id = None
+        self.test_user_id = None
+        self.test_user_session_token = None
 
     def log_result(self, test_name: str, success: bool, details: str = "", response_data: Any = None):
         """Log test result"""
