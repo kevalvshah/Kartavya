@@ -558,6 +558,7 @@ function TasksListPage() {
   const [filters, setFilters] = useState({ status: "", category_id: "", q: "" });
   const [editorOpen, setEditorOpen] = useState(false);
   const [editing, setEditing] = useState(null);
+  const [editorKey, setEditorKey] = useState("new");
 
   const load = async () => {
     const params = {};
