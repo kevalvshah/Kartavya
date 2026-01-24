@@ -785,28 +785,51 @@ function TaskEditor({ open, onOpenChange, editing, categories, onSaved }) {
 
   useEffect(() => {
     if (!open) return;
-    if (!editing) {
-      setForm((f) => ({
-        ...f,
-        title: "",
-        description: "",
-        status: "todo",
-        priority: "medium",
-        category_id: "",
-        tags: "",
-        due_at: "",
-        reminder_at: "",
-        estimated_minutes: "",
-        recurrence_rule: "none",
-        recurrence_interval: 1,
-        attachments: [{ name: "", url: "" }],
-        custom_fields_text: "{}",
-        subtasks: [{ title: "", is_done: false }],
-      }));
-      return;
-    }
 
-    setForm({
+    const initial = !editing
+      ? {
+          title: "",
+          description: "",
+          status: "todo",
+          priority: "medium",
+          category_id: "",
+          tags: "",
+          due_at: "",
+          reminder_at: "",
+          estimated_minutes: "",
+          recurrence_rule: "none",
+          recurrence_interval: 1,
+          attachments: [{ name: "", url: "" }],
+          custom_fields_text: "{}",
+          subtasks: [{ title: "", is_done: false }],
+        }
+      : {
+          title: editing.title || "",
+          description: editing.description || "",
+          status: editing.status || "todo",
+          priority: editing.priority || "medium",
+          category_id: editing.category_id || "",
+          tags: (editing.tags || []).join(", "),
+          due_at: toDatetimeLocalValue(editing.due_at),
+          reminder_at: toDatetimeLocalValue(editing.reminder_at),
+          estimated_minutes: editing.estimated_minutes ? String(editing.estimated_minutes) : "",
+          recurrence_rule: editing.recurrence?.rule || "none",
+          recurrence_interval: editing.recurrence?.interval || 1,
+          attachments:
+            editing.attachments && editing.attachments.length
+              ? editing.attachments
+              : [{ name: "", url: "" }],
+          custom_fields_text: JSON.stringify(editing.custom_fields || {}, null, 2),
+          subtasks:
+            editing.subtasks && editing.subtasks.length
+              ? editing.subtasks
+              : [{ title: "", is_done: false }],
+        };
+
+    setForm(initial);
+  }, [open, editing]);
+
+  const save = async () => {
       title: editing.title || "",
       description: editing.description || "",
       status: editing.status || "todo",
