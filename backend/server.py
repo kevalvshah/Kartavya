@@ -10,7 +10,7 @@ from datetime import datetime, timedelta, timezone
 import requests
 from dotenv import load_dotenv
 from fastapi import FastAPI, APIRouter, Depends, HTTPException, Response, Request
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 from pymongo import ReturnDocument
@@ -106,6 +106,63 @@ async def normalize_orders(scope: Dict[str, Any], status: str) -> None:
         .sort([("order", 1), ("updated_at", 1)])
         .to_list(5000)
     )
+
+
+async def reminder_scheduler_loop() -> None:
+    # Background scheduler to generate reminders even when the user isn't actively browsing.
+    # Runs every 60 seconds.
+    while True:
+        try:
+            now = now_utc()
+            tasks = await db.tasks.find(
+                {
+                    "status": {"$ne": "done"},
+                    "reminder_at": {"$ne": None, "$lte": now},
+                    "reminder_sent_at": None,
+                },
+                {"_id": 0},
+            ).to_list(200)
+
+            for t in tasks:
+                recipients = set(t.get("assignee_user_ids", []))
+                if t.get("assignee_emails"):
+                    users = await db.users.find(
+                        {"email": {"$in": t["assignee_emails"]}},
+                        {"_id": 0},
+                    ).to_list(2000)
+                    recipients.update([u["user_id"] for u in users])
+
+                if not recipients:
+                    if t.get("user_id"):
+                        recipients.add(t["user_id"])
+
+                for uid in recipients:
+                    await create_notification(
+                        user_id=uid,
+                        notif_type="reminder",
+                        title="Task reminder",
+                        message=f"Due soon: {t['title']}",
+                        task_id=t["task_id"],
+                        team_id=t.get("team_id"),
+                        url="/tasks",
+                    )
+                    await send_web_push_to_user(
+                        uid,
+                        {"title": "TaskFlow", "body": f"Reminder: {t['title']}", "data": {"url": "/tasks"}},
+                    )
+
+                await db.tasks.update_one(
+                    {"task_id": t["task_id"]},
+                    {"$set": {"reminder_sent_at": now_utc(), "updated_at": now_utc()}},
+                )
+
+        except Exception as e:
+            logger.warning("reminder scheduler error: %s", str(e))
+
+        import asyncio
+
+        await asyncio.sleep(60)
+
 
     for idx, t in enumerate(tasks):
         if t.get("order") != idx:
@@ -413,6 +470,8 @@ class DashboardSummaryOut(BaseModel):
 
 
 class PushSubscriptionIn(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
     endpoint: str
     keys: Dict[str, str]
 
@@ -1104,6 +1163,13 @@ async def list_notifications(unread_only: bool = False, user: Dict[str, Any] = D
     return [NotificationOut(**n) for n in items]
 
 
+
+    # Start background reminder scheduler
+    import asyncio
+
+    if not getattr(app.state, "reminder_task", None):
+        app.state.reminder_task = asyncio.create_task(reminder_scheduler_loop())
+
 @api_router.post("/notifications/mark-read")
 async def mark_read(payload: MarkReadIn, user: Dict[str, Any] = Depends(get_current_user)):
     if payload.mark_all:
@@ -1121,6 +1187,12 @@ async def mark_read(payload: MarkReadIn, user: Dict[str, Any] = Depends(get_curr
         {"$set": {"read_at": now_utc()}},
     )
     return {"ok": True}
+
+
+    # Stop scheduler
+    task = getattr(app.state, "reminder_task", None)
+    if task:
+        task.cancel()
 
 
 @api_router.post("/notifications/process")
