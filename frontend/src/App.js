@@ -1,9 +1,17 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate, Outlet } from "react-router-dom";
-import axios from "axios";
+import {
+  BrowserRouter,
+  Routes,
+  Route,
+  Navigate,
+  useLocation,
+  useNavigate,
+  Outlet,
+} from "react-router-dom";
 import "./App.css";
 
 import { cn } from "./lib/utils";
+import { api } from "./lib/api";
 import { Button } from "./components/ui/button";
 import { Input } from "./components/ui/input";
 import { Select } from "./components/ui/select";
@@ -11,7 +19,12 @@ import { Modal } from "./components/ui/modal";
 import { Badge } from "./components/ui/badge";
 import { ToastProvider, useToast } from "./components/ui/toast";
 
+import TeamsPage from "./pages/TeamsPage";
+import NotificationsSettingsPage from "./pages/NotificationsSettingsPage";
+import { NotificationsModal } from "./components/NotificationsModal";
+
 import {
+  Bell,
   CalendarClock,
   LayoutGrid,
   ListTodo,
@@ -21,17 +34,10 @@ import {
   Sun,
   Moon,
   Tag,
+  Users,
 } from "lucide-react";
 
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
-
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-const API = `${BACKEND_URL}/api`;
-
-const api = axios.create({
-  baseURL: API,
-  withCredentials: true,
-});
 
 function useTheme() {
   const [theme, setTheme] = useState(() => {
@@ -95,7 +101,9 @@ function AppRouter() {
         <Route path="dashboard" element={<DashboardPage />} />
         <Route path="tasks" element={<TasksListPage />} />
         <Route path="board" element={<BoardPage />} />
+        <Route path="teams" element={<TeamsPage />} />
         <Route path="settings/categories" element={<CategoriesPage />} />
+        <Route path="settings/notifications" element={<NotificationsSettingsPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/dashboard" replace />} />
     </Routes>
@@ -181,11 +189,17 @@ function LoginPage() {
         <div className="mt-10 grid gap-6 lg:grid-cols-12">
           <div className="lg:col-span-7">
             <div className="rounded-3xl border border-border/70 bg-card/60 p-8 shadow-sm">
-              <h1 data-testid="login-hero-title" className="text-4xl sm:text-5xl lg:text-6xl font-semibold tracking-tight">
+              <h1
+                data-testid="login-hero-title"
+                className="text-4xl sm:text-5xl lg:text-6xl font-semibold tracking-tight"
+              >
                 Your tasks, organized like a workspace.
               </h1>
-              <p data-testid="login-hero-subtitle" className="mt-4 text-base md:text-lg text-muted-foreground leading-relaxed">
-                Categories + priorities, due dates with time, subtasks, tags, attachments, reminders, and a kanban board you can drag around.
+              <p
+                data-testid="login-hero-subtitle"
+                className="mt-4 text-base md:text-lg text-muted-foreground leading-relaxed"
+              >
+                Personal + team tasks, assignments, reminders, due dates with time, subtasks, tags, attachments, and a kanban board you can drag around.
               </p>
 
               <div className="mt-7 flex flex-wrap items-center gap-3">
@@ -200,7 +214,7 @@ function LoginPage() {
               <div className="mt-8 grid grid-cols-1 gap-3 sm:grid-cols-3">
                 <FeaturePill testid="login-pill-views" icon={<LayoutGrid size={16} />} title="Board + List" />
                 <FeaturePill testid="login-pill-due" icon={<CalendarClock size={16} />} title="Due date + time" />
-                <FeaturePill testid="login-pill-tags" icon={<Tag size={16} />} title="Tags & more" />
+                <FeaturePill testid="login-pill-tags" icon={<Tag size={16} />} title="Teams + alerts" />
               </div>
             </div>
           </div>
@@ -211,16 +225,16 @@ function LoginPage() {
                 What you get
               </div>
               <div className="mt-4 space-y-3">
-                <PreviewItem testid="login-preview-1" title="Dashboard" desc="At-a-glance status, overdue, and due soon." />
-                <PreviewItem testid="login-preview-2" title="Editing" desc="Rich details: notes, subtasks, attachments, custom fields." />
-                <PreviewItem testid="login-preview-3" title="Reordering" desc="Drag tasks between columns and keep everything tidy." />
+                <PreviewItem testid="login-preview-1" title="Dashboard" desc="Status, overdue, and due soon counts." />
+                <PreviewItem testid="login-preview-2" title="Teams" desc="Create teams and add admins by email." />
+                <PreviewItem testid="login-preview-3" title="Notifications" desc="In-app inbox + browser push (optional)." />
               </div>
             </div>
           </div>
         </div>
 
         <footer className="mt-10 text-sm text-muted-foreground">
-          <span data-testid="login-footer-text">Tip: after logging in, open the Board and drag a task to feel the Notion vibe.</span>
+          <span data-testid="login-footer-text">Tip: enable notifications in Settings → Notifications.</span>
         </footer>
       </div>
     </div>
@@ -270,7 +284,6 @@ function AuthCallback() {
     (async () => {
       try {
         await api.post("/auth/session", { session_id: sessionId });
-        // Clear hash (one-time token)
         window.history.replaceState(null, "", window.location.pathname);
         navigate("/dashboard", { replace: true });
       } catch (e) {
@@ -297,25 +310,48 @@ function AuthCallback() {
 }
 
 function AppShell() {
+  const [notifOpen, setNotifOpen] = useState(false);
+  const [unread, setUnread] = useState(0);
+
+  // Poll reminders + unread count when app is open
+  useEffect(() => {
+    let mounted = true;
+    const tick = async () => {
+      try {
+        await api.post("/notifications/process");
+        const res = await api.get("/notifications", { params: { unread_only: true } });
+        if (!mounted) return;
+        setUnread(res.data.length);
+      } catch (e) {
+        // ignore
+      }
+    };
+
+    tick();
+    const id = setInterval(tick, 30000);
+    return () => {
+      mounted = false;
+      clearInterval(id);
+    };
+  }, []);
+
   return (
     <div data-testid="app-shell" className="min-h-screen bg-app text-foreground">
       <div className="mx-auto max-w-7xl px-6 py-6">
         <div className="grid gap-6 lg:grid-cols-[260px_1fr]">
           <Sidebar />
           <main className="min-w-0">
-            <Topbar />
+            <Topbar unread={unread} onOpenNotifications={() => setNotifOpen(true)} />
             <div className="mt-6">
-              <OutletCompat />
+              <Outlet />
             </div>
           </main>
         </div>
       </div>
+
+      <NotificationsModal open={notifOpen} onOpenChange={setNotifOpen} />
     </div>
   );
-}
-
-function OutletCompat() {
-  return <Outlet />;
 }
 
 function Sidebar() {
@@ -327,7 +363,9 @@ function Sidebar() {
     { to: "/dashboard", label: "Dashboard", icon: LayoutGrid, testid: "sidebar-nav-dashboard" },
     { to: "/tasks", label: "Tasks", icon: ListTodo, testid: "sidebar-nav-tasks" },
     { to: "/board", label: "Board", icon: LayoutGrid, testid: "sidebar-nav-board" },
+    { to: "/teams", label: "Teams", icon: Users, testid: "sidebar-nav-teams" },
     { to: "/settings/categories", label: "Categories", icon: Settings, testid: "sidebar-nav-categories" },
+    { to: "/settings/notifications", label: "Notifications", icon: Bell, testid: "sidebar-nav-notifications" },
   ];
 
   return (
@@ -389,14 +427,14 @@ function Sidebar() {
           Pro tip
         </div>
         <div data-testid="sidebar-hint" className="mt-1 text-xs text-muted-foreground leading-relaxed">
-          Create tasks in the list, then drag them around the board.
+          Create team tasks and assign them. Reminders can notify assignees.
         </div>
       </div>
     </aside>
   );
 }
 
-function Topbar() {
+function Topbar({ unread, onOpenNotifications }) {
   const navigate = useNavigate();
   const { pushToast } = useToast();
 
@@ -425,6 +463,22 @@ function Topbar() {
       </div>
 
       <div className="flex items-center gap-2">
+        <button
+          data-testid="topbar-notifications-button"
+          onClick={onOpenNotifications}
+          className="relative inline-flex h-10 w-10 items-center justify-center rounded-full border border-border/60 bg-background/30 transition-colors duration-150 hover:bg-muted/40"
+        >
+          <Bell size={16} />
+          {unread ? (
+            <span
+              data-testid="topbar-notifications-unread"
+              className="absolute -right-1 -top-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-violet-600 px-1 text-[11px] font-semibold text-white"
+            >
+              {unread > 99 ? "99+" : unread}
+            </span>
+          ) : null}
+        </button>
+
         <Button data-testid="topbar-logout-button" variant="ghost" onClick={handleLogout}>
           <LogOut size={16} />
           <span className="ml-2 text-sm">Logout</span>
@@ -477,7 +531,7 @@ function DashboardPage() {
 
             <div className="mt-5 rounded-2xl border border-border/60 bg-background/30 p-4">
               <div data-testid="dashboard-note" className="text-sm text-muted-foreground">
-                Open <span className="font-medium text-foreground">Tasks</span> to add details, then switch to <span className="font-medium text-foreground">Board</span> for drag & drop.
+                Create team tasks, assign them, and enable browser notifications for reminders.
               </div>
             </div>
           </div>
@@ -497,7 +551,14 @@ function StatCard({ label, value, testid, tone }) {
       ? "from-rose-500/15 to-transparent"
       : "from-violet-500/15 to-transparent";
   return (
-    <div data-testid={testid} className={cn("rounded-3xl border border-border/70 bg-card/50 p-5", "bg-gradient-to-b", toneClass)}>
+    <div
+      data-testid={testid}
+      className={cn(
+        "rounded-3xl border border-border/70 bg-card/50 p-5",
+        "bg-gradient-to-b",
+        toneClass,
+      )}
+    >
       <div className="text-xs font-semibold text-muted-foreground">{label}</div>
       <div className="mt-2 text-2xl font-semibold tracking-tight">{value}</div>
     </div>
@@ -555,7 +616,16 @@ function TasksListPage() {
   const { pushToast } = useToast();
   const [tasks, setTasks] = useState([]);
   const [categories, setCategories] = useState([]);
-  const [filters, setFilters] = useState({ status: "", category_id: "", q: "" });
+  const [teams, setTeams] = useState([]);
+
+  const [filters, setFilters] = useState({
+    status: "",
+    category_id: "",
+    q: "",
+    team_id: "",
+    assigned_to_me: false,
+  });
+
   const [editorOpen, setEditorOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [editorKey, setEditorKey] = useState("new");
@@ -565,10 +635,17 @@ function TasksListPage() {
     if (filters.status) params.status = filters.status;
     if (filters.category_id) params.category_id = filters.category_id;
     if (filters.q) params.q = filters.q;
+    if (filters.team_id) params.team_id = filters.team_id;
+    if (filters.assigned_to_me) params.assigned_to_me = true;
 
-    const [t, c] = await Promise.all([api.get("/tasks", { params }), api.get("/categories")]);
+    const [t, c, te] = await Promise.all([
+      api.get("/tasks", { params }),
+      api.get("/categories"),
+      api.get("/teams"),
+    ]);
     setTasks(t.data);
     setCategories(c.data);
+    setTeams(te.data);
   };
 
   useEffect(() => {
@@ -584,7 +661,7 @@ function TasksListPage() {
     }, 250);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters.status, filters.category_id, filters.q]);
+  }, [filters.status, filters.category_id, filters.q, filters.team_id, filters.assigned_to_me]);
 
   const onCreate = () => {
     setEditing(null);
@@ -618,6 +695,11 @@ function TasksListPage() {
     }
   };
 
+  const scopeLabel = (t) => {
+    if (t.team_id) return `Team: ${teams.find((x) => x.team_id === t.team_id)?.name || t.team_id}`;
+    return "Personal";
+  };
+
   return (
     <div data-testid="tasks-page" className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -626,7 +708,7 @@ function TasksListPage() {
             Tasks
           </div>
           <div data-testid="tasks-subtitle" className="mt-1 text-sm text-muted-foreground">
-            Filter, edit, and keep your system clean.
+            Personal + team tasks. Assign and get notified.
           </div>
         </div>
         <Button data-testid="tasks-create-button" onClick={onCreate}>
@@ -636,7 +718,7 @@ function TasksListPage() {
       </div>
 
       <div data-testid="tasks-filters" className="rounded-3xl border border-border/70 bg-card/50 p-4">
-        <div className="grid gap-3 md:grid-cols-3">
+        <div className="grid gap-3 md:grid-cols-5">
           <div>
             <div data-testid="tasks-filter-status-label" className="mb-1 text-xs font-semibold text-muted-foreground">
               Status
@@ -651,6 +733,17 @@ function TasksListPage() {
                 { value: "in_progress", label: "In progress" },
                 { value: "done", label: "Done" },
               ]}
+            />
+          </div>
+          <div>
+            <div data-testid="tasks-filter-team-label" className="mb-1 text-xs font-semibold text-muted-foreground">
+              Team
+            </div>
+            <Select
+              data-testid="tasks-filter-team"
+              value={filters.team_id}
+              onChange={(v) => setFilters((p) => ({ ...p, team_id: v }))}
+              options={[{ value: "", label: "All scopes" }, ...teams.map((t) => ({ value: t.team_id, label: t.name }))]}
             />
           </div>
           <div>
@@ -675,12 +768,29 @@ function TasksListPage() {
               placeholder="Search by title…"
             />
           </div>
+          <div>
+            <div data-testid="tasks-filter-assigned-label" className="mb-1 text-xs font-semibold text-muted-foreground">
+              Assigned
+            </div>
+            <button
+              data-testid="tasks-filter-assigned-to-me"
+              onClick={() => setFilters((p) => ({ ...p, assigned_to_me: !p.assigned_to_me }))}
+              className={cn(
+                "h-10 w-full rounded-2xl border border-border/60 bg-background/40 px-3 text-sm",
+                "transition-colors duration-150 hover:bg-muted/40",
+                filters.assigned_to_me ? "ring-2 ring-violet-500/30" : "",
+              )}
+            >
+              {filters.assigned_to_me ? "Assigned to me" : "All"}
+            </button>
+          </div>
         </div>
       </div>
 
       <div data-testid="tasks-table" className="rounded-3xl border border-border/70 bg-card/50 overflow-hidden">
-        <div className="grid grid-cols-[1fr_160px_160px_220px_180px] gap-0 border-b border-border/60 px-5 py-3 text-xs font-semibold text-muted-foreground">
+        <div className="grid grid-cols-[1fr_200px_140px_180px_220px_160px] gap-0 border-b border-border/60 px-5 py-3 text-xs font-semibold text-muted-foreground">
           <div data-testid="tasks-col-title">Title</div>
+          <div data-testid="tasks-col-scope">Scope</div>
           <div data-testid="tasks-col-status">Status</div>
           <div data-testid="tasks-col-priority">Priority</div>
           <div data-testid="tasks-col-due">Due</div>
@@ -699,7 +809,7 @@ function TasksListPage() {
               <div
                 key={t.task_id}
                 data-testid={`task-row-${t.task_id}`}
-                className="grid grid-cols-[1fr_160px_160px_220px_180px] items-center border-b border-border/40 px-5 py-4"
+                className="grid grid-cols-[1fr_200px_140px_180px_220px_160px] items-center border-b border-border/40 px-5 py-4"
               >
                 <button
                   data-testid={`task-row-title-button-${t.task_id}`}
@@ -713,9 +823,17 @@ function TasksListPage() {
                         {tag}
                       </Badge>
                     ))}
+                    {(t.assignee_user_ids || []).length ? (
+                      <Badge data-testid={`task-assignees-${t.task_id}`} tone="info">
+                        {(t.assignee_user_ids || []).length} assignee(s)
+                      </Badge>
+                    ) : null}
                   </div>
                 </button>
 
+                <div data-testid={`task-row-scope-${t.task_id}`} className="text-sm text-muted-foreground">
+                  {scopeLabel(t)}
+                </div>
                 <div data-testid={`task-row-status-${t.task_id}`} className="text-sm text-muted-foreground">
                   {t.status === "in_progress" ? "In progress" : t.status.charAt(0).toUpperCase() + t.status.slice(1)}
                 </div>
@@ -753,6 +871,7 @@ function TasksListPage() {
         onOpenChange={setEditorOpen}
         editing={editing}
         categories={categories}
+        teams={teams}
         onSaved={(task) => {
           setEditorOpen(false);
           setEditing(null);
@@ -767,10 +886,13 @@ function TasksListPage() {
   );
 }
 
-function TaskEditor({ open, onOpenChange, editing, categories, onSaved }) {
+function TaskEditor({ open, onOpenChange, editing, categories, teams, onSaved }) {
   const { pushToast } = useToast();
 
-  const [form, setForm] = useState(() => {
+  const [teamMembers, setTeamMembers] = useState([]);
+  const [yourRole, setYourRole] = useState("member");
+
+  const initial = useMemo(() => {
     if (!editing) {
       return {
         title: "",
@@ -779,6 +901,9 @@ function TaskEditor({ open, onOpenChange, editing, categories, onSaved }) {
         priority: "medium",
         category_id: "",
         tags: "",
+        team_id: "",
+        assign_scope: "none", // none | whole_team | members
+        assignee_user_ids: [],
         due_at: "",
         reminder_at: "",
         estimated_minutes: "",
@@ -797,6 +922,9 @@ function TaskEditor({ open, onOpenChange, editing, categories, onSaved }) {
       priority: editing.priority || "medium",
       category_id: editing.category_id || "",
       tags: (editing.tags || []).join(", "),
+      team_id: editing.team_id || "",
+      assign_scope: (editing.assignee_user_ids || []).length ? "members" : "none",
+      assignee_user_ids: editing.assignee_user_ids || [],
       due_at: toDatetimeLocalValue(editing.due_at),
       reminder_at: toDatetimeLocalValue(editing.reminder_at),
       estimated_minutes: editing.estimated_minutes ? String(editing.estimated_minutes) : "",
@@ -812,7 +940,37 @@ function TaskEditor({ open, onOpenChange, editing, categories, onSaved }) {
           ? editing.subtasks
           : [{ title: "", is_done: false }],
     };
-  });
+  }, [editing]);
+
+  const [form, setForm] = useState(initial);
+
+  useEffect(() => {
+    setForm(initial);
+  }, [initial]);
+
+  const isTeamTask = !!form.team_id;
+
+  useEffect(() => {
+    if (!open) return;
+    if (!form.team_id) {
+      setTeamMembers([]);
+      setYourRole("member");
+      return;
+    }
+
+    (async () => {
+      try {
+        const res = await api.get(`/teams/${form.team_id}`);
+        setTeamMembers((res.data.members || []).filter((m) => m.status === "active" && m.user_id));
+        setYourRole(res.data.your_role || "member");
+      } catch (e) {
+        setTeamMembers([]);
+        setYourRole("member");
+      }
+    })();
+  }, [open, form.team_id]);
+
+  const canEditAssignments = !isTeamTask || yourRole === "owner" || yourRole === "admin";
 
   const save = async () => {
     if (!form.title.trim()) {
@@ -828,6 +986,11 @@ function TaskEditor({ open, onOpenChange, editing, categories, onSaved }) {
       return;
     }
 
+    let assignees = form.assignee_user_ids || [];
+    if (form.assign_scope === "whole_team" && isTeamTask) {
+      assignees = teamMembers.map((m) => m.user_id);
+    }
+
     const payload = {
       title: form.title.trim(),
       description: form.description?.trim() || null,
@@ -840,8 +1003,10 @@ function TaskEditor({ open, onOpenChange, editing, categories, onSaved }) {
             .map((t) => t.trim())
             .filter(Boolean)
         : [],
+      team_id: form.team_id || null,
+      assignee_user_ids: assignees,
       due_at: fromDatetimeLocalValue(form.due_at),
-      reminder_at: fromDatetimeLocalValue(form.reminder_at),
+      reminder_at: form.reminder_at ? fromDatetimeLocalValue(form.reminder_at) : null,
       estimated_minutes: form.estimated_minutes ? Number(form.estimated_minutes) : null,
       recurrence: { rule: form.recurrence_rule, interval: Number(form.recurrence_interval) || 1 },
       attachments: (form.attachments || []).filter((a) => a.url && a.name),
@@ -859,7 +1024,8 @@ function TaskEditor({ open, onOpenChange, editing, categories, onSaved }) {
       pushToast({ type: "success", title: "Saved", message: "Task updated." });
       onSaved(res.data);
     } catch (e) {
-      pushToast({ type: "error", title: "Could not save", message: "Please try again." });
+      const msg = e?.response?.data?.detail || "Please try again.";
+      pushToast({ type: "error", title: "Could not save", message: msg });
     }
   };
 
@@ -907,7 +1073,26 @@ function TaskEditor({ open, onOpenChange, editing, categories, onSaved }) {
           />
         </div>
 
-        <div className="grid gap-3 md:grid-cols-3">
+        <div className="grid gap-3 md:grid-cols-4">
+          <div>
+            <div data-testid="task-editor-team-label" className="mb-1 text-xs font-semibold text-muted-foreground">
+              Scope
+            </div>
+            <Select
+              data-testid="task-editor-team"
+              value={form.team_id}
+              onChange={(v) =>
+                setForm((p) => ({
+                  ...p,
+                  team_id: v,
+                  assign_scope: v ? p.assign_scope : "none",
+                  assignee_user_ids: [],
+                }))
+              }
+              options={[{ value: "", label: "Personal" }, ...teams.map((t) => ({ value: t.team_id, label: `Team: ${t.name}` }))]}
+            />
+          </div>
+
           <div>
             <div data-testid="task-editor-status-label" className="mb-1 text-xs font-semibold text-muted-foreground">
               Status
@@ -923,6 +1108,7 @@ function TaskEditor({ open, onOpenChange, editing, categories, onSaved }) {
               ]}
             />
           </div>
+
           <div>
             <div data-testid="task-editor-priority-label" className="mb-1 text-xs font-semibold text-muted-foreground">
               Priority
@@ -939,6 +1125,7 @@ function TaskEditor({ open, onOpenChange, editing, categories, onSaved }) {
               ]}
             />
           </div>
+
           <div>
             <div data-testid="task-editor-category-label" className="mb-1 text-xs font-semibold text-muted-foreground">
               Category
@@ -950,6 +1137,82 @@ function TaskEditor({ open, onOpenChange, editing, categories, onSaved }) {
               options={[{ value: "", label: "None" }, ...categories.map((c) => ({ value: c.category_id, label: c.name }))]}
             />
           </div>
+        </div>
+
+        <div>
+          <div data-testid="task-editor-assignments-label" className="mb-2 text-xs font-semibold text-muted-foreground">
+            Assignment
+          </div>
+          {!canEditAssignments ? (
+            <div data-testid="task-editor-assignments-disabled" className="rounded-2xl border border-border/60 bg-background/30 p-4 text-sm text-muted-foreground">
+              Only team admins can change assignments on team tasks.
+            </div>
+          ) : (
+            <div data-testid="task-editor-assignments" className="rounded-2xl border border-border/60 bg-background/30 p-4">
+              {!isTeamTask ? (
+                <div data-testid="task-editor-assignments-personal" className="text-sm text-muted-foreground">
+                  Personal tasks can still have assignees once you move them into a team.
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <Select
+                    data-testid="task-editor-assign-scope"
+                    value={form.assign_scope}
+                    onChange={(v) => setForm((p) => ({ ...p, assign_scope: v, assignee_user_ids: [] }))}
+                    options={[
+                      { value: "none", label: "Unassigned" },
+                      { value: "whole_team", label: "Assign to whole team" },
+                      { value: "members", label: "Assign to selected members" },
+                    ]}
+                  />
+
+                  {form.assign_scope === "members" ? (
+                    <div data-testid="task-editor-assign-members" className="grid gap-2 md:grid-cols-2">
+                      {teamMembers.length === 0 ? (
+                        <div data-testid="task-editor-assign-members-empty" className="text-sm text-muted-foreground">
+                          No active members found.
+                        </div>
+                      ) : (
+                        teamMembers.map((m) => {
+                          const checked = (form.assignee_user_ids || []).includes(m.user_id);
+                          return (
+                            <label
+                              key={m.user_id}
+                              data-testid={`task-editor-assign-member-${m.user_id}`}
+                              className={cn(
+                                "flex items-center gap-2 rounded-2xl border border-border/60 bg-background/40 px-3 py-2 text-sm",
+                                "transition-colors duration-150 hover:bg-muted/40",
+                              )}
+                            >
+                              <input
+                                data-testid={`task-editor-assign-member-checkbox-${m.user_id}`}
+                                type="checkbox"
+                                checked={checked}
+                                onChange={(e) => {
+                                  const isOn = e.target.checked;
+                                  setForm((p) => {
+                                    const cur = new Set(p.assignee_user_ids || []);
+                                    if (isOn) cur.add(m.user_id);
+                                    else cur.delete(m.user_id);
+                                    return { ...p, assignee_user_ids: Array.from(cur) };
+                                  });
+                                }}
+                              />
+                              <span className="truncate">{m.email}</span>
+                            </label>
+                          );
+                        })
+                      )}
+                    </div>
+                  ) : null}
+
+                  <div data-testid="task-editor-assign-hint" className="text-xs text-muted-foreground">
+                    Assignment triggers in-app + browser push notifications (if enabled).
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="grid gap-3 md:grid-cols-2">
@@ -973,7 +1236,11 @@ function TaskEditor({ open, onOpenChange, editing, categories, onSaved }) {
               type="datetime-local"
               value={form.reminder_at}
               onChange={(e) => setForm((p) => ({ ...p, reminder_at: e.target.value }))}
+              placeholder="Default is due - 2 hours"
             />
+            <div data-testid="task-editor-reminder-hint" className="mt-1 text-xs text-muted-foreground">
+              If you set a due date and leave this empty, TaskFlow defaults to <span className="font-mono">due - 2h</span>.
+            </div>
           </div>
         </div>
 
@@ -1164,6 +1431,8 @@ function BoardPage() {
   const { pushToast } = useToast();
   const [tasks, setTasks] = useState([]);
   const [categories, setCategories] = useState([]);
+  const [teams, setTeams] = useState([]);
+  const [teamId, setTeamId] = useState("");
 
   const columns = useMemo(
     () => [
@@ -1175,15 +1444,27 @@ function BoardPage() {
   );
 
   const load = async () => {
-    const [t, c] = await Promise.all([api.get("/tasks"), api.get("/categories")]);
+    const params = {};
+    if (teamId) params.team_id = teamId;
+    const [t, c, te] = await Promise.all([
+      api.get("/tasks", { params }),
+      api.get("/categories"),
+      api.get("/teams"),
+    ]);
     setTasks(t.data);
     setCategories(c.data);
+    setTeams(te.data);
   };
 
   useEffect(() => {
     load().catch(() => pushToast({ type: "error", title: "Could not load board", message: "Try again." }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    load().catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [teamId]);
 
   const grouped = useMemo(() => {
     const map = { todo: [], in_progress: [], done: [] };
@@ -1207,20 +1488,15 @@ function BoardPage() {
     const moving = sourceList.find((t) => t.task_id === taskId);
     if (!moving) return;
 
-    // Remove from source
     const sourceIdx = sourceList.findIndex((t) => t.task_id === taskId);
     sourceList.splice(sourceIdx, 1);
-
-    // Insert into dest
     destList.splice(destination.index, 0, { ...moving, status: destStatus });
 
-    // Rebuild state orders
     const next = tasks.map((t) => {
       if (t.task_id === taskId) return { ...t, status: destStatus };
       return t;
     });
 
-    // Set order based on lists
     const applyOrders = (list, status) => {
       list.forEach((t, idx) => {
         const i = next.findIndex((x) => x.task_id === t.task_id);
@@ -1241,10 +1517,11 @@ function BoardPage() {
   };
 
   const categoryName = (id) => categories.find((c) => c.category_id === id)?.name || "";
+  const teamName = (id) => teams.find((t) => t.team_id === id)?.name || id;
 
   return (
     <div data-testid="board-page" className="space-y-5">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <div data-testid="board-title" className="text-sm font-semibold">
             Board
@@ -1252,6 +1529,15 @@ function BoardPage() {
           <div data-testid="board-subtitle" className="mt-1 text-sm text-muted-foreground">
             Drag cards between columns.
           </div>
+        </div>
+
+        <div className="w-full max-w-[360px]">
+          <Select
+            data-testid="board-team-filter"
+            value={teamId}
+            onChange={setTeamId}
+            options={[{ value: "", label: "All scopes" }, ...teams.map((t) => ({ value: t.team_id, label: `Team: ${t.name}` }))]}
+          />
         </div>
       </div>
 
@@ -1289,13 +1575,21 @@ function BoardPage() {
                             <div className="flex items-start justify-between gap-2">
                               <div className="min-w-0">
                                 <div className="truncate text-sm font-semibold">{t.title}</div>
+                                {t.team_id ? (
+                                  <div data-testid={`board-card-team-${t.task_id}`} className="mt-1 text-xs text-muted-foreground">
+                                    Team: {teamName(t.team_id)}
+                                  </div>
+                                ) : null}
                                 {t.category_id ? (
                                   <div data-testid={`board-card-category-${t.task_id}`} className="mt-1 text-xs text-muted-foreground">
                                     {categoryName(t.category_id)}
                                   </div>
                                 ) : null}
                               </div>
-                              <Badge data-testid={`board-card-priority-${t.task_id}`} tone={t.priority === "urgent" ? "danger" : "info"}>
+                              <Badge
+                                data-testid={`board-card-priority-${t.task_id}`}
+                                tone={t.priority === "urgent" ? "danger" : "info"}
+                              >
                                 {t.priority}
                               </Badge>
                             </div>
@@ -1309,6 +1603,12 @@ function BoardPage() {
                             {(t.subtasks || []).length ? (
                               <div data-testid={`board-card-subtasks-${t.task_id}`} className="mt-3 text-xs text-muted-foreground">
                                 Subtasks: {(t.subtasks || []).filter((s) => s.is_done).length}/{(t.subtasks || []).length}
+                              </div>
+                            ) : null}
+
+                            {(t.assignee_user_ids || []).length ? (
+                              <div data-testid={`board-card-assignees-${t.task_id}`} className="mt-3 text-xs text-muted-foreground">
+                                Assignees: {(t.assignee_user_ids || []).length}
                               </div>
                             ) : null}
 
@@ -1410,7 +1710,6 @@ function CategoriesPage() {
               value={color}
               onChange={(e) => {
                 const v = e.target.value;
-                // Keep the input editable, but only accept valid hex when it matches fully
                 if (v === "" || v === "#") return setColor(v);
                 if (/^#[0-9A-Fa-f]{0,6}$/.test(v)) setColor(v);
               }}
