@@ -63,6 +63,30 @@ body {
   background: rgb(var(--muted));
 }
 
+/* Opacity helpers for custom tokens used as Tailwind-like classnames */
+.bg-muted\/40 {
+  background: color-mix(in srgb, rgb(var(--muted)) 40%, transparent);
+}
+.bg-muted\/50 {
+  background: color-mix(in srgb, rgb(var(--muted)) 50%, transparent);
+}
+.bg-muted\/60 {
+  background: color-mix(in srgb, rgb(var(--muted)) 60%, transparent);
+}
+
+.bg-card\/90 {
+  background: color-mix(in srgb, rgb(var(--card)) 90%, transparent);
+}
+
 .border-border {
   border-color: rgb(var(--border));
+}
+.border-border\/40 {
+  border-color: color-mix(in srgb, rgb(var(--border)) 40%, transparent);
+}
+.border-border\/60 {
+  border-color: color-mix(in srgb, rgb(var(--border)) 60%, transparent);
+}
+.border-border\/70 {
+  border-color: color-mix(in srgb, rgb(var(--border)) 70%, transparent);
 }

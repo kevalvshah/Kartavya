@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate, Outlet } from "react-router-dom";
 import axios from "axios";
 import "./App.css";
 
@@ -315,9 +315,6 @@ function AppShell() {
 }
 
 function OutletCompat() {
-  // react-router-dom v7 includes Outlet, but importing it would add another import line.
-  // This keeps the file compact.
-  const { Outlet } = require("react-router-dom");
   return <Outlet />;
 }
 

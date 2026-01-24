@@ -11,6 +11,7 @@ from fastapi import FastAPI, APIRouter, Depends, HTTPException, Response, Reques
 from pydantic import BaseModel, Field
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
+from pymongo import ReturnDocument
 
 
 ROOT_DIR = Path(__file__).parent
@@ -365,7 +366,7 @@ async def update_category(
     res = await db.categories.find_one_and_update(
         {"user_id": user["user_id"], "category_id": category_id},
         {"$set": update},
-        return_document=True,
+        return_document=ReturnDocument.AFTER,
         projection={"_id": 0},
     )
     if not res:
@@ -508,7 +509,7 @@ async def update_task(task_id: str, payload: TaskUpdate, user: Dict[str, Any] = 
     res = await db.tasks.find_one_and_update(
         {"user_id": user["user_id"], "task_id": task_id},
         {"$set": update},
-        return_document=True,
+        return_document=ReturnDocument.AFTER,
         projection={"_id": 0},
     )
 
@@ -560,7 +561,7 @@ async def toggle_task(task_id: str, user: Dict[str, Any] = Depends(get_current_u
                 "updated_at": now_utc(),
             }
         },
-        return_document=True,
+        return_document=ReturnDocument.AFTER,
         projection={"_id": 0},
     )
 
@@ -582,7 +583,7 @@ async def move_task(task_id: str, payload: TaskMoveIn, user: Dict[str, Any] = De
     res = await db.tasks.find_one_and_update(
         {"user_id": user["user_id"], "task_id": task_id},
         {"$set": {"status": new_status, "order": payload.order, "updated_at": now_utc()}},
-        return_document=True,
+        return_document=ReturnDocument.AFTER,
         projection={"_id": 0},
     )
 
