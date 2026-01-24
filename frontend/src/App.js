@@ -1389,22 +1389,44 @@ function CategoriesPage() {
       </div>
 
       <div data-testid="categories-create" className="rounded-3xl border border-border/70 bg-card/50 p-5">
-        <div className="grid gap-3 md:grid-cols-[1fr_160px_160px]">
+        <div className="grid gap-3 md:grid-cols-[1fr_220px_160px]">
           <Input
             data-testid="categories-create-name"
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="e.g., Work"
           />
-          <Input
-            data-testid="categories-create-color"
-            type="color"
-            value={color}
-            onChange={(e) => setColor(e.target.value)}
-          />
+
+          <div className="grid grid-cols-[64px_1fr] gap-2">
+            <Input
+              data-testid="categories-create-color"
+              type="color"
+              value={color}
+              onChange={(e) => setColor(e.target.value)}
+              className="px-2"
+            />
+            <Input
+              data-testid="categories-create-color-hex"
+              value={color}
+              onChange={(e) => {
+                const v = e.target.value;
+                // Keep the input editable, but only accept valid hex when it matches fully
+                if (v === "" || v === "#") return setColor(v);
+                if (/^#[0-9A-Fa-f]{0,6}$/.test(v)) setColor(v);
+              }}
+              onBlur={() => {
+                if (!/^#[0-9A-Fa-f]{6}$/.test(color)) setColor("#7C3AED");
+              }}
+              placeholder="#7C3AED"
+            />
+          </div>
+
           <Button data-testid="categories-create-button" onClick={create}>
             Create
           </Button>
+        </div>
+        <div data-testid="categories-color-hint" className="mt-3 text-xs text-muted-foreground">
+          Tip: you can type a hex like <span className="font-mono">#7C3AED</span> or use the picker.
         </div>
       </div>
 
