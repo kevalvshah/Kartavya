@@ -891,6 +891,7 @@ function TaskEditor({ open, onOpenChange, editing, categories, teams, onSaved })
 
   const [teamMembers, setTeamMembers] = useState([]);
   const [yourRole, setYourRole] = useState("member");
+  const [teamPermLoading, setTeamPermLoading] = useState(false);
 
   const initial = useMemo(() => {
     if (!editing) {
