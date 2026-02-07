@@ -80,6 +80,156 @@ yarn start
 
 ---
 
+
+## Deploy on Windows 11 Pro (Laptop / Thin Client)
+
+### Minimum resource requirements (recommended)
+These depend on how many tasks/users you expect, but for a small team:
+- **CPU:** 2 cores (4 cores recommended)
+- **RAM:** 8 GB minimum (16 GB recommended)
+- **Storage:** 10–20 GB free (more if you store lots of attachments/DB data locally)
+- **Network:** stable internet (Google auth + push notifications need HTTPS when public)
+
+> If this is a thin client, the biggest limiter is usually RAM. MongoDB benefits from extra memory.
+
+### What you need to install
+1) **Git for Windows**
+- Used to clone/pull updates.
+
+2) **Python 3.10+ (Windows x64)**
+- Make sure to check: **“Add Python to PATH”** during installation.
+
+3) **Node.js 18+ (Windows x64)**
+
+4) **Yarn**
+```powershell
+npm install -g yarn
+```
+
+5) **MongoDB** (choose one)
+- **Option A (Recommended): MongoDB Atlas** (no local DB install)
+- **Option B: MongoDB Community Server for Windows**
+
+6) (If making it public) **A reverse proxy + TLS**
+- Recommended on Windows: **Caddy** (simple HTTPS)
+- Alternative: Nginx for Windows (more manual)
+
+---
+
+### Run locally on Windows (private LAN / local use)
+
+#### 1) Clone the repo
+```powershell
+cd C:\
+mkdir apps
+cd apps
+git clone <YOUR_REPO_URL> taskflow
+cd taskflow
+```
+
+#### 2) Backend setup
+```powershell
+cd backend
+python -m venv .venv
+.\.venv\Scripts\activate
+pip install -r requirements.txt
+```
+
+Create `backend/.env`:
+- `MONGO_URL=...` (Atlas or local)
+- `DB_NAME=test_database`
+- `CORS_ORIGINS=http://localhost:3000`
+
+Run backend:
+```powershell
+uvicorn server:app --host 0.0.0.0 --port 8001
+```
+
+#### 3) Frontend setup
+Open a **second** PowerShell:
+```powershell
+cd C:\apps\taskflow\frontend
+yarn install
+```
+
+Create `frontend/.env`:
+- `REACT_APP_BACKEND_URL=http://localhost:8001`
+
+Run frontend:
+```powershell
+yarn start
+```
+
+Open:
+- http://localhost:3000
+
+---
+
+### Make it public from a Windows machine (recommended approach)
+If you want the app accessible from the internet:
+
+#### Step A: Use a real domain
+- Buy/setup a domain: `yourdomain.com`
+- Point DNS (A record) to your public IP.
+
+#### Step B: Ensure your Windows machine is reachable
+- Configure port forwarding on your router:
+  - 80 → your Windows box
+  - 443 → your Windows box
+
+#### Step C: Use Caddy as reverse proxy (easy HTTPS)
+1) Install **Caddy** (Windows)
+2) Create a `Caddyfile` like this:
+```caddyfile
+yourdomain.com {
+  encode gzip
+
+  # Frontend (React build)
+  root * C:\apps\taskflow\frontend\build
+  file_server
+
+  # SPA routing
+  try_files {path} /index.html
+
+  # Backend API
+  handle_path /api/* {
+    reverse_proxy 127.0.0.1:8001
+  }
+}
+```
+
+3) Build the frontend once:
+```powershell
+cd C:\apps\taskflow\frontend
+yarn build
+```
+
+4) Run Caddy as a service (or in a terminal) and it will automatically provision HTTPS certificates.
+
+#### Step D: Update frontend env for public URL
+`frontend/.env`:
+- `REACT_APP_BACKEND_URL=https://yourdomain.com`
+
+Rebuild frontend:
+```powershell
+yarn build
+```
+
+---
+
+### Running in the background (Windows)
+For always-on use, pick one:
+- **Windows Task Scheduler** to start backend + Caddy on boot
+- **NSSM (Non-Sucking Service Manager)** to run the backend as a Windows service
+
+---
+
+### Notes for Windows deployments
+- If you run MongoDB locally, it will store data on disk on that Windows machine. Make backups.
+- For push notifications, your site must be **HTTPS** and the browser must allow notifications.
+- If you want mobile-native push later (iOS/Android), you’ll need a mobile app + Firebase/APNs.
+
+
 ## Deploy on a Linux Server (Production)
 
 ### 1) What you need to install (prerequisites)
