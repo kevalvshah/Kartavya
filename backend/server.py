@@ -107,12 +107,19 @@ async def normalize_orders(scope: Dict[str, Any], status: str) -> None:
         .to_list(5000)
     )
 
+    ops = []
+    stamp = now_utc()
     for idx, t in enumerate(tasks):
         if t.get("order") != idx:
-            await db.tasks.update_one(
-                {"task_id": t["task_id"]},
-                {"$set": {"order": idx, "updated_at": now_utc()}},
+            ops.append(
+                UpdateOne(
+                    {"task_id": t["task_id"]},
+                    {"$set": {"order": idx, "updated_at": stamp}},
+                )
             )
+
+    if ops:
+        await db.tasks.bulk_write(ops, ordered=False)
 
 
 async def reminder_scheduler_loop() -> None:
