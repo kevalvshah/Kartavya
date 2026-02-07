@@ -13,7 +13,7 @@ from fastapi import FastAPI, APIRouter, Depends, HTTPException, Response, Reques
 from pydantic import BaseModel, Field, ConfigDict
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
-from pymongo import ReturnDocument
+from pymongo import ReturnDocument, UpdateOne
 
 from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 from py_vapid import Vapid
