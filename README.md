@@ -166,6 +166,23 @@ If you run the backend and reverse proxy as services (Task Scheduler/NSSM/Caddy 
 You *can* set up GitHub Actions to build the React frontend on every push and attach the build output as an artifact.
 This is optional—TaskFlow is simple enough to build directly on your host.
 
+
+### Deploy scripts (GitHub-friendly)
+After you clone your repo onto a host machine, you can deploy/update with:
+
+Linux:
+```bash
+cd /opt/taskflow
+chmod +x ./scripts/deploy_linux.sh
+./scripts/deploy_linux.sh --restart-systemd --restart-nginx
+```
+
+Windows:
+```powershell
+cd C:\apps\taskflow
+.\scripts\deploy_windows.ps1
+```
+
 ---
 
 
