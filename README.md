@@ -78,6 +78,86 @@ yarn install
 yarn start
 ```
 
+
+## GitHub setup (recommended) + how it helps deployment
+
+Using GitHub makes self-hosting on **Windows** or **Linux** much easier:
+- You can update any server with a single `git pull`.
+- You can keep environment files **out of Git** (safer) while still deploying code quickly.
+- You can optionally use **GitHub Actions** to build artifacts automatically.
+
+### 1) Create a GitHub repo
+1. Create a new repository on GitHub (private recommended).
+2. On your development machine (where this code lives):
+```bash
+cd /path/to/taskflow
+
+git init
+git add .
+git commit -m "Initial commit"
+git branch -M main
+git remote add origin https://github.com/<your-org>/<your-repo>.git
+git push -u origin main
+```
+
+### 2) Keep secrets out of Git
+This repo is configured to ignore `*.env` already (see `.gitignore`).
+
+Recommended pattern:
+- Commit **example env** files only:
+  - `backend/.env.example`
+  - `frontend/.env.example`
+- On each server, create real `.env` files manually.
+
+Example `.env.example` contents:
+- `backend/.env.example`
+  - `MONGO_URL=mongodb://localhost:27017`
+  - `DB_NAME=test_database`
+  - `CORS_ORIGINS=https://yourdomain.com`
+- `frontend/.env.example`
+  - `REACT_APP_BACKEND_URL=https://yourdomain.com`
+
+### 3) Deploy updates to a Linux server using GitHub
+On the server:
+```bash
+cd /opt/taskflow
+sudo git pull
+
+# Backend update
+cd /opt/taskflow/backend
+source .venv/bin/activate
+pip install -r requirements.txt
+sudo systemctl restart taskflow-backend
+
+# Frontend update
+cd /opt/taskflow/frontend
+yarn install
+yarn build
+sudo systemctl restart nginx
+```
+
+### 4) Deploy updates to a Windows 11 host using GitHub
+On the Windows box:
+```powershell
+cd C:\apps\taskflow
+git pull
+
+# Backend update
+cd backend
+.\.venv\Scripts\activate
+pip install -r requirements.txt
+
+# Frontend update
+cd ..\frontend
+yarn install
+yarn build
+```
+If you run the backend and reverse proxy as services (Task Scheduler/NSSM/Caddy service), restart those services after pulling updates.
+
+### 5) Optional: GitHub Actions (build artifacts)
+You *can* set up GitHub Actions to build the React frontend on every push and attach the build output as an artifact.
+This is optional—TaskFlow is simple enough to build directly on your host.
+
 ---
 
 
