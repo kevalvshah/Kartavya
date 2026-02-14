@@ -68,7 +68,6 @@ need_cmd() {
 
 need_cmd git
 need_cmd python3
-need_cmd pip
 need_cmd node
 need_cmd yarn
 
