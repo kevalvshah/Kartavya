@@ -127,6 +127,14 @@ sudo git pull
 cd /opt/taskflow/backend
 source .venv/bin/activate
 pip install -r requirements.txt
+
+### One-command deploy scripts
+This repo includes simple deploy helpers:
+- Linux: `scripts/deploy_linux.sh`
+- Windows: `scripts/deploy_windows.ps1`
+
+Docs: `scripts/README.md`
+
 sudo systemctl restart taskflow-backend
 
 # Frontend update
