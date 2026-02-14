@@ -133,20 +133,28 @@ echo "Deploying frontend…"
 
 # Restarts
 if [[ $RESTART_SYSTEMD -eq 1 ]]; then
-  if command -v systemctl >/dev/null 2>&1 && systemctl list-units --type=service | grep -q "taskflow-backend.service"; then
-    echo "Restarting systemd service taskflow-backend…"
-    sudo systemctl restart taskflow-backend
+  if command -v systemctl >/dev/null 2>&1; then
+    if systemctl list-units --type=service 2>/dev/null | grep -q "taskflow-backend.service"; then
+      echo "Restarting systemd service taskflow-backend…"
+      sudo systemctl restart taskflow-backend
+    else
+      echo "NOTE: taskflow-backend systemd service not found; skipping."
+    fi
   else
-    echo "NOTE: taskflow-backend systemd service not found; skipping."
+    echo "NOTE: systemctl not available on this host; skipping systemd restart."
   fi
 fi
 
 if [[ $RESTART_NGINX -eq 1 ]]; then
-  if command -v systemctl >/dev/null 2>&1 && systemctl list-units --type=service | grep -q "nginx.service"; then
-    echo "Restarting nginx…"
-    sudo systemctl restart nginx
+  if command -v systemctl >/dev/null 2>&1; then
+    if systemctl list-units --type=service 2>/dev/null | grep -q "nginx.service"; then
+      echo "Restarting nginx…"
+      sudo systemctl restart nginx
+    else
+      echo "NOTE: nginx service not found; skipping."
+    fi
   else
-    echo "NOTE: nginx service not found; skipping."
+    echo "NOTE: systemctl not available on this host; skipping nginx restart."
   fi
 fi
 
