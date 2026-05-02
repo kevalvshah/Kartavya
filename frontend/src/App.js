@@ -41,14 +41,14 @@ import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 
 function useTheme() {
   const [theme, setTheme] = useState(() => {
-    const saved = localStorage.getItem("taskflow_theme");
+    const saved = localStorage.getItem("kartavya_theme");
     if (saved === "dark" || saved === "light") return saved;
     return "light";
   });
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", theme === "dark");
-    localStorage.setItem("taskflow_theme", theme);
+    localStorage.setItem("kartavya_theme", theme);
   }, [theme]);
 
   return { theme, setTheme };
@@ -80,15 +80,10 @@ function fromDatetimeLocalValue(v) {
 }
 
 function AppRouter() {
-  const location = useLocation();
-  // IMPORTANT: Emergent auth returns session_id in the URL fragment (hash)
-  if (location.hash?.includes("session_id=")) {
-    return <AuthCallback />;
-  }
-
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/register" element={<RegisterPage />} />
       <Route
         path="/"
         element={
@@ -113,36 +108,36 @@ function AppRouter() {
 function Protected({ children }) {
   const navigate = useNavigate();
   const location = useLocation();
-  const [isAuthed, setIsAuthed] = useState(null); // null=checking
+  const [isAuthed, setIsAuthed] = useState(null);
 
   useEffect(() => {
     let mounted = true;
+    const token = localStorage.getItem("auth_token");
+    if (!token) {
+      setIsAuthed(false);
+      navigate("/login", { replace: true, state: { from: location.pathname } });
+      return;
+    }
     (async () => {
       try {
         const res = await api.get("/auth/me");
         if (!mounted) return;
-        window.__taskflow_user = res.data;
+        window.__kartavya_user = res.data;
         setIsAuthed(true);
       } catch (e) {
         if (!mounted) return;
+        localStorage.removeItem("auth_token");
         setIsAuthed(false);
         navigate("/login", { replace: true, state: { from: location.pathname } });
       }
     })();
-    return () => {
-      mounted = false;
-    };
+    return () => { mounted = false; };
   }, [navigate, location.pathname]);
 
   if (isAuthed === null) {
     return (
-      <div data-testid="auth-checking" className="min-h-screen bg-app text-foreground">
-        <div className="mx-auto max-w-6xl px-6 py-10">
-          <div className="rounded-2xl border border-border/70 bg-card/60 p-6">
-            <div className="h-5 w-48 animate-pulse rounded bg-muted" />
-            <div className="mt-4 h-4 w-80 animate-pulse rounded bg-muted" />
-          </div>
-        </div>
+      <div className="min-h-screen bg-app text-foreground flex items-center justify-center">
+        <div className="text-sm text-muted-foreground">Loading Kartavya…</div>
       </div>
     );
   }
@@ -151,91 +146,155 @@ function Protected({ children }) {
   return children;
 }
 
+// ── Kartavya branded Login page ──────────────────────────────────────────────
 function LoginPage() {
-  const { theme, setTheme } = useTheme();
+  const navigate = useNavigate();
+  const { pushToast } = useToast();
+  const [form, setForm] = useState({ email: "", password: "" });
+  const [loading, setLoading] = useState(false);
 
-  const handleLogin = () => {
-    // REMINDER: DO NOT HARDCODE THE URL, OR ADD ANY FALLBACKS OR REDIRECT URLS, THIS BREAKS THE AUTH
-    const redirectUrl = window.location.origin + "/dashboard";
-    window.location.href = `https://auth.emergentagent.com/?redirect=${encodeURIComponent(redirectUrl)}`;
+  const handle = (e) => setForm((f) => ({ ...f, [e.target.name]: e.target.value }));
+
+  const submit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      const res = await api.post("/auth/login", { email: form.email, password: form.password });
+      localStorage.setItem("auth_token", res.data.token);
+      navigate("/dashboard", { replace: true });
+    } catch (err) {
+      pushToast({ type: "error", title: "Login failed", message: err?.response?.data?.detail || "Invalid email or password" });
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
-    <div data-testid="login-page" className="min-h-screen bg-app text-foreground">
-      <div className="mx-auto max-w-6xl px-6 py-10">
-        <header className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-violet-500 to-fuchsia-500 shadow-sm" />
-            <div>
-              <div data-testid="login-brand-title" className="text-lg font-semibold tracking-tight">
-                TaskFlow
-              </div>
-              <div data-testid="login-brand-subtitle" className="text-sm text-muted-foreground">
-                Notion-style tasks, with a dashboard and kanban.
-              </div>
-            </div>
+    <div className="min-h-screen flex" style={{ fontFamily: "'Nunito', sans-serif", background: "#f4fafd" }}>
+      {/* Left panel */}
+      <div style={{ width: 420, background: "#050e1a", display: "flex", flexDirection: "column", justifyContent: "space-between", padding: 44, flexShrink: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{ width: 36, height: 36, borderRadius: 9, background: "linear-gradient(135deg,#0082c6,#05b7aa)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <svg width="18" height="18" viewBox="0 0 22 22" fill="none"><path d="M4 11L11 4L18 11L11 18L4 11Z" stroke="white" strokeWidth="1.8"/><path d="M7.5 11L11 7.5L14.5 11L11 14.5L7.5 11Z" fill="white" opacity=".85"/></svg>
           </div>
-
-          <Button
-            data-testid="theme-toggle-button"
-            variant="ghost"
-            onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-          >
-            {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
-            <span className="ml-2 text-sm">{theme === "dark" ? "Light" : "Dark"}</span>
-          </Button>
-        </header>
-
-        <div className="mt-10 grid gap-6 lg:grid-cols-12">
-          <div className="lg:col-span-7">
-            <div className="rounded-3xl border border-border/70 bg-card/60 p-8 shadow-sm">
-              <h1
-                data-testid="login-hero-title"
-                className="text-4xl sm:text-5xl lg:text-6xl font-semibold tracking-tight"
-              >
-                Your tasks, organized like a workspace.
-              </h1>
-              <p
-                data-testid="login-hero-subtitle"
-                className="mt-4 text-base md:text-lg text-muted-foreground leading-relaxed"
-              >
-                Personal + team tasks, assignments, reminders, due dates with time, subtasks, tags, attachments, and a kanban board you can drag around.
-              </p>
-
-              <div className="mt-7 flex flex-wrap items-center gap-3">
-                <Button data-testid="login-google-button" onClick={handleLogin}>
-                  Continue with Google
-                </Button>
-                <div data-testid="login-note" className="text-sm text-muted-foreground">
-                  Uses secure cookie sessions (7 days).
-                </div>
-              </div>
-
-              <div className="mt-8 grid grid-cols-1 gap-3 sm:grid-cols-3">
-                <FeaturePill testid="login-pill-views" icon={<LayoutGrid size={16} />} title="Board + List" />
-                <FeaturePill testid="login-pill-due" icon={<CalendarClock size={16} />} title="Due date + time" />
-                <FeaturePill testid="login-pill-tags" icon={<Tag size={16} />} title="Teams + alerts" />
-              </div>
-            </div>
-          </div>
-
-          <div className="lg:col-span-5">
-            <div className="rounded-3xl border border-border/70 bg-gradient-to-b from-card/70 to-card/40 p-6 shadow-sm">
-              <div data-testid="login-preview-title" className="text-sm font-semibold text-muted-foreground">
-                What you get
-              </div>
-              <div className="mt-4 space-y-3">
-                <PreviewItem testid="login-preview-1" title="Dashboard" desc="Status, overdue, and due soon counts." />
-                <PreviewItem testid="login-preview-2" title="Teams" desc="Create teams and add admins by email." />
-                <PreviewItem testid="login-preview-3" title="Notifications" desc="In-app inbox + browser push (optional)." />
-              </div>
-            </div>
+          <div>
+            <div style={{ fontSize: 16, fontWeight: 800, color: "#fff", letterSpacing: 2.5, textTransform: "uppercase" }}>Kartavya</div>
+            <div style={{ fontSize: 8, letterSpacing: 3, textTransform: "uppercase", color: "#05b7aa", marginTop: 2, fontWeight: 700 }}>by Aekam Inc</div>
           </div>
         </div>
+        <div>
+          <h2 style={{ color: "#fff", fontSize: 30, fontWeight: 800, lineHeight: 1.25, marginBottom: 12, letterSpacing: -0.5 }}>Do what<br /><span style={{ background: "linear-gradient(90deg,#0082c6,#05b7aa)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>must be done.</span></h2>
+          <p style={{ color: "#8aa5be", fontSize: 13, lineHeight: 1.7 }}>Team task management built for Indian businesses — from solo founders to full agency teams.</p>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {["Kanban boards, list views & due dates", "Team roles, assignments & reminders", "Browser push & in-app notifications", "Web app + Android — one backend"].map((f) => (
+            <div key={f} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <div style={{ width: 20, height: 2, background: "linear-gradient(90deg,#0082c6,#05b7aa)", borderRadius: 2, flexShrink: 0 }} />
+              <span style={{ fontSize: 12, color: "#8aa5be" }}>{f}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+      {/* Right panel */}
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", padding: "48px 60px", maxWidth: 520, background: "#fff" }}>
+        <div style={{ marginBottom: 28 }}>
+          <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: 3.5, textTransform: "uppercase", color: "#03a1b6", marginBottom: 8 }}>Welcome back</div>
+          <h1 style={{ fontSize: 28, fontWeight: 800, color: "#0a1628", letterSpacing: -0.5, lineHeight: 1.2 }}>Sign in to<br /><span style={{ color: "#0082c6" }}>Kartavya</span></h1>
+        </div>
+        <form onSubmit={submit}>
+          <div style={{ marginBottom: 14 }}>
+            <label style={{ display: "block", fontSize: 10, fontWeight: 800, letterSpacing: 2, textTransform: "uppercase", color: "#5a7087", marginBottom: 6 }}>Email address</label>
+            <input name="email" type="email" value={form.email} onChange={handle} required placeholder="you@aekaminc.com" style={{ width: "100%", padding: "11px 14px", background: "#f4fafd", border: "1.5px solid #d0e8f5", borderRadius: 8, fontSize: 14, color: "#0a1628", outline: "none", boxSizing: "border-box" }} />
+          </div>
+          <div style={{ marginBottom: 14 }}>
+            <label style={{ display: "block", fontSize: 10, fontWeight: 800, letterSpacing: 2, textTransform: "uppercase", color: "#5a7087", marginBottom: 6 }}>Password</label>
+            <input name="password" type="password" value={form.password} onChange={handle} required placeholder="••••••••••" style={{ width: "100%", padding: "11px 14px", background: "#f4fafd", border: "1.5px solid #d0e8f5", borderRadius: 8, fontSize: 14, color: "#0a1628", outline: "none", boxSizing: "border-box" }} />
+          </div>
+          <button type="submit" disabled={loading} style={{ width: "100%", padding: 13, background: "linear-gradient(90deg,#0082c6,#03a1b6,#05b7aa)", border: "none", borderRadius: 8, fontSize: 12, fontWeight: 800, color: "#fff", cursor: "pointer", letterSpacing: 2, textTransform: "uppercase", marginTop: 4 }}>
+            {loading ? "Signing in…" : "Sign In"}
+          </button>
+        </form>
+        <p style={{ textAlign: "center", fontSize: 13, color: "#5a7087", marginTop: 18 }}>No account?{" "}<span onClick={() => navigate("/register")} style={{ color: "#0082c6", fontWeight: 800, cursor: "pointer" }}>Create one free</span></p>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, paddingTop: 18, marginTop: 18, borderTop: "1px solid #d0e8f5", fontSize: 9, letterSpacing: 2.5, textTransform: "uppercase" }}>
+          <span style={{ color: "#b8cedd", fontWeight: 700 }}>Powered by</span>
+          <div style={{ width: 4, height: 4, borderRadius: "50%", background: "#05b7aa" }} />
+          <span style={{ color: "#03a1b6", fontWeight: 800 }}>Aekam Inc</span>
+        </div>
+      </div>
+    </div>
+  );
+}
 
-        <footer className="mt-10 text-sm text-muted-foreground">
-          <span data-testid="login-footer-text">Tip: enable notifications in Settings → Notifications.</span>
-        </footer>
+// ── Kartavya branded Register page ───────────────────────────────────────────
+function RegisterPage() {
+  const navigate = useNavigate();
+  const { pushToast } = useToast();
+  const [form, setForm] = useState({ name: "", email: "", password: "", confirm: "" });
+  const [loading, setLoading] = useState(false);
+
+  const handle = (e) => setForm((f) => ({ ...f, [e.target.name]: e.target.value }));
+
+  const submit = async (e) => {
+    e.preventDefault();
+    if (form.password !== form.confirm) { pushToast({ type: "error", title: "Passwords don't match", message: "Please check and try again." }); return; }
+    if (form.password.length < 8) { pushToast({ type: "error", title: "Password too short", message: "Minimum 8 characters." }); return; }
+    setLoading(true);
+    try {
+      const res = await api.post("/auth/register", { name: form.name, email: form.email, password: form.password });
+      localStorage.setItem("auth_token", res.data.token);
+      navigate("/dashboard", { replace: true });
+    } catch (err) {
+      pushToast({ type: "error", title: "Registration failed", message: err?.response?.data?.detail || "Please try again." });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen flex" style={{ fontFamily: "'Nunito', sans-serif", background: "#f4fafd" }}>
+      <div style={{ width: 420, background: "#050e1a", display: "flex", flexDirection: "column", justifyContent: "space-between", padding: 44, flexShrink: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{ width: 36, height: 36, borderRadius: 9, background: "linear-gradient(135deg,#0082c6,#05b7aa)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <svg width="18" height="18" viewBox="0 0 22 22" fill="none"><path d="M4 11L11 4L18 11L11 18L4 11Z" stroke="white" strokeWidth="1.8"/><path d="M7.5 11L11 7.5L14.5 11L11 14.5L7.5 11Z" fill="white" opacity=".85"/></svg>
+          </div>
+          <div>
+            <div style={{ fontSize: 16, fontWeight: 800, color: "#fff", letterSpacing: 2.5, textTransform: "uppercase" }}>Kartavya</div>
+            <div style={{ fontSize: 8, letterSpacing: 3, textTransform: "uppercase", color: "#05b7aa", marginTop: 2, fontWeight: 700 }}>by Aekam Inc</div>
+          </div>
+        </div>
+        <div>
+          <h2 style={{ color: "#fff", fontSize: 30, fontWeight: 800, lineHeight: 1.25, marginBottom: 12 }}>Get started<br /><span style={{ background: "linear-gradient(90deg,#0082c6,#05b7aa)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>for free.</span></h2>
+          <p style={{ color: "#8aa5be", fontSize: 13, lineHeight: 1.7 }}>Join Kartavya and start managing your team tasks the right way.</p>
+        </div>
+        <div style={{ fontSize: 9, letterSpacing: 2, textTransform: "uppercase", color: "rgba(255,255,255,0.2)", fontWeight: 700 }}>by Aekam Inc — aekaminc.com</div>
+      </div>
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", padding: "48px 60px", maxWidth: 520, background: "#fff" }}>
+        <div style={{ marginBottom: 28 }}>
+          <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: 3.5, textTransform: "uppercase", color: "#03a1b6", marginBottom: 8 }}>Get started free</div>
+          <h1 style={{ fontSize: 28, fontWeight: 800, color: "#0a1628", letterSpacing: -0.5, lineHeight: 1.2 }}>Join<br /><span style={{ color: "#0082c6" }}>Kartavya</span></h1>
+        </div>
+        <form onSubmit={submit}>
+          {[
+            { label: "Full name", name: "name", type: "text", ph: "Jane Smith" },
+            { label: "Email address", name: "email", type: "email", ph: "you@aekaminc.com" },
+            { label: "Password", name: "password", type: "password", ph: "At least 8 characters" },
+            { label: "Confirm password", name: "confirm", type: "password", ph: "••••••••••" },
+          ].map(({ label, name, type, ph }) => (
+            <div key={name} style={{ marginBottom: 14 }}>
+              <label style={{ display: "block", fontSize: 10, fontWeight: 800, letterSpacing: 2, textTransform: "uppercase", color: "#5a7087", marginBottom: 6 }}>{label}</label>
+              <input name={name} type={type} value={form[name]} onChange={handle} required placeholder={ph} style={{ width: "100%", padding: "11px 14px", background: "#f4fafd", border: "1.5px solid #d0e8f5", borderRadius: 8, fontSize: 14, color: "#0a1628", outline: "none", boxSizing: "border-box" }} />
+            </div>
+          ))}
+          <button type="submit" disabled={loading} style={{ width: "100%", padding: 13, background: "linear-gradient(90deg,#0082c6,#03a1b6,#05b7aa)", border: "none", borderRadius: 8, fontSize: 12, fontWeight: 800, color: "#fff", cursor: "pointer", letterSpacing: 2, textTransform: "uppercase", marginTop: 4 }}>
+            {loading ? "Creating account…" : "Create Account"}
+          </button>
+        </form>
+        <p style={{ textAlign: "center", fontSize: 13, color: "#5a7087", marginTop: 18 }}>Already have an account?{" "}<span onClick={() => navigate("/login")} style={{ color: "#0082c6", fontWeight: 800, cursor: "pointer" }}>Sign in</span></p>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, paddingTop: 18, marginTop: 18, borderTop: "1px solid #d0e8f5", fontSize: 9, letterSpacing: 2.5, textTransform: "uppercase" }}>
+          <span style={{ color: "#b8cedd", fontWeight: 700 }}>Powered by</span>
+          <div style={{ width: 4, height: 4, borderRadius: "50%", background: "#05b7aa" }} />
+          <span style={{ color: "#03a1b6", fontWeight: 800 }}>Aekam Inc</span>
+        </div>
       </div>
     </div>
   );
@@ -243,10 +302,7 @@ function LoginPage() {
 
 function FeaturePill({ icon, title, testid }) {
   return (
-    <div
-      data-testid={testid}
-      className="flex items-center gap-2 rounded-2xl border border-border/60 bg-background/40 px-4 py-3"
-    >
+    <div data-testid={testid} className="flex items-center gap-2 rounded-2xl border border-border/60 bg-background/40 px-4 py-3">
       <div className="text-violet-500">{icon}</div>
       <div className="text-sm font-medium">{title}</div>
     </div>
@@ -262,58 +318,10 @@ function PreviewItem({ title, desc, testid }) {
   );
 }
 
-function AuthCallback() {
-  const navigate = useNavigate();
-  const { pushToast } = useToast();
-  const hasProcessed = useRef(false);
-
-  useEffect(() => {
-    if (hasProcessed.current) return;
-    hasProcessed.current = true;
-
-    const hash = window.location.hash || "";
-    const match = hash.match(/session_id=([^&]+)/);
-    const sessionId = match ? decodeURIComponent(match[1]) : null;
-
-    if (!sessionId) {
-      pushToast({ type: "error", title: "Login failed", message: "Missing session_id" });
-      navigate("/login", { replace: true });
-      return;
-    }
-
-    (async () => {
-      try {
-        await api.post("/auth/session", { session_id: sessionId });
-        window.history.replaceState(null, "", window.location.pathname);
-        navigate("/dashboard", { replace: true });
-      } catch (e) {
-        pushToast({ type: "error", title: "Login failed", message: "Could not create session" });
-        navigate("/login", { replace: true });
-      }
-    })();
-  }, [navigate, pushToast]);
-
-  return (
-    <div data-testid="auth-callback" className="min-h-screen bg-app text-foreground">
-      <div className="mx-auto max-w-3xl px-6 py-16">
-        <div className="rounded-3xl border border-border/70 bg-card/60 p-8">
-          <div data-testid="auth-callback-title" className="text-xl font-semibold">
-            Signing you in…
-          </div>
-          <div data-testid="auth-callback-subtitle" className="mt-2 text-sm text-muted-foreground">
-            This should only take a moment.
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function AppShell() {
   const [notifOpen, setNotifOpen] = useState(false);
   const [unread, setUnread] = useState(0);
 
-  // Poll reminders + unread count when app is open
   useEffect(() => {
     let mounted = true;
     const tick = async () => {
@@ -322,17 +330,11 @@ function AppShell() {
         const res = await api.get("/notifications", { params: { unread_only: true } });
         if (!mounted) return;
         setUnread(res.data.length);
-      } catch (e) {
-        // ignore
-      }
+      } catch (e) {}
     };
-
     tick();
     const id = setInterval(tick, 30000);
-    return () => {
-      mounted = false;
-      clearInterval(id);
-    };
+    return () => { mounted = false; clearInterval(id); };
   }, []);
 
   return (
@@ -342,13 +344,10 @@ function AppShell() {
           <Sidebar />
           <main className="min-w-0">
             <Topbar unread={unread} onOpenNotifications={() => setNotifOpen(true)} />
-            <div className="mt-6">
-              <Outlet />
-            </div>
+            <div className="mt-6"><Outlet /></div>
           </main>
         </div>
       </div>
-
       <NotificationsModal open={notifOpen} onOpenChange={setNotifOpen} />
     </div>
   );
@@ -369,29 +368,18 @@ function Sidebar() {
   ];
 
   return (
-    <aside
-      data-testid="sidebar"
-      className="rounded-3xl border border-border/70 bg-card/50 p-4 shadow-sm lg:sticky lg:top-6 lg:h-[calc(100vh-48px)]"
-    >
+    <aside data-testid="sidebar" className="rounded-3xl border border-border/70 bg-card/50 p-4 shadow-sm lg:sticky lg:top-6 lg:h-[calc(100vh-48px)]">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-violet-500 to-fuchsia-500" />
+          <div style={{ width: 36, height: 36, borderRadius: 9, background: "linear-gradient(135deg,#0082c6,#05b7aa)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <svg width="16" height="16" viewBox="0 0 22 22" fill="none"><path d="M4 11L11 4L18 11L11 18L4 11Z" stroke="white" strokeWidth="1.8"/><path d="M7.5 11L11 7.5L14.5 11L11 14.5L7.5 11Z" fill="white" opacity=".85"/></svg>
+          </div>
           <div>
-            <div data-testid="sidebar-brand" className="text-sm font-semibold tracking-tight">
-              TaskFlow
-            </div>
-            <div data-testid="sidebar-brand-caption" className="text-xs text-muted-foreground">
-              Focused workspace
-            </div>
+            <div data-testid="sidebar-brand" className="text-sm font-semibold tracking-tight" style={{ letterSpacing: 1.5, textTransform: "uppercase", fontSize: 13 }}>Kartavya</div>
+            <div data-testid="sidebar-brand-caption" className="text-xs text-muted-foreground" style={{ fontSize: 9, letterSpacing: 2, color: "#05b7aa" }}>by Aekam Inc</div>
           </div>
         </div>
-
-        <Button
-          data-testid="sidebar-theme-toggle"
-          variant="ghost"
-          size="icon"
-          onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-        >
+        <Button data-testid="sidebar-theme-toggle" variant="ghost" size="icon" onClick={() => setTheme(theme === "dark" ? "light" : "dark")}>
           {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
         </Button>
       </div>
@@ -401,34 +389,13 @@ function Sidebar() {
           const active = location.pathname === item.to;
           const Icon = item.icon;
           return (
-            <button
-              key={item.to}
-              data-testid={item.testid}
-              onClick={() => navigate(item.to)}
-              className={cn(
-                "w-full rounded-2xl px-3 py-2 text-left text-sm font-medium",
-                "transition-colors duration-150",
-                active
-                  ? "bg-violet-500/15 text-violet-100 dark:text-violet-50"
-                  : "text-muted-foreground hover:bg-muted/40 hover:text-foreground",
-              )}
-            >
-              <span className="inline-flex items-center gap-2">
-                <Icon size={16} />
-                {item.label}
-              </span>
+            <button key={item.to} data-testid={item.testid} onClick={() => navigate(item.to)}
+              className={cn("w-full rounded-2xl px-3 py-2 text-left text-sm font-medium", "transition-colors duration-150",
+                active ? "bg-violet-500/15 text-violet-100 dark:text-violet-50" : "text-muted-foreground hover:bg-muted/40 hover:text-foreground")}>
+              <span className="inline-flex items-center gap-2"><Icon size={16} />{item.label}</span>
             </button>
           );
         })}
-      </div>
-
-      <div className="mt-6 rounded-2xl border border-border/60 bg-background/30 p-3">
-        <div data-testid="sidebar-hint-title" className="text-xs font-semibold text-muted-foreground">
-          Pro tip
-        </div>
-        <div data-testid="sidebar-hint" className="mt-1 text-xs text-muted-foreground leading-relaxed">
-          Create team tasks and assign them. Reminders can notify assignees.
-        </div>
       </div>
     </aside>
   );
@@ -439,49 +406,30 @@ function Topbar({ unread, onOpenNotifications }) {
   const { pushToast } = useToast();
 
   const handleLogout = async () => {
-    try {
-      await api.post("/auth/logout");
-      pushToast({ type: "success", title: "Logged out", message: "See you next time." });
-    } catch (e) {
-      // ignore
-    }
+    try { await api.post("/auth/logout"); } catch (e) {}
+    localStorage.removeItem("auth_token");
+    pushToast({ type: "success", title: "Logged out", message: "See you next time." });
     navigate("/login", { replace: true });
   };
 
   return (
-    <div
-      data-testid="topbar"
-      className="flex flex-wrap items-center justify-between gap-3 rounded-3xl border border-border/70 bg-card/50 px-4 py-3"
-    >
+    <div data-testid="topbar" className="flex flex-wrap items-center justify-between gap-3 rounded-3xl border border-border/70 bg-card/50 px-4 py-3">
       <div className="min-w-0">
-        <div data-testid="topbar-title" className="text-sm font-semibold">
-          Workspace
-        </div>
-        <div data-testid="topbar-subtitle" className="text-xs text-muted-foreground">
-          Plan, ship, repeat.
-        </div>
+        <div data-testid="topbar-title" className="text-sm font-semibold">Workspace</div>
+        <div data-testid="topbar-subtitle" className="text-xs text-muted-foreground">Plan, ship, repeat.</div>
       </div>
-
       <div className="flex items-center gap-2">
-        <button
-          data-testid="topbar-notifications-button"
-          onClick={onOpenNotifications}
-          className="relative inline-flex h-10 w-10 items-center justify-center rounded-full border border-border/60 bg-background/30 transition-colors duration-150 hover:bg-muted/40"
-        >
+        <button data-testid="topbar-notifications-button" onClick={onOpenNotifications}
+          className="relative inline-flex h-10 w-10 items-center justify-center rounded-full border border-border/60 bg-background/30 transition-colors duration-150 hover:bg-muted/40">
           <Bell size={16} />
           {unread ? (
-            <span
-              data-testid="topbar-notifications-unread"
-              className="absolute -right-1 -top-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-violet-600 px-1 text-[11px] font-semibold text-white"
-            >
+            <span data-testid="topbar-notifications-unread" className="absolute -right-1 -top-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-violet-600 px-1 text-[11px] font-semibold text-white">
               {unread > 99 ? "99+" : unread}
             </span>
           ) : null}
         </button>
-
         <Button data-testid="topbar-logout-button" variant="ghost" onClick={handleLogout}>
-          <LogOut size={16} />
-          <span className="ml-2 text-sm">Logout</span>
+          <LogOut size={16} /><span className="ml-2 text-sm">Logout</span>
         </Button>
       </div>
     </div>
@@ -511,54 +459,31 @@ function DashboardPage() {
         <StatCard testid="dashboard-stat-done" label="Done" value={summary?.done ?? "—"} />
         <StatCard testid="dashboard-stat-overdue" label="Overdue" value={summary?.overdue ?? "—"} tone="danger" />
       </div>
-
       <div className="grid gap-6 lg:grid-cols-12">
         <div className="lg:col-span-7">
           <div className="rounded-3xl border border-border/70 bg-card/50 p-6">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <div data-testid="dashboard-focus-title" className="text-sm font-semibold">
-                  Today’s focus
-                </div>
-                <div data-testid="dashboard-focus-subtitle" className="mt-1 text-sm text-muted-foreground">
-                  Overdue tasks and due within 24h are a good place to start.
-                </div>
+                <div data-testid="dashboard-focus-title" className="text-sm font-semibold">Today's focus</div>
+                <div data-testid="dashboard-focus-subtitle" className="mt-1 text-sm text-muted-foreground">Overdue tasks and due within 24h are a good place to start.</div>
               </div>
-              <Badge data-testid="dashboard-due24h-badge" tone="info">
-                Due 24h: {summary?.due_24h ?? "—"}
-              </Badge>
+              <Badge data-testid="dashboard-due24h-badge" tone="info">Due 24h: {summary?.due_24h ?? "—"}</Badge>
             </div>
-
             <div className="mt-5 rounded-2xl border border-border/60 bg-background/30 p-4">
-              <div data-testid="dashboard-note" className="text-sm text-muted-foreground">
-                Create team tasks, assign them, and enable browser notifications for reminders.
-              </div>
+              <div data-testid="dashboard-note" className="text-sm text-muted-foreground">Create team tasks, assign them, and enable browser notifications for reminders.</div>
             </div>
           </div>
         </div>
-
-        <div className="lg:col-span-5">
-          <QuickAddCard />
-        </div>
+        <div className="lg:col-span-5"><QuickAddCard /></div>
       </div>
     </div>
   );
 }
 
 function StatCard({ label, value, testid, tone }) {
-  const toneClass =
-    tone === "danger"
-      ? "from-rose-500/15 to-transparent"
-      : "from-violet-500/15 to-transparent";
+  const toneClass = tone === "danger" ? "from-rose-500/15 to-transparent" : "from-violet-500/15 to-transparent";
   return (
-    <div
-      data-testid={testid}
-      className={cn(
-        "rounded-3xl border border-border/70 bg-card/50 p-5",
-        "bg-gradient-to-b",
-        toneClass,
-      )}
-    >
+    <div data-testid={testid} className={cn("rounded-3xl border border-border/70 bg-card/50 p-5", "bg-gradient-to-b", toneClass)}>
       <div className="text-xs font-semibold text-muted-foreground">{label}</div>
       <div className="mt-2 text-2xl font-semibold tracking-tight">{value}</div>
     </div>
@@ -571,10 +496,7 @@ function QuickAddCard() {
   const [saving, setSaving] = useState(false);
 
   const create = async () => {
-    if (!title.trim()) {
-      pushToast({ type: "error", title: "Missing title", message: "Add a task title." });
-      return;
-    }
+    if (!title.trim()) { pushToast({ type: "error", title: "Missing title", message: "Add a task title." }); return; }
     setSaving(true);
     try {
       await api.post("/tasks", { title: title.trim(), status: "todo", priority: "medium" });
@@ -589,24 +511,11 @@ function QuickAddCard() {
 
   return (
     <div data-testid="dashboard-quickadd" className="rounded-3xl border border-border/70 bg-card/50 p-6">
-      <div data-testid="dashboard-quickadd-title" className="text-sm font-semibold">
-        Quick add
-      </div>
-      <div data-testid="dashboard-quickadd-subtitle" className="mt-1 text-sm text-muted-foreground">
-        Capture something now, polish it later.
-      </div>
-
+      <div data-testid="dashboard-quickadd-title" className="text-sm font-semibold">Quick add</div>
+      <div data-testid="dashboard-quickadd-subtitle" className="mt-1 text-sm text-muted-foreground">Capture something now, polish it later.</div>
       <div className="mt-4 flex items-center gap-2">
-        <Input
-          data-testid="dashboard-quickadd-input"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          placeholder="e.g., Draft project brief"
-        />
-        <Button data-testid="dashboard-quickadd-button" onClick={create} disabled={saving}>
-          <Plus size={16} />
-          <span className="ml-2">Add</span>
-        </Button>
+        <Input data-testid="dashboard-quickadd-input" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g., Draft project brief" />
+        <Button data-testid="dashboard-quickadd-button" onClick={create} disabled={saving}><Plus size={16} /><span className="ml-2">Add</span></Button>
       </div>
     </div>
   );
@@ -617,15 +526,7 @@ function TasksListPage() {
   const [tasks, setTasks] = useState([]);
   const [categories, setCategories] = useState([]);
   const [teams, setTeams] = useState([]);
-
-  const [filters, setFilters] = useState({
-    status: "",
-    category_id: "",
-    q: "",
-    team_id: "",
-    assigned_to_me: false,
-  });
-
+  const [filters, setFilters] = useState({ status: "", category_id: "", q: "", team_id: "", assigned_to_me: false });
   const [editorOpen, setEditorOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [editorKey, setEditorKey] = useState("new");
@@ -637,838 +538,116 @@ function TasksListPage() {
     if (filters.q) params.q = filters.q;
     if (filters.team_id) params.team_id = filters.team_id;
     if (filters.assigned_to_me) params.assigned_to_me = true;
-
-    const [t, c, te] = await Promise.all([
-      api.get("/tasks", { params }),
-      api.get("/categories"),
-      api.get("/teams"),
-    ]);
-    setTasks(t.data);
-    setCategories(c.data);
-    setTeams(te.data);
+    const [t, c, te] = await Promise.all([api.get("/tasks", { params }), api.get("/categories"), api.get("/teams")]);
+    setTasks(t.data); setCategories(c.data); setTeams(te.data);
   };
 
-  useEffect(() => {
-    load().catch(() => {
-      pushToast({ type: "error", title: "Could not load tasks", message: "Try refreshing." });
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  useEffect(() => { load().catch(() => pushToast({ type: "error", title: "Could not load tasks", message: "Try refreshing." })); }, []);
+  useEffect(() => { const t = setTimeout(() => load().catch(() => {}), 250); return () => clearTimeout(t); }, [filters.status, filters.category_id, filters.q, filters.team_id, filters.assigned_to_me]);
 
-  useEffect(() => {
-    const t = setTimeout(() => {
-      load().catch(() => {});
-    }, 250);
-    return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters.status, filters.category_id, filters.q, filters.team_id, filters.assigned_to_me]);
-
-  const onCreate = () => {
-    setEditing(null);
-    setEditorKey(`new_${Date.now()}`);
-    setEditorOpen(true);
-  };
-
-  const onEdit = (task) => {
-    setEditing(task);
-    setEditorKey(`edit_${task.task_id}`);
-    setEditorOpen(true);
-  };
-
+  const onCreate = () => { setEditing(null); setEditorKey(`new_${Date.now()}`); setEditorOpen(true); };
+  const onEdit = (task) => { setEditing(task); setEditorKey(`edit_${task.task_id}`); setEditorOpen(true); };
   const onToggle = async (task) => {
-    try {
-      const res = await api.patch(`/tasks/${task.task_id}/toggle`);
-      setTasks((prev) => prev.map((t) => (t.task_id === task.task_id ? res.data : t)));
-    } catch (e) {
-      pushToast({ type: "error", title: "Could not update", message: "Try again." });
-    }
+    try { const res = await api.patch(`/tasks/${task.task_id}/toggle`); setTasks((prev) => prev.map((t) => (t.task_id === task.task_id ? res.data : t))); }
+    catch (e) { pushToast({ type: "error", title: "Could not update", message: "Try again." }); }
   };
-
   const onDelete = async (task) => {
     if (!window.confirm(`Delete “${task.title}”?`)) return;
-    try {
-      await api.delete(`/tasks/${task.task_id}`);
-      setTasks((prev) => prev.filter((t) => t.task_id !== task.task_id));
-      pushToast({ type: "success", title: "Deleted", message: "Task removed." });
-    } catch (e) {
-      pushToast({ type: "error", title: "Could not delete", message: "Try again." });
-    }
+    try { await api.delete(`/tasks/${task.task_id}`); setTasks((prev) => prev.filter((t) => t.task_id !== task.task_id)); pushToast({ type: "success", title: "Deleted", message: "Task removed." }); }
+    catch (e) { pushToast({ type: "error", title: "Could not delete", message: "Try again." }); }
   };
-
-  const scopeLabel = (t) => {
-    if (t.team_id) return `Team: ${teams.find((x) => x.team_id === t.team_id)?.name || t.team_id}`;
-    return "Personal";
-  };
+  const scopeLabel = (t) => { if (t.team_id) return `Team: ${teams.find((x) => x.team_id === t.team_id)?.name || t.team_id}`; return "Personal"; };
 
   return (
     <div data-testid="tasks-page" className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <div data-testid="tasks-title" className="text-sm font-semibold">
-            Tasks
-          </div>
-          <div data-testid="tasks-subtitle" className="mt-1 text-sm text-muted-foreground">
-            Personal + team tasks. Assign and get notified.
-          </div>
-        </div>
-        <Button data-testid="tasks-create-button" onClick={onCreate}>
-          <Plus size={16} />
-          <span className="ml-2">New task</span>
-        </Button>
+        <div><div data-testid="tasks-title" className="text-sm font-semibold">Tasks</div><div data-testid="tasks-subtitle" className="mt-1 text-sm text-muted-foreground">Personal + team tasks.</div></div>
+        <Button data-testid="tasks-create-button" onClick={onCreate}><Plus size={16} /><span className="ml-2">New task</span></Button>
       </div>
-
       <div data-testid="tasks-filters" className="rounded-3xl border border-border/70 bg-card/50 p-4">
         <div className="grid gap-3 md:grid-cols-5">
-          <div>
-            <div data-testid="tasks-filter-status-label" className="mb-1 text-xs font-semibold text-muted-foreground">
-              Status
-            </div>
-            <Select
-              data-testid="tasks-filter-status"
-              value={filters.status}
-              onChange={(v) => setFilters((p) => ({ ...p, status: v }))}
-              options={[
-                { value: "", label: "All" },
-                { value: "todo", label: "Todo" },
-                { value: "in_progress", label: "In progress" },
-                { value: "done", label: "Done" },
-              ]}
-            />
-          </div>
-          <div>
-            <div data-testid="tasks-filter-team-label" className="mb-1 text-xs font-semibold text-muted-foreground">
-              Team
-            </div>
-            <Select
-              data-testid="tasks-filter-team"
-              value={filters.team_id}
-              onChange={(v) => setFilters((p) => ({ ...p, team_id: v }))}
-              options={[{ value: "", label: "All scopes" }, ...teams.map((t) => ({ value: t.team_id, label: t.name }))]}
-            />
-          </div>
-          <div>
-            <div data-testid="tasks-filter-category-label" className="mb-1 text-xs font-semibold text-muted-foreground">
-              Category
-            </div>
-            <Select
-              data-testid="tasks-filter-category"
-              value={filters.category_id}
-              onChange={(v) => setFilters((p) => ({ ...p, category_id: v }))}
-              options={[{ value: "", label: "All" }, ...categories.map((c) => ({ value: c.category_id, label: c.name }))]}
-            />
-          </div>
-          <div>
-            <div data-testid="tasks-filter-search-label" className="mb-1 text-xs font-semibold text-muted-foreground">
-              Search
-            </div>
-            <Input
-              data-testid="tasks-filter-search"
-              value={filters.q}
-              onChange={(e) => setFilters((p) => ({ ...p, q: e.target.value }))}
-              placeholder="Search by title…"
-            />
-          </div>
-          <div>
-            <div data-testid="tasks-filter-assigned-label" className="mb-1 text-xs font-semibold text-muted-foreground">
-              Assigned
-            </div>
-            <button
-              data-testid="tasks-filter-assigned-to-me"
-              onClick={() => setFilters((p) => ({ ...p, assigned_to_me: !p.assigned_to_me }))}
-              className={cn(
-                "h-10 w-full rounded-2xl border border-border/60 bg-background/40 px-3 text-sm",
-                "transition-colors duration-150 hover:bg-muted/40",
-                filters.assigned_to_me ? "ring-2 ring-violet-500/30" : "",
-              )}
-            >
-              {filters.assigned_to_me ? "Assigned to me" : "All"}
-            </button>
-          </div>
+          <div><div className="mb-1 text-xs font-semibold text-muted-foreground">Status</div><Select data-testid="tasks-filter-status" value={filters.status} onChange={(v) => setFilters((p) => ({ ...p, status: v }))} options={[{ value: "", label: "All" }, { value: "todo", label: "Todo" }, { value: "in_progress", label: "In progress" }, { value: "done", label: "Done" }]} /></div>
+          <div><div className="mb-1 text-xs font-semibold text-muted-foreground">Team</div><Select data-testid="tasks-filter-team" value={filters.team_id} onChange={(v) => setFilters((p) => ({ ...p, team_id: v }))} options={[{ value: "", label: "All scopes" }, ...teams.map((t) => ({ value: t.team_id, label: t.name }))]} /></div>
+          <div><div className="mb-1 text-xs font-semibold text-muted-foreground">Category</div><Select data-testid="tasks-filter-category" value={filters.category_id} onChange={(v) => setFilters((p) => ({ ...p, category_id: v }))} options={[{ value: "", label: "All" }, ...categories.map((c) => ({ value: c.category_id, label: c.name }))]} /></div>
+          <div><div className="mb-1 text-xs font-semibold text-muted-foreground">Search</div><Input data-testid="tasks-filter-search" value={filters.q} onChange={(e) => setFilters((p) => ({ ...p, q: e.target.value }))} placeholder="Search by title…" /></div>
+          <div><div className="mb-1 text-xs font-semibold text-muted-foreground">Assigned</div><button data-testid="tasks-filter-assigned-to-me" onClick={() => setFilters((p) => ({ ...p, assigned_to_me: !p.assigned_to_me }))} className={cn("h-10 w-full rounded-2xl border border-border/60 bg-background/40 px-3 text-sm transition-colors duration-150 hover:bg-muted/40", filters.assigned_to_me ? "ring-2 ring-violet-500/30" : "")}>{filters.assigned_to_me ? "Assigned to me" : "All"}</button></div>
         </div>
       </div>
-
       <div data-testid="tasks-table" className="rounded-3xl border border-border/70 bg-card/50 overflow-hidden">
         <div className="grid grid-cols-[1fr_200px_140px_180px_220px_160px] gap-0 border-b border-border/60 px-5 py-3 text-xs font-semibold text-muted-foreground">
-          <div data-testid="tasks-col-title">Title</div>
-          <div data-testid="tasks-col-scope">Scope</div>
-          <div data-testid="tasks-col-status">Status</div>
-          <div data-testid="tasks-col-priority">Priority</div>
-          <div data-testid="tasks-col-due">Due</div>
-          <div data-testid="tasks-col-actions" className="text-right">
-            Actions
-          </div>
+          <div>Title</div><div>Scope</div><div>Status</div><div>Priority</div><div>Due</div><div className="text-right">Actions</div>
         </div>
-
-        {tasks.length === 0 ? (
-          <div data-testid="tasks-empty" className="px-5 py-8 text-sm text-muted-foreground">
-            No tasks found. Create one.
-          </div>
-        ) : (
-          <div>
-            {tasks.map((t) => (
-              <div
-                key={t.task_id}
-                data-testid={`task-row-${t.task_id}`}
-                className="grid grid-cols-[1fr_200px_140px_180px_220px_160px] items-center border-b border-border/40 px-5 py-4"
-              >
-                <button
-                  data-testid={`task-row-title-button-${t.task_id}`}
-                  onClick={() => onEdit(t)}
-                  className="min-w-0 text-left"
-                >
-                  <div className="truncate text-sm font-semibold">{t.title}</div>
-                  <div className="mt-1 flex flex-wrap gap-1">
-                    {(t.tags || []).slice(0, 3).map((tag) => (
-                      <Badge key={tag} data-testid={`task-tag-${t.task_id}-${tag}`} tone="neutral">
-                        {tag}
-                      </Badge>
-                    ))}
-                    {(t.assignee_user_ids || []).length ? (
-                      <Badge data-testid={`task-assignees-${t.task_id}`} tone="info">
-                        {(t.assignee_user_ids || []).length} assignee(s)
-                      </Badge>
-                    ) : null}
-                  </div>
-                </button>
-
-                <div data-testid={`task-row-scope-${t.task_id}`} className="text-sm text-muted-foreground">
-                  {scopeLabel(t)}
-                </div>
-                <div data-testid={`task-row-status-${t.task_id}`} className="text-sm text-muted-foreground">
-                  {t.status === "in_progress" ? "In progress" : t.status.charAt(0).toUpperCase() + t.status.slice(1)}
-                </div>
-                <div data-testid={`task-row-priority-${t.task_id}`} className="text-sm text-muted-foreground">
-                  {t.priority}
-                </div>
-                <div data-testid={`task-row-due-${t.task_id}`} className="text-sm text-muted-foreground">
-                  {t.due_at ? formatDue(t.due_at) : "—"}
-                </div>
-                <div className="flex justify-end gap-2">
-                  <Button
-                    data-testid={`task-toggle-${t.task_id}`}
-                    variant="ghost"
-                    onClick={() => onToggle(t)}
-                  >
-                    {t.status === "done" ? "Reopen" : "Complete"}
-                  </Button>
-                  <Button
-                    data-testid={`task-delete-${t.task_id}`}
-                    variant="ghost"
-                    onClick={() => onDelete(t)}
-                  >
-                    Delete
-                  </Button>
-                </div>
-              </div>
-            ))}
-          </div>
+        {tasks.length === 0 ? (<div data-testid="tasks-empty" className="px-5 py-8 text-sm text-muted-foreground">No tasks found. Create one.</div>) : (
+          <div>{tasks.map((t) => (
+            <div key={t.task_id} data-testid={`task-row-${t.task_id}`} className="grid grid-cols-[1fr_200px_140px_180px_220px_160px] items-center border-b border-border/40 px-5 py-4">
+              <button data-testid={`task-row-title-button-${t.task_id}`} onClick={() => onEdit(t)} className="min-w-0 text-left"><div className="truncate text-sm font-semibold">{t.title}</div><div className="mt-1 flex flex-wrap gap-1">{(t.tags || []).slice(0, 3).map((tag) => (<Badge key={tag} tone="neutral">{tag}</Badge>))}{(t.assignee_user_ids || []).length ? (<Badge tone="info">{(t.assignee_user_ids || []).length} assignee(s)</Badge>) : null}</div></button>
+              <div className="text-sm text-muted-foreground">{scopeLabel(t)}</div>
+              <div className="text-sm text-muted-foreground">{t.status === "in_progress" ? "In progress" : t.status.charAt(0).toUpperCase() + t.status.slice(1)}</div>
+              <div className="text-sm text-muted-foreground">{t.priority}</div>
+              <div className="text-sm text-muted-foreground">{t.due_at ? formatDue(t.due_at) : "—"}</div>
+              <div className="flex justify-end gap-2"><Button variant="ghost" onClick={() => onToggle(t)}>{t.status === "done" ? "Reopen" : "Complete"}</Button><Button variant="ghost" onClick={() => onDelete(t)}>Delete</Button></div>
+            </div>
+          ))}</div>
         )}
       </div>
-
-      <TaskEditor
-        key={editorKey}
-        open={editorOpen}
-        onOpenChange={setEditorOpen}
-        editing={editing}
-        categories={categories}
-        teams={teams}
-        onSaved={(task) => {
-          setEditorOpen(false);
-          setEditing(null);
-          setTasks((prev) => {
-            const exists = prev.some((t) => t.task_id === task.task_id);
-            if (exists) return prev.map((t) => (t.task_id === task.task_id ? task : t));
-            return [task, ...prev];
-          });
-        }}
-      />
+      <TaskEditor key={editorKey} open={editorOpen} onOpenChange={setEditorOpen} editing={editing} categories={categories} teams={teams} onSaved={(task) => { setEditorOpen(false); setEditing(null); setTasks((prev) => { const exists = prev.some((t) => t.task_id === task.task_id); if (exists) return prev.map((t) => (t.task_id === task.task_id ? task : t)); return [task, ...prev]; }); }} />
     </div>
   );
 }
 
 function TaskEditor({ open, onOpenChange, editing, categories, teams, onSaved }) {
   const { pushToast } = useToast();
-
   const [teamMembers, setTeamMembers] = useState([]);
   const [yourRole, setYourRole] = useState("member");
   const [teamPermLoading, setTeamPermLoading] = useState(false);
 
   const initial = useMemo(() => {
-    if (!editing) {
-      return {
-        title: "",
-        description: "",
-        status: "todo",
-        priority: "medium",
-        category_id: "",
-        tags: "",
-        team_id: "",
-        assign_scope: "none", // none | whole_team | members
-        assignee_user_ids: [],
-        due_at: "",
-        reminder_at: "",
-        estimated_minutes: "",
-        recurrence_rule: "none",
-        recurrence_interval: 1,
-        attachments: [{ name: "", url: "" }],
-        custom_fields_text: "{}",
-        subtasks: [{ title: "", is_done: false }],
-      };
-    }
-
-    return {
-      title: editing.title || "",
-      description: editing.description || "",
-      status: editing.status || "todo",
-      priority: editing.priority || "medium",
-      category_id: editing.category_id || "",
-      tags: (editing.tags || []).join(", "),
-      team_id: editing.team_id || "",
-      assign_scope: (editing.assignee_user_ids || []).length ? "members" : "none",
-      assignee_user_ids: editing.assignee_user_ids || [],
-      due_at: toDatetimeLocalValue(editing.due_at),
-      reminder_at: toDatetimeLocalValue(editing.reminder_at),
-      estimated_minutes: editing.estimated_minutes ? String(editing.estimated_minutes) : "",
-      recurrence_rule: editing.recurrence?.rule || "none",
-      recurrence_interval: editing.recurrence?.interval || 1,
-      attachments:
-        editing.attachments && editing.attachments.length
-          ? editing.attachments
-          : [{ name: "", url: "" }],
-      custom_fields_text: JSON.stringify(editing.custom_fields || {}, null, 2),
-      subtasks:
-        editing.subtasks && editing.subtasks.length
-          ? editing.subtasks
-          : [{ title: "", is_done: false }],
-    };
+    if (!editing) return { title: "", description: "", status: "todo", priority: "medium", category_id: "", tags: "", team_id: "", assign_scope: "none", assignee_user_ids: [], due_at: "", reminder_at: "", estimated_minutes: "", recurrence_rule: "none", recurrence_interval: 1, attachments: [{ name: "", url: "" }], custom_fields_text: "{}", subtasks: [{ title: "", is_done: false }] };
+    return { title: editing.title || "", description: editing.description || "", status: editing.status || "todo", priority: editing.priority || "medium", category_id: editing.category_id || "", tags: (editing.tags || []).join(", "), team_id: editing.team_id || "", assign_scope: (editing.assignee_user_ids || []).length ? "members" : "none", assignee_user_ids: editing.assignee_user_ids || [], due_at: toDatetimeLocalValue(editing.due_at), reminder_at: toDatetimeLocalValue(editing.reminder_at), estimated_minutes: editing.estimated_minutes ? String(editing.estimated_minutes) : "", recurrence_rule: editing.recurrence?.rule || "none", recurrence_interval: editing.recurrence?.interval || 1, attachments: editing.attachments && editing.attachments.length ? editing.attachments : [{ name: "", url: "" }], custom_fields_text: JSON.stringify(editing.custom_fields || {}, null, 2), subtasks: editing.subtasks && editing.subtasks.length ? editing.subtasks : [{ title: "", is_done: false }] };
   }, [editing]);
 
   const [form, setForm] = useState(initial);
-
-  useEffect(() => {
-    setForm(initial);
-  }, [initial]);
+  useEffect(() => { setForm(initial); }, [initial]);
 
   const isTeamTask = !!form.team_id;
-
   useEffect(() => {
-    if (!open) return;
-    if (!form.team_id) {
-      setTeamMembers([]);
-      setYourRole("member");
-      setTeamPermLoading(false);
-      return;
-    }
-
-    let mounted = true;
-    setTeamPermLoading(true);
-    (async () => {
-      try {
-        const res = await api.get(`/teams/${form.team_id}`);
-        if (!mounted) return;
-        setTeamMembers((res.data.members || []).filter((m) => m.status === "active" && m.user_id));
-        setYourRole(res.data.your_role || "member");
-      } catch (e) {
-        if (!mounted) return;
-        setTeamMembers([]);
-        setYourRole("member");
-      } finally {
-        if (mounted) setTeamPermLoading(false);
-      }
-    })();
-
-    return () => {
-      mounted = false;
-    };
+    if (!open || !form.team_id) { setTeamMembers([]); setYourRole("member"); setTeamPermLoading(false); return; }
+    let mounted = true; setTeamPermLoading(true);
+    (async () => { try { const res = await api.get(`/teams/${form.team_id}`); if (!mounted) return; setTeamMembers((res.data.members || []).filter((m) => m.status === "active" && m.user_id)); setYourRole(res.data.your_role || "member"); } catch (e) { if (!mounted) return; setTeamMembers([]); setYourRole("member"); } finally { if (mounted) setTeamPermLoading(false); } })();
+    return () => { mounted = false; };
   }, [open, form.team_id]);
 
   const canEditAssignments = !isTeamTask || yourRole === "owner" || yourRole === "admin";
 
   const save = async () => {
-    if (!form.title.trim()) {
-      pushToast({ type: "error", title: "Missing title", message: "Task title is required." });
-      return;
-    }
-
+    if (!form.title.trim()) { pushToast({ type: "error", title: "Missing title", message: "Task title is required." }); return; }
     let customFields = {};
-    try {
-      customFields = form.custom_fields_text?.trim() ? JSON.parse(form.custom_fields_text) : {};
-    } catch (e) {
-      pushToast({ type: "error", title: "Custom fields", message: "Must be valid JSON." });
-      return;
-    }
-
+    try { customFields = form.custom_fields_text?.trim() ? JSON.parse(form.custom_fields_text) : {}; } catch (e) { pushToast({ type: "error", title: "Custom fields", message: "Must be valid JSON." }); return; }
     let assignees = form.assignee_user_ids || [];
-    if (form.assign_scope === "whole_team" && isTeamTask) {
-      assignees = teamMembers.map((m) => m.user_id);
-    }
-
-    const payload = {
-      title: form.title.trim(),
-      description: form.description?.trim() || null,
-      status: form.status,
-      priority: form.priority,
-      category_id: form.category_id || null,
-      tags: form.tags
-        ? form.tags
-            .split(",")
-            .map((t) => t.trim())
-            .filter(Boolean)
-        : [],
-      team_id: form.team_id || null,
-      assignee_user_ids: assignees,
-      due_at: fromDatetimeLocalValue(form.due_at),
-      reminder_at: form.reminder_at ? fromDatetimeLocalValue(form.reminder_at) : null,
-      estimated_minutes: form.estimated_minutes ? Number(form.estimated_minutes) : null,
-      recurrence: { rule: form.recurrence_rule, interval: Number(form.recurrence_interval) || 1 },
-      attachments: (form.attachments || []).filter((a) => a.url && a.name),
-      custom_fields: customFields,
-      subtasks: (form.subtasks || [])
-        .filter((s) => s.title && s.title.trim())
-        .map((s, idx) => ({ title: s.title.trim(), is_done: !!s.is_done, order: idx })),
-    };
-
-    try {
-      const res = editing
-        ? await api.put(`/tasks/${editing.task_id}`, payload)
-        : await api.post(`/tasks`, payload);
-
-      pushToast({ type: "success", title: "Saved", message: "Task updated." });
-      onSaved(res.data);
-    } catch (e) {
-      const msg = e?.response?.data?.detail || "Please try again.";
-      pushToast({ type: "error", title: "Could not save", message: msg });
-    }
+    if (form.assign_scope === "whole_team" && isTeamTask) assignees = teamMembers.map((m) => m.user_id);
+    const payload = { title: form.title.trim(), description: form.description?.trim() || null, status: form.status, priority: form.priority, category_id: form.category_id || null, tags: form.tags ? form.tags.split(",").map((t) => t.trim()).filter(Boolean) : [], team_id: form.team_id || null, assignee_user_ids: assignees, due_at: fromDatetimeLocalValue(form.due_at), reminder_at: form.reminder_at ? fromDatetimeLocalValue(form.reminder_at) : null, estimated_minutes: form.estimated_minutes ? Number(form.estimated_minutes) : null, recurrence: { rule: form.recurrence_rule, interval: Number(form.recurrence_interval) || 1 }, attachments: (form.attachments || []).filter((a) => a.url && a.name), custom_fields: customFields, subtasks: (form.subtasks || []).filter((s) => s.title && s.title.trim()).map((s, idx) => ({ title: s.title.trim(), is_done: !!s.is_done, order: idx })) };
+    try { const res = editing ? await api.put(`/tasks/${editing.task_id}`, payload) : await api.post(`/tasks`, payload); pushToast({ type: "success", title: "Saved", message: "Task updated." }); onSaved(res.data); }
+    catch (e) { pushToast({ type: "error", title: "Could not save", message: e?.response?.data?.detail || "Please try again." }); }
   };
 
   return (
-    <Modal
-      open={open}
-      onOpenChange={onOpenChange}
-      title={editing ? "Edit task" : "New task"}
-      dataTestId="task-editor-modal"
-      footer={
-        <div className="flex items-center justify-between gap-2">
-          <Button data-testid="task-editor-cancel" variant="ghost" onClick={() => onOpenChange(false)}>
-            Cancel
-          </Button>
-          <Button data-testid="task-editor-save" onClick={save}>
-            Save task
-          </Button>
-        </div>
-      }
-    >
+    <Modal open={open} onOpenChange={onOpenChange} title={editing ? "Edit task" : "New task"} dataTestId="task-editor-modal" footer={<div className="flex items-center justify-between gap-2"><Button data-testid="task-editor-cancel" variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button><Button data-testid="task-editor-save" onClick={save}>Save task</Button></div>}>
       <div className="space-y-5">
-        <div>
-          <div data-testid="task-editor-title-label" className="mb-1 text-xs font-semibold text-muted-foreground">
-            Title
-          </div>
-          <Input
-            data-testid="task-editor-title-input"
-            value={form.title}
-            onChange={(e) => setForm((p) => ({ ...p, title: e.target.value }))}
-            placeholder="e.g., Plan sprint kickoff"
-          />
-        </div>
-
-        <div>
-          <div data-testid="task-editor-description-label" className="mb-1 text-xs font-semibold text-muted-foreground">
-            Notes
-          </div>
-          <textarea
-            data-testid="task-editor-description-input"
-            value={form.description}
-            onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))}
-            placeholder="Context, links, meeting notes…"
-            className="w-full rounded-2xl border border-border/60 bg-background/40 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-violet-500/40"
-            rows={4}
-          />
-        </div>
-
+        <div><div className="mb-1 text-xs font-semibold text-muted-foreground">Title</div><Input data-testid="task-editor-title-input" value={form.title} onChange={(e) => setForm((p) => ({ ...p, title: e.target.value }))} placeholder="e.g., Plan sprint kickoff" /></div>
+        <div><div className="mb-1 text-xs font-semibold text-muted-foreground">Notes</div><textarea data-testid="task-editor-description-input" value={form.description} onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))} placeholder="Context, links, meeting notes…" className="w-full rounded-2xl border border-border/60 bg-background/40 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-violet-500/40" rows={4} /></div>
         <div className="grid gap-3 md:grid-cols-4">
-          <div>
-            <div data-testid="task-editor-team-label" className="mb-1 text-xs font-semibold text-muted-foreground">
-              Scope
-            </div>
-            <Select
-              data-testid="task-editor-team"
-              value={form.team_id}
-              onChange={(v) =>
-                setForm((p) => ({
-                  ...p,
-                  team_id: v,
-                  assign_scope: v ? p.assign_scope : "none",
-                  assignee_user_ids: [],
-                }))
-              }
-              options={[{ value: "", label: "Personal" }, ...teams.map((t) => ({ value: t.team_id, label: `Team: ${t.name}` }))]}
-            />
-          </div>
-
-          <div>
-            <div data-testid="task-editor-status-label" className="mb-1 text-xs font-semibold text-muted-foreground">
-              Status
-            </div>
-            <Select
-              data-testid="task-editor-status"
-              value={form.status}
-              onChange={(v) => setForm((p) => ({ ...p, status: v }))}
-              options={[
-                { value: "todo", label: "Todo" },
-                { value: "in_progress", label: "In progress" },
-                { value: "done", label: "Done" },
-              ]}
-            />
-          </div>
-
-          <div>
-            <div data-testid="task-editor-priority-label" className="mb-1 text-xs font-semibold text-muted-foreground">
-              Priority
-            </div>
-            <Select
-              data-testid="task-editor-priority"
-              value={form.priority}
-              onChange={(v) => setForm((p) => ({ ...p, priority: v }))}
-              options={[
-                { value: "low", label: "Low" },
-                { value: "medium", label: "Medium" },
-                { value: "high", label: "High" },
-                { value: "urgent", label: "Urgent" },
-              ]}
-            />
-          </div>
-
-          <div>
-            <div data-testid="task-editor-category-label" className="mb-1 text-xs font-semibold text-muted-foreground">
-              Category
-            </div>
-            <Select
-              data-testid="task-editor-category"
-              value={form.category_id}
-              onChange={(v) => setForm((p) => ({ ...p, category_id: v }))}
-              options={[{ value: "", label: "None" }, ...categories.map((c) => ({ value: c.category_id, label: c.name }))]}
-            />
-          </div>
+          <div><div className="mb-1 text-xs font-semibold text-muted-foreground">Scope</div><Select data-testid="task-editor-team" value={form.team_id} onChange={(v) => setForm((p) => ({ ...p, team_id: v, assign_scope: v ? p.assign_scope : "none", assignee_user_ids: [] }))} options={[{ value: "", label: "Personal" }, ...teams.map((t) => ({ value: t.team_id, label: `Team: ${t.name}` }))]} /></div>
+          <div><div className="mb-1 text-xs font-semibold text-muted-foreground">Status</div><Select data-testid="task-editor-status" value={form.status} onChange={(v) => setForm((p) => ({ ...p, status: v }))} options={[{ value: "todo", label: "Todo" }, { value: "in_progress", label: "In progress" }, { value: "done", label: "Done" }]} /></div>
+          <div><div className="mb-1 text-xs font-semibold text-muted-foreground">Priority</div><Select data-testid="task-editor-priority" value={form.priority} onChange={(v) => setForm((p) => ({ ...p, priority: v }))} options={[{ value: "low", label: "Low" }, { value: "medium", label: "Medium" }, { value: "high", label: "High" }, { value: "urgent", label: "Urgent" }]} /></div>
+          <div><div className="mb-1 text-xs font-semibold text-muted-foreground">Category</div><Select data-testid="task-editor-category" value={form.category_id} onChange={(v) => setForm((p) => ({ ...p, category_id: v }))} options={[{ value: "", label: "None" }, ...categories.map((c) => ({ value: c.category_id, label: c.name }))]} /></div>
         </div>
-
-        <div>
-          <div data-testid="task-editor-assignments-label" className="mb-2 text-xs font-semibold text-muted-foreground">
-            Assignment
-          </div>
-          <div data-testid="task-editor-assignments" className="rounded-2xl border border-border/60 bg-background/30 p-4">
-            {!canEditAssignments ? (
-              <div data-testid="task-editor-assignments-disabled" className="text-sm text-muted-foreground">
-                Only team admins can change assignments on team tasks.
-              </div>
-            ) : (
-              <div className="space-y-3">
-                <Select
-                  data-testid="task-editor-assign-scope"
-                  value={form.assign_scope}
-                  onChange={(v) => setForm((p) => ({ ...p, assign_scope: v, assignee_user_ids: [] }))}
-                  disabled={!isTeamTask || teamPermLoading}
-                  options={[
-                    { value: "none", label: "Unassigned" },
-                    { value: "whole_team", label: "Assign to whole team" },
-                    { value: "members", label: "Assign to selected members" },
-                  ]}
-                />
-
-                {teamPermLoading && isTeamTask ? (
-                  <div data-testid="task-editor-team-loading" className="text-sm text-muted-foreground">
-                    Loading team members…
-                  </div>
-                ) : null}
-
-                {!isTeamTask ? (
-                  <div data-testid="task-editor-assignments-personal" className="text-sm text-muted-foreground">
-                    Select a team in <span className="font-medium text-foreground">Scope</span> to assign this task.
-                  </div>
-                ) : null}
-
-                {isTeamTask && form.assign_scope === "members" ? (
-                  <div data-testid="task-editor-assign-members" className="grid gap-2 md:grid-cols-2">
-                    {teamMembers.length === 0 ? (
-                      <div data-testid="task-editor-assign-members-empty" className="text-sm text-muted-foreground">
-                        No active members found.
-                      </div>
-                    ) : (
-                      teamMembers.map((m) => {
-                        const checked = (form.assignee_user_ids || []).includes(m.user_id);
-                        return (
-                          <label
-                            key={m.user_id}
-                            data-testid={`task-editor-assign-member-${m.user_id}`}
-                            className={cn(
-                              "flex items-center gap-2 rounded-2xl border border-border/60 bg-background/40 px-3 py-2 text-sm",
-                              "transition-colors duration-150 hover:bg-muted/40",
-                            )}
-                          >
-                            <input
-                              data-testid={`task-editor-assign-member-checkbox-${m.user_id}`}
-                              type="checkbox"
-                              checked={checked}
-                              onChange={(e) => {
-                                const isOn = e.target.checked;
-                                setForm((p) => {
-                                  const cur = new Set(p.assignee_user_ids || []);
-                                  if (isOn) cur.add(m.user_id);
-                                  else cur.delete(m.user_id);
-                                  return { ...p, assignee_user_ids: Array.from(cur) };
-                                });
-                              }}
-                            />
-                            <span className="truncate">{m.email}</span>
-                          </label>
-                        );
-                      })
-                    )}
-                  </div>
-                ) : null}
-
-                <div data-testid="task-editor-assign-hint" className="text-xs text-muted-foreground">
-                  Assignment triggers in-app + browser push notifications (if enabled).
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-
         <div className="grid gap-3 md:grid-cols-2">
-          <div>
-            <div data-testid="task-editor-due-label" className="mb-1 text-xs font-semibold text-muted-foreground">
-              Due date & time
-            </div>
-            <Input
-              data-testid="task-editor-due"
-              type="datetime-local"
-              value={form.due_at}
-              onChange={(e) => setForm((p) => ({ ...p, due_at: e.target.value }))}
-            />
-          </div>
-          <div>
-            <div data-testid="task-editor-reminder-label" className="mb-1 text-xs font-semibold text-muted-foreground">
-              Reminder
-            </div>
-            <Input
-              data-testid="task-editor-reminder"
-              type="datetime-local"
-              value={form.reminder_at}
-              onChange={(e) => setForm((p) => ({ ...p, reminder_at: e.target.value }))}
-              placeholder="Default is due - 2 hours"
-            />
-            <div data-testid="task-editor-reminder-hint" className="mt-1 text-xs text-muted-foreground">
-              If you set a due date and leave this empty, TaskFlow defaults to <span className="font-mono">due - 2h</span>.
-            </div>
-          </div>
+          <div><div className="mb-1 text-xs font-semibold text-muted-foreground">Due date & time</div><Input data-testid="task-editor-due" type="datetime-local" value={form.due_at} onChange={(e) => setForm((p) => ({ ...p, due_at: e.target.value }))} /></div>
+          <div><div className="mb-1 text-xs font-semibold text-muted-foreground">Reminder</div><Input data-testid="task-editor-reminder" type="datetime-local" value={form.reminder_at} onChange={(e) => setForm((p) => ({ ...p, reminder_at: e.target.value }))} /></div>
         </div>
-
         <div className="grid gap-3 md:grid-cols-2">
-          <div>
-            <div data-testid="task-editor-due-label" className="mb-1 text-xs font-semibold text-muted-foreground">
-              Due date & time
-            </div>
-            <Input
-              data-testid="task-editor-due"
-              type="datetime-local"
-              value={form.due_at}
-              onChange={(e) => setForm((p) => ({ ...p, due_at: e.target.value }))}
-            />
-          </div>
-          <div>
-            <div data-testid="task-editor-reminder-label" className="mb-1 text-xs font-semibold text-muted-foreground">
-              Reminder
-            </div>
-            <Input
-              data-testid="task-editor-reminder"
-              type="datetime-local"
-              value={form.reminder_at}
-              onChange={(e) => setForm((p) => ({ ...p, reminder_at: e.target.value }))}
-              placeholder="Default is due - 2 hours"
-            />
-            <div data-testid="task-editor-reminder-hint" className="mt-1 text-xs text-muted-foreground">
-              If you set a due date and leave this empty, TaskFlow defaults to <span className="font-mono">due - 2h</span>.
-            </div>
-          </div>
-        </div>
-
-        <div className="grid gap-3 md:grid-cols-2">
-          <div>
-            <div data-testid="task-editor-tags-label" className="mb-1 text-xs font-semibold text-muted-foreground">
-              Tags
-            </div>
-            <Input
-              data-testid="task-editor-tags"
-              value={form.tags}
-              onChange={(e) => setForm((p) => ({ ...p, tags: e.target.value }))}
-              placeholder="Design, review, urgent… (comma separated)"
-            />
-          </div>
-          <div>
-            <div data-testid="task-editor-estimate-label" className="mb-1 text-xs font-semibold text-muted-foreground">
-              Estimated minutes
-            </div>
-            <Input
-              data-testid="task-editor-estimate"
-              value={form.estimated_minutes}
-              onChange={(e) => setForm((p) => ({ ...p, estimated_minutes: e.target.value }))}
-              placeholder="e.g., 45"
-            />
-          </div>
-        </div>
-
-        <div className="grid gap-3 md:grid-cols-2">
-          <div>
-            <div data-testid="task-editor-recurrence-rule-label" className="mb-1 text-xs font-semibold text-muted-foreground">
-              Recurring
-            </div>
-            <Select
-              data-testid="task-editor-recurrence-rule"
-              value={form.recurrence_rule}
-              onChange={(v) => setForm((p) => ({ ...p, recurrence_rule: v }))}
-              options={[
-                { value: "none", label: "Not recurring" },
-                { value: "daily", label: "Daily" },
-                { value: "weekly", label: "Weekly" },
-                { value: "monthly", label: "Monthly" },
-              ]}
-            />
-          </div>
-          <div>
-            <div data-testid="task-editor-recurrence-interval-label" className="mb-1 text-xs font-semibold text-muted-foreground">
-              Interval
-            </div>
-            <Input
-              data-testid="task-editor-recurrence-interval"
-              value={String(form.recurrence_interval)}
-              onChange={(e) => setForm((p) => ({ ...p, recurrence_interval: e.target.value }))}
-              placeholder="1"
-            />
-          </div>
-        </div>
-
-        <div>
-          <div data-testid="task-editor-subtasks-label" className="mb-2 text-xs font-semibold text-muted-foreground">
-            Subtasks
-          </div>
-          <div className="space-y-2">
-            {form.subtasks.map((s, idx) => (
-              <div key={idx} className="flex items-center gap-2">
-                <input
-                  data-testid={`task-editor-subtask-done-${idx}`}
-                  type="checkbox"
-                  checked={!!s.is_done}
-                  onChange={(e) => {
-                    const isDone = e.target.checked;
-                    setForm((p) => ({
-                      ...p,
-                      subtasks: p.subtasks.map((x, i) => (i === idx ? { ...x, is_done: isDone } : x)),
-                    }));
-                  }}
-                />
-                <Input
-                  data-testid={`task-editor-subtask-title-${idx}`}
-                  value={s.title}
-                  onChange={(e) => {
-                    const title = e.target.value;
-                    setForm((p) => ({
-                      ...p,
-                      subtasks: p.subtasks.map((x, i) => (i === idx ? { ...x, title } : x)),
-                    }));
-                  }}
-                  placeholder={`Subtask ${idx + 1}`}
-                />
-                <Button
-                  data-testid={`task-editor-subtask-remove-${idx}`}
-                  variant="ghost"
-                  onClick={() =>
-                    setForm((p) => ({
-                      ...p,
-                      subtasks: p.subtasks.filter((_, i) => i !== idx),
-                    }))
-                  }
-                >
-                  Remove
-                </Button>
-              </div>
-            ))}
-            <Button
-              data-testid="task-editor-subtask-add"
-              variant="ghost"
-              onClick={() => setForm((p) => ({ ...p, subtasks: [...p.subtasks, { title: "", is_done: false }] }))}
-            >
-              Add subtask
-            </Button>
-          </div>
-        </div>
-
-        <div>
-          <div data-testid="task-editor-attachments-label" className="mb-2 text-xs font-semibold text-muted-foreground">
-            Attachments
-          </div>
-          <div className="space-y-2">
-            {form.attachments.map((a, idx) => (
-              <div key={idx} className="grid gap-2 md:grid-cols-[1fr_1.2fr_100px]">
-                <Input
-                  data-testid={`task-editor-attachment-name-${idx}`}
-                  value={a.name}
-                  onChange={(e) => {
-                    const name = e.target.value;
-                    setForm((p) => ({
-                      ...p,
-                      attachments: p.attachments.map((x, i) => (i === idx ? { ...x, name } : x)),
-                    }));
-                  }}
-                  placeholder="Name"
-                />
-                <Input
-                  data-testid={`task-editor-attachment-url-${idx}`}
-                  value={a.url}
-                  onChange={(e) => {
-                    const url = e.target.value;
-                    setForm((p) => ({
-                      ...p,
-                      attachments: p.attachments.map((x, i) => (i === idx ? { ...x, url } : x)),
-                    }));
-                  }}
-                  placeholder="https://…"
-                />
-                <Button
-                  data-testid={`task-editor-attachment-remove-${idx}`}
-                  variant="ghost"
-                  onClick={() =>
-                    setForm((p) => ({
-                      ...p,
-                      attachments: p.attachments.filter((_, i) => i !== idx),
-                    }))
-                  }
-                >
-                  Remove
-                </Button>
-              </div>
-            ))}
-
-            <Button
-              data-testid="task-editor-attachment-add"
-              variant="ghost"
-              onClick={() => setForm((p) => ({ ...p, attachments: [...p.attachments, { name: "", url: "" }] }))}
-            >
-              Add attachment
-            </Button>
-          </div>
-        </div>
-
-        <div>
-          <div data-testid="task-editor-customfields-label" className="mb-1 text-xs font-semibold text-muted-foreground">
-            Custom fields (JSON)
-          </div>
-          <textarea
-            data-testid="task-editor-customfields-input"
-            value={form.custom_fields_text}
-            onChange={(e) => setForm((p) => ({ ...p, custom_fields_text: e.target.value }))}
-            className="w-full rounded-2xl border border-border/60 bg-background/40 px-3 py-2 text-xs font-mono outline-none focus:ring-2 focus:ring-violet-500/40"
-            rows={5}
-          />
+          <div><div className="mb-1 text-xs font-semibold text-muted-foreground">Tags</div><Input data-testid="task-editor-tags" value={form.tags} onChange={(e) => setForm((p) => ({ ...p, tags: e.target.value }))} placeholder="Design, review… (comma separated)" /></div>
+          <div><div className="mb-1 text-xs font-semibold text-muted-foreground">Estimated minutes</div><Input data-testid="task-editor-estimate" value={form.estimated_minutes} onChange={(e) => setForm((p) => ({ ...p, estimated_minutes: e.target.value }))} placeholder="e.g., 45" /></div>
         </div>
       </div>
     </Modal>
@@ -1481,87 +660,25 @@ function BoardPage() {
   const [categories, setCategories] = useState([]);
   const [teams, setTeams] = useState([]);
   const [teamId, setTeamId] = useState("");
+  const columns = useMemo(() => [{ id: "todo", title: "Todo" }, { id: "in_progress", title: "In progress" }, { id: "done", title: "Done" }], []);
 
-  const columns = useMemo(
-    () => [
-      { id: "todo", title: "Todo" },
-      { id: "in_progress", title: "In progress" },
-      { id: "done", title: "Done" },
-    ],
-    [],
-  );
+  const load = async () => { const params = {}; if (teamId) params.team_id = teamId; const [t, c, te] = await Promise.all([api.get("/tasks", { params }), api.get("/categories"), api.get("/teams")]); setTasks(t.data); setCategories(c.data); setTeams(te.data); };
+  useEffect(() => { load().catch(() => pushToast({ type: "error", title: "Could not load board", message: "Try again." })); }, []);
+  useEffect(() => { load().catch(() => {}); }, [teamId]);
 
-  const load = async () => {
-    const params = {};
-    if (teamId) params.team_id = teamId;
-    const [t, c, te] = await Promise.all([
-      api.get("/tasks", { params }),
-      api.get("/categories"),
-      api.get("/teams"),
-    ]);
-    setTasks(t.data);
-    setCategories(c.data);
-    setTeams(te.data);
-  };
-
-  useEffect(() => {
-    load().catch(() => pushToast({ type: "error", title: "Could not load board", message: "Try again." }));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
-    load().catch(() => {});
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [teamId]);
-
-  const grouped = useMemo(() => {
-    const map = { todo: [], in_progress: [], done: [] };
-    for (const t of tasks) map[t.status]?.push(t);
-    for (const key of Object.keys(map)) map[key].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-    return map;
-  }, [tasks]);
+  const grouped = useMemo(() => { const map = { todo: [], in_progress: [], done: [] }; for (const t of tasks) map[t.status]?.push(t); for (const key of Object.keys(map)) map[key].sort((a, b) => (a.order ?? 0) - (b.order ?? 0)); return map; }, [tasks]);
 
   const onDragEnd = async (result) => {
     const { destination, source, draggableId } = result;
-    if (!destination) return;
-    if (destination.droppableId === source.droppableId && destination.index === source.index) return;
-
-    const taskId = draggableId;
-    const sourceStatus = source.droppableId;
-    const destStatus = destination.droppableId;
-
-    const sourceList = Array.from(grouped[sourceStatus]);
-    const destList = sourceStatus === destStatus ? sourceList : Array.from(grouped[destStatus]);
-
-    const moving = sourceList.find((t) => t.task_id === taskId);
-    if (!moving) return;
-
-    const sourceIdx = sourceList.findIndex((t) => t.task_id === taskId);
-    sourceList.splice(sourceIdx, 1);
-    destList.splice(destination.index, 0, { ...moving, status: destStatus });
-
-    const next = tasks.map((t) => {
-      if (t.task_id === taskId) return { ...t, status: destStatus };
-      return t;
-    });
-
-    const applyOrders = (list, status) => {
-      list.forEach((t, idx) => {
-        const i = next.findIndex((x) => x.task_id === t.task_id);
-        if (i >= 0) next[i] = { ...next[i], status, order: idx };
-      });
-    };
-
-    applyOrders(sourceList, sourceStatus);
-    applyOrders(destList, destStatus);
-    setTasks(next);
-
-    try {
-      await api.patch(`/tasks/${taskId}/move`, { status: destStatus, order: destination.index });
-    } catch (e) {
-      pushToast({ type: "error", title: "Move failed", message: "Refreshing board…" });
-      load().catch(() => {});
-    }
+    if (!destination || (destination.droppableId === source.droppableId && destination.index === source.index)) return;
+    const taskId = draggableId; const sourceStatus = source.droppableId; const destStatus = destination.droppableId;
+    const sourceList = Array.from(grouped[sourceStatus]); const destList = sourceStatus === destStatus ? sourceList : Array.from(grouped[destStatus]);
+    const moving = sourceList.find((t) => t.task_id === taskId); if (!moving) return;
+    sourceList.splice(sourceList.findIndex((t) => t.task_id === taskId), 1); destList.splice(destination.index, 0, { ...moving, status: destStatus });
+    const next = tasks.map((t) => t.task_id === taskId ? { ...t, status: destStatus } : t);
+    const applyOrders = (list, status) => list.forEach((t, idx) => { const i = next.findIndex((x) => x.task_id === t.task_id); if (i >= 0) next[i] = { ...next[i], status, order: idx }; });
+    applyOrders(sourceList, sourceStatus); applyOrders(destList, destStatus); setTasks(next);
+    try { await api.patch(`/tasks/${taskId}/move`, { status: destStatus, order: destination.index }); } catch (e) { pushToast({ type: "error", title: "Move failed", message: "Refreshing board…" }); load().catch(() => {}); }
   };
 
   const categoryName = (id) => categories.find((c) => c.category_id === id)?.name || "";
@@ -1570,111 +687,35 @@ function BoardPage() {
   return (
     <div data-testid="board-page" className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <div data-testid="board-title" className="text-sm font-semibold">
-            Board
-          </div>
-          <div data-testid="board-subtitle" className="mt-1 text-sm text-muted-foreground">
-            Drag cards between columns.
-          </div>
-        </div>
-
-        <div className="w-full max-w-[360px]">
-          <Select
-            data-testid="board-team-filter"
-            value={teamId}
-            onChange={setTeamId}
-            options={[{ value: "", label: "All scopes" }, ...teams.map((t) => ({ value: t.team_id, label: `Team: ${t.name}` }))]}
-          />
-        </div>
+        <div><div data-testid="board-title" className="text-sm font-semibold">Board</div><div data-testid="board-subtitle" className="mt-1 text-sm text-muted-foreground">Drag cards between columns.</div></div>
+        <div className="w-full max-w-[360px]"><Select data-testid="board-team-filter" value={teamId} onChange={setTeamId} options={[{ value: "", label: "All scopes" }, ...teams.map((t) => ({ value: t.team_id, label: `Team: ${t.name}` }))]} /></div>
       </div>
-
       <DragDropContext onDragEnd={onDragEnd}>
         <div data-testid="board-columns" className="grid gap-4 lg:grid-cols-3">
           {columns.map((col) => (
             <div key={col.id} className="rounded-3xl border border-border/70 bg-card/50 overflow-hidden">
               <div className="flex items-center justify-between px-4 py-3 border-b border-border/60">
-                <div data-testid={`board-col-title-${col.id}`} className="text-sm font-semibold">
-                  {col.title}
-                </div>
-                <Badge data-testid={`board-col-count-${col.id}`} tone="neutral">
-                  {grouped[col.id]?.length ?? 0}
-                </Badge>
+                <div data-testid={`board-col-title-${col.id}`} className="text-sm font-semibold">{col.title}</div>
+                <Badge data-testid={`board-col-count-${col.id}`} tone="neutral">{grouped[col.id]?.length ?? 0}</Badge>
               </div>
-
-              <Droppable droppableId={col.id}>
-                {(provided) => (
-                  <div
-                    data-testid={`board-col-dropzone-${col.id}`}
-                    ref={provided.innerRef}
-                    {...provided.droppableProps}
-                    className="min-h-[220px] p-3 space-y-3"
-                  >
-                    {grouped[col.id].map((t, idx) => (
-                      <Draggable key={t.task_id} draggableId={t.task_id} index={idx}>
-                        {(drag) => (
-                          <div
-                            data-testid={`board-card-${t.task_id}`}
-                            ref={drag.innerRef}
-                            {...drag.draggableProps}
-                            {...drag.dragHandleProps}
-                            className="rounded-2xl border border-border/60 bg-background/35 p-4 shadow-sm"
-                          >
-                            <div className="flex items-start justify-between gap-2">
-                              <div className="min-w-0">
-                                <div className="truncate text-sm font-semibold">{t.title}</div>
-                                {t.team_id ? (
-                                  <div data-testid={`board-card-team-${t.task_id}`} className="mt-1 text-xs text-muted-foreground">
-                                    Team: {teamName(t.team_id)}
-                                  </div>
-                                ) : null}
-                                {t.category_id ? (
-                                  <div data-testid={`board-card-category-${t.task_id}`} className="mt-1 text-xs text-muted-foreground">
-                                    {categoryName(t.category_id)}
-                                  </div>
-                                ) : null}
-                              </div>
-                              <Badge
-                                data-testid={`board-card-priority-${t.task_id}`}
-                                tone={t.priority === "urgent" ? "danger" : "info"}
-                              >
-                                {t.priority}
-                              </Badge>
-                            </div>
-
-                            {t.due_at ? (
-                              <div data-testid={`board-card-due-${t.task_id}`} className="mt-3 text-xs text-muted-foreground">
-                                Due: {formatDue(t.due_at)}
-                              </div>
-                            ) : null}
-
-                            {(t.subtasks || []).length ? (
-                              <div data-testid={`board-card-subtasks-${t.task_id}`} className="mt-3 text-xs text-muted-foreground">
-                                Subtasks: {(t.subtasks || []).filter((s) => s.is_done).length}/{(t.subtasks || []).length}
-                              </div>
-                            ) : null}
-
-                            {(t.assignee_user_ids || []).length ? (
-                              <div data-testid={`board-card-assignees-${t.task_id}`} className="mt-3 text-xs text-muted-foreground">
-                                Assignees: {(t.assignee_user_ids || []).length}
-                              </div>
-                            ) : null}
-
-                            <div className="mt-3 flex flex-wrap gap-1">
-                              {(t.tags || []).slice(0, 4).map((tag) => (
-                                <Badge key={tag} data-testid={`board-card-tag-${t.task_id}-${tag}`} tone="neutral">
-                                  {tag}
-                                </Badge>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                      </Draggable>
-                    ))}
-                    {provided.placeholder}
-                  </div>
-                )}
-              </Droppable>
+              <Droppable droppableId={col.id}>{(provided) => (
+                <div data-testid={`board-col-dropzone-${col.id}`} ref={provided.innerRef} {...provided.droppableProps} className="min-h-[220px] p-3 space-y-3">
+                  {grouped[col.id].map((t, idx) => (
+                    <Draggable key={t.task_id} draggableId={t.task_id} index={idx}>{(drag) => (
+                      <div data-testid={`board-card-${t.task_id}`} ref={drag.innerRef} {...drag.draggableProps} {...drag.dragHandleProps} className="rounded-2xl border border-border/60 bg-background/35 p-4 shadow-sm">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0"><div className="truncate text-sm font-semibold">{t.title}</div>{t.team_id ? <div className="mt-1 text-xs text-muted-foreground">Team: {teamName(t.team_id)}</div> : null}{t.category_id ? <div className="mt-1 text-xs text-muted-foreground">{categoryName(t.category_id)}</div> : null}</div>
+                          <Badge tone={t.priority === "urgent" ? "danger" : "info"}>{t.priority}</Badge>
+                        </div>
+                        {t.due_at ? <div className="mt-3 text-xs text-muted-foreground">Due: {formatDue(t.due_at)}</div> : null}
+                        {(t.subtasks || []).length ? <div className="mt-3 text-xs text-muted-foreground">Subtasks: {(t.subtasks || []).filter((s) => s.is_done).length}/{(t.subtasks || []).length}</div> : null}
+                        <div className="mt-3 flex flex-wrap gap-1">{(t.tags || []).slice(0, 4).map((tag) => <Badge key={tag} tone="neutral">{tag}</Badge>)}</div>
+                      </div>
+                    )}</Draggable>
+                  ))}
+                  {provided.placeholder}
+                </div>
+              )}</Droppable>
             </div>
           ))}
         </div>
@@ -1687,130 +728,42 @@ function CategoriesPage() {
   const { pushToast } = useToast();
   const [cats, setCats] = useState([]);
   const [name, setName] = useState("");
-  const [color, setColor] = useState("#7C3AED");
+  const [color, setColor] = useState("#0082c6");
 
-  const load = async () => {
-    const res = await api.get("/categories");
-    setCats(res.data);
-  };
-
-  useEffect(() => {
-    load().catch(() => pushToast({ type: "error", title: "Could not load categories", message: "Try again." }));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const load = async () => { const res = await api.get("/categories"); setCats(res.data); };
+  useEffect(() => { load().catch(() => pushToast({ type: "error", title: "Could not load categories", message: "Try again." })); }, []);
 
   const create = async () => {
-    if (!name.trim()) {
-      pushToast({ type: "error", title: "Missing name", message: "Category needs a name." });
-      return;
-    }
-    try {
-      const res = await api.post("/categories", { name: name.trim(), color });
-      setCats((p) => [res.data, ...p]);
-      setName("");
-      pushToast({ type: "success", title: "Created", message: "Category added." });
-    } catch (e) {
-      pushToast({ type: "error", title: "Could not create", message: "Try again." });
-    }
+    if (!name.trim()) { pushToast({ type: "error", title: "Missing name", message: "Category needs a name." }); return; }
+    try { const res = await api.post("/categories", { name: name.trim(), color }); setCats((p) => [res.data, ...p]); setName(""); pushToast({ type: "success", title: "Created", message: "Category added." }); }
+    catch (e) { pushToast({ type: "error", title: "Could not create", message: "Try again." }); }
   };
 
   const remove = async (c) => {
-    if (!window.confirm(`Delete category “${c.name}”? Tasks will be uncategorized.`)) return;
-    try {
-      await api.delete(`/categories/${c.category_id}`);
-      setCats((p) => p.filter((x) => x.category_id !== c.category_id));
-      pushToast({ type: "success", title: "Deleted", message: "Category removed." });
-    } catch (e) {
-      pushToast({ type: "error", title: "Could not delete", message: "Try again." });
-    }
+    if (!window.confirm(`Delete category “${c.name}”?`)) return;
+    try { await api.delete(`/categories/${c.category_id}`); setCats((p) => p.filter((x) => x.category_id !== c.category_id)); pushToast({ type: "success", title: "Deleted", message: "Category removed." }); }
+    catch (e) { pushToast({ type: "error", title: "Could not delete", message: "Try again." }); }
   };
 
   return (
     <div data-testid="categories-page" className="space-y-6">
-      <div>
-        <div data-testid="categories-title" className="text-sm font-semibold">
-          Categories
-        </div>
-        <div data-testid="categories-subtitle" className="mt-1 text-sm text-muted-foreground">
-          Keep a clean set of buckets.
-        </div>
-      </div>
-
+      <div><div data-testid="categories-title" className="text-sm font-semibold">Categories</div><div data-testid="categories-subtitle" className="mt-1 text-sm text-muted-foreground">Keep a clean set of buckets.</div></div>
       <div data-testid="categories-create" className="rounded-3xl border border-border/70 bg-card/50 p-5">
         <div className="grid gap-3 md:grid-cols-[1fr_220px_160px]">
-          <Input
-            data-testid="categories-create-name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="e.g., Work"
-          />
-
+          <Input data-testid="categories-create-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g., Work" />
           <div className="grid grid-cols-[64px_1fr] gap-2">
-            <Input
-              data-testid="categories-create-color"
-              type="color"
-              value={color}
-              onChange={(e) => setColor(e.target.value)}
-              className="px-2"
-            />
-            <Input
-              data-testid="categories-create-color-hex"
-              value={color}
-              onChange={(e) => {
-                const v = e.target.value;
-                if (v === "" || v === "#") return setColor(v);
-                if (/^#[0-9A-Fa-f]{0,6}$/.test(v)) setColor(v);
-              }}
-              onBlur={() => {
-                if (!/^#[0-9A-Fa-f]{6}$/.test(color)) setColor("#7C3AED");
-              }}
-              placeholder="#7C3AED"
-            />
+            <Input data-testid="categories-create-color" type="color" value={color} onChange={(e) => setColor(e.target.value)} className="px-2" />
+            <Input data-testid="categories-create-color-hex" value={color} onChange={(e) => { const v = e.target.value; if (v === "" || v === "#") return setColor(v); if (/^#[0-9A-Fa-f]{0,6}$/.test(v)) setColor(v); }} onBlur={() => { if (!/^#[0-9A-Fa-f]{6}$/.test(color)) setColor("#0082c6"); }} placeholder="#0082c6" />
           </div>
-
-          <Button data-testid="categories-create-button" onClick={create}>
-            Create
-          </Button>
-        </div>
-        <div data-testid="categories-color-hint" className="mt-3 text-xs text-muted-foreground">
-          Tip: you can type a hex like <span className="font-mono">#7C3AED</span> or use the picker.
+          <Button data-testid="categories-create-button" onClick={create}>Create</Button>
         </div>
       </div>
-
       <div data-testid="categories-list" className="rounded-3xl border border-border/70 bg-card/50 overflow-hidden">
-        {cats.length === 0 ? (
-          <div data-testid="categories-empty" className="px-5 py-8 text-sm text-muted-foreground">
-            No categories yet.
-          </div>
-        ) : (
+        {cats.length === 0 ? (<div data-testid="categories-empty" className="px-5 py-8 text-sm text-muted-foreground">No categories yet.</div>) : (
           cats.map((c) => (
-            <div
-              key={c.category_id}
-              data-testid={`category-row-${c.category_id}`}
-              className="flex items-center justify-between gap-3 border-b border-border/40 px-5 py-4"
-            >
-              <div className="flex items-center gap-3">
-                <div
-                  data-testid={`category-color-${c.category_id}`}
-                  className="h-3.5 w-3.5 rounded-full"
-                  style={{ background: c.color }}
-                />
-                <div>
-                  <div data-testid={`category-name-${c.category_id}`} className="text-sm font-semibold">
-                    {c.name}
-                  </div>
-                  <div data-testid={`category-id-${c.category_id}`} className="text-xs text-muted-foreground">
-                    {c.category_id}
-                  </div>
-                </div>
-              </div>
-              <Button
-                data-testid={`category-delete-${c.category_id}`}
-                variant="ghost"
-                onClick={() => remove(c)}
-              >
-                Delete
-              </Button>
+            <div key={c.category_id} data-testid={`category-row-${c.category_id}`} className="flex items-center justify-between gap-3 border-b border-border/40 px-5 py-4">
+              <div className="flex items-center gap-3"><div className="h-3.5 w-3.5 rounded-full" style={{ background: c.color }} /><div><div className="text-sm font-semibold">{c.name}</div><div className="text-xs text-muted-foreground">{c.category_id}</div></div></div>
+              <Button variant="ghost" onClick={() => remove(c)}>Delete</Button>
             </div>
           ))
         )}
