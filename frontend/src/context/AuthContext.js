@@ -1,23 +1,11 @@
 // frontend/src/context/AuthContext.js
-// Kartavya by Aekam Inc
-// Replaces Emergent Google OAuth with email/password + JWT
+// Kartavya by Aekam Inc — JWT auth context
+// Used by pages/LoginPage.js (standalone) and App.js (inline)
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { api } from '../lib/api';
 
 const AuthContext = createContext(null);
-const API = process.env.REACT_APP_BACKEND_URL || '';
-
-export function authFetch(url, options = {}) {
-  const token = localStorage.getItem('auth_token');
-  return fetch(url, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(options.headers || {}),
-    },
-  });
-}
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
@@ -26,46 +14,33 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     const token = localStorage.getItem('auth_token');
     if (!token) { setLoading(false); return; }
-    authFetch(`${API}/api/auth/me`)
-      .then((r) => (r.ok ? r.json() : null))
-      .then((u) => { setUser(u); setLoading(false); })
+    api.get('/auth/me')
+      .then((r) => { setUser(r.data); setLoading(false); })
       .catch(() => { localStorage.removeItem('auth_token'); setLoading(false); });
   }, []);
 
-  const register = useCallback(async (name, email, password) => {
-    const res = await fetch(`${API}/api/auth/register`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, email, password }),
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.detail || 'Registration failed');
-    localStorage.setItem('auth_token', data.token);
-    setUser(data.user);
-    return data.user;
+  const login = useCallback(async (email, password) => {
+    const res = await api.post('/auth/login', { email, password });
+    localStorage.setItem('auth_token', res.data.token);
+    setUser(res.data.user);
+    return res.data.user;
   }, []);
 
-  const login = useCallback(async (email, password) => {
-    const res = await fetch(`${API}/api/auth/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password }),
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.detail || 'Login failed');
-    localStorage.setItem('auth_token', data.token);
-    setUser(data.user);
-    return data.user;
+  const register = useCallback(async (name, email, password) => {
+    const res = await api.post('/auth/register', { name, email, password });
+    localStorage.setItem('auth_token', res.data.token);
+    setUser(res.data.user);
+    return res.data.user;
   }, []);
 
   const logout = useCallback(async () => {
-    await authFetch(`${API}/api/auth/logout`, { method: 'POST' }).catch(() => {});
+    try { await api.post('/auth/logout'); } catch (_) {}
     localStorage.removeItem('auth_token');
     setUser(null);
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout, register }}>
+    <AuthContext.Provider value={{ user, loading, login, register, logout }}>
       {children}
     </AuthContext.Provider>
   );
