@@ -10,7 +10,6 @@ export default function TeamsPage() {
   const [name, setName] = useState("");
   const [selectedTeamId, setSelectedTeamId] = useState("");
   const [teamDetail, setTeamDetail] = useState(null);
-
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState("member");
 
@@ -32,16 +31,17 @@ export default function TeamsPage() {
   }, []);
 
   useEffect(() => {
-    if (!selectedTeamId) {
-      setTeamDetail(null);
-      return;
-    }
+    if (!selectedTeamId) { setTeamDetail(null); return; }
     loadDetail(selectedTeamId).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedTeamId]);
 
   const yourRole = teamDetail?.your_role || "member";
-  const isAdmin = yourRole === "owner" || yourRole === "admin";
+  const isAdmin  = yourRole === "owner" || yourRole === "admin";
+
+  // Stable reference — fixes react-hooks/exhaustive-deps ESLint CI error
+  const members      = useMemo(() => teamDetail?.members || [], [teamDetail]);
+  const invitedCount = useMemo(() => members.filter((m) => m.status === "invited").length, [members]);
 
   const createTeam = async () => {
     if (!name.trim()) return;
@@ -71,16 +71,13 @@ export default function TeamsPage() {
   };
 
   const removeMember = async (memberId) => {
-    if (!window.confirm("Remove this member?") ) return;
+    if (!window.confirm("Remove this member?")) return;
     await api.delete(`/teams/${selectedTeamId}/members/${memberId}`);
     setTeamDetail((prev) => ({
       ...prev,
       members: (prev?.members || []).filter((m) => m.member_id !== memberId),
     }));
   };
-
-  const members = teamDetail?.members || [];
-  const invitedCount = useMemo(() => members.filter((m) => m.status === "invited").length, [members]);
 
   return (
     <div data-testid="teams-page" className="space-y-6">
@@ -135,9 +132,7 @@ export default function TeamsPage() {
                     </div>
                     <div data-testid="team-detail-role" className="mt-1 text-sm text-muted-foreground">
                       Your role: <span className="font-medium text-foreground">{yourRole}</span>
-                      {invitedCount ? (
-                        <span className="ml-2">• Invites pending: {invitedCount}</span>
-                      ) : null}
+                      {invitedCount ? <span className="ml-2">• Invites pending: {invitedCount}</span> : null}
                     </div>
                   </div>
                   <Badge data-testid="team-detail-badge" tone={isAdmin ? "info" : "neutral"}>
@@ -148,7 +143,7 @@ export default function TeamsPage() {
                 <div className="mt-6">
                   <div data-testid="team-members-title" className="text-sm font-semibold">Members</div>
                   <div data-testid="team-members-subtitle" className="mt-1 text-sm text-muted-foreground">
-                    Add members by email. Invites become active automatically when they log in.
+                    Add members by email. Invites become active when they sign in.
                   </div>
 
                   <div data-testid="team-members-add" className="mt-4 rounded-2xl border border-border/60 bg-background/30 p-4">
@@ -163,10 +158,7 @@ export default function TeamsPage() {
                           data-testid="team-invite-role"
                           value={inviteRole}
                           onChange={setInviteRole}
-                          options={[
-                            { value: "member", label: "Member" },
-                            { value: "admin", label: "Admin" },
-                          ]}
+                          options={[{ value: "member", label: "Member" }, { value: "admin", label: "Admin" }]}
                         />
                         <Button data-testid="team-invite-button" onClick={addMember}>Add</Button>
                       </div>
@@ -175,9 +167,7 @@ export default function TeamsPage() {
 
                   <div data-testid="team-members-list" className="mt-4 rounded-2xl border border-border/60 overflow-hidden">
                     {members.length === 0 ? (
-                      <div data-testid="team-members-empty" className="px-4 py-6 text-sm text-muted-foreground">
-                        No members found.
-                      </div>
+                      <div data-testid="team-members-empty" className="px-4 py-6 text-sm text-muted-foreground">No members found.</div>
                     ) : (
                       members.map((m) => (
                         <div
@@ -191,17 +181,12 @@ export default function TeamsPage() {
                               {m.status}{m.user_id ? " • active" : ""}
                             </div>
                           </div>
-
                           <div className="flex items-center gap-2">
                             <Select
                               data-testid={`team-member-role-${m.member_id}`}
                               value={m.role}
                               onChange={(role) => updateMemberRole(m.member_id, role)}
-                              options={[
-                                { value: "member", label: "Member" },
-                                { value: "admin", label: "Admin" },
-                                { value: "owner", label: "Owner" },
-                              ]}
+                              options={[{ value: "member", label: "Member" }, { value: "admin", label: "Admin" }, { value: "owner", label: "Owner" }]}
                               disabled={!isAdmin}
                               className="max-w-[160px]"
                             />
@@ -220,7 +205,7 @@ export default function TeamsPage() {
                   </div>
 
                   <div data-testid="teams-permissions-note" className="mt-4 text-xs text-muted-foreground">
-                    Note: You can promote/demote admins. <span className="font-medium">Owner</span> is the original creator, but you can transfer ownership by setting another member to Owner.
+                    Admins can add members and assign tasks. Ownership can be transferred by setting another member to Owner.
                   </div>
                 </div>
               </>
