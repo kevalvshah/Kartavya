@@ -10,11 +10,16 @@ _pool: asyncpg.Pool | None = None
 async def get_pool() -> asyncpg.Pool:
     global _pool
     if _pool is None:
+        dsn = os.environ["DATABASE_URL"]
+        # Supabase requires SSL
+        if "sslmode" not in dsn:
+            dsn += "?sslmode=require"
         _pool = await asyncpg.create_pool(
-            dsn=os.environ["DATABASE_URL"],
-            min_size=2,
+            dsn=dsn,
+            min_size=1,
             max_size=10,
             command_timeout=30,
+            ssl="require",
         )
     return _pool
 
