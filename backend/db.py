@@ -1,9 +1,7 @@
 """
 db.py — Supabase PostgreSQL connection pool for Kartavya
-Uses Supabase Transaction Pooler (port 6543) for external connectivity.
-
-Required DATABASE_URL format:
-postgresql://postgres.PROJECT_REF:PASSWORD@aws-0-REGION.pooler.supabase.com:6543/postgres
+Lazy connection — does NOT connect at startup, connects on first request.
+This prevents Railway crashes if DATABASE_URL is misconfigured.
 """
 import os
 import asyncpg
@@ -14,7 +12,9 @@ _pool: asyncpg.Pool | None = None
 async def get_pool() -> asyncpg.Pool:
     global _pool
     if _pool is None:
-        dsn = os.environ["DATABASE_URL"]
+        dsn = os.environ.get("DATABASE_URL", "")
+        if not dsn:
+            raise RuntimeError("DATABASE_URL environment variable is not set")
         _pool = await asyncpg.create_pool(
             dsn=dsn,
             min_size=1,
