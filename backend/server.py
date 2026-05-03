@@ -1,24 +1,32 @@
+"""
+server.py — Kartavya API by Aekam Inc
+Database: Supabase PostgreSQL via asyncpg
+Auth: JWT (email + password)
+"""
+
+import asyncio
+import base64
+import json
+import logging
 import os
 import uuid
-import json
-import base64
-import logging
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Literal, Optional
-from datetime import datetime, timedelta, timezone
 
-import requests
-from dotenv import load_dotenv
-from fastapi import FastAPI, APIRouter, Depends, HTTPException, Response, Request
-from pydantic import BaseModel, Field, ConfigDict
-from starlette.middleware.cors import CORSMiddleware
-from motor.motor_asyncio import AsyncIOMotorClient
-from pymongo import ReturnDocument, UpdateOne
-
+import asyncpg
 from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
+from dotenv import load_dotenv
+from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request, Response
+from pydantic import BaseModel, ConfigDict, Field
 from py_vapid import Vapid
-from pywebpush import webpush, WebPushException
+from pywebpush import WebPushException, webpush
+from starlette.middleware.cors import CORSMiddleware
 
+from auth_router import require_user
+from auth_router import router as auth_router
+from db import close_pool, get_pool
+from health import router as health_router
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env")
@@ -26,20 +34,11 @@ load_dotenv(ROOT_DIR / ".env")
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
-mongo_url = os.environ.get("MONGO_URL")
-if not mongo_url:
-    raise RuntimeError("MONGO_URL missing")
-
-client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ.get("DB_NAME", "test_database")]
-
-app = FastAPI()
+app = FastAPI(title="Kartavya API", description="Team task management by Aekam Inc")
 api_router = APIRouter(prefix="/api")
 
 
-# -----------------------------
-# Helpers
-# -----------------------------
+# ── Helpers ───────────────────────────────────────────────────────────────────
 
 def now_utc() -> datetime:
     return datetime.now(timezone.utc)
@@ -57,242 +56,125 @@ def parse_dt(value: Optional[str]) -> Optional[datetime]:
     return dt
 
 
-def get_session_token_from_request(request: Request) -> Optional[str]:
-    # Primary: httpOnly cookie
-    token = request.cookies.get("session_token")
-    if token:
-        return token
-
-    # Fallback: Authorization header (Bearer)
-    auth_header = request.headers.get("authorization") or request.headers.get("Authorization")
-    if auth_header and auth_header.lower().startswith("bearer "):
-        return auth_header.split(" ", 1)[1].strip()
-
-    return None
-
-
-async def get_current_user(request: Request) -> Dict[str, Any]:
-    token = get_session_token_from_request(request)
-    if not token:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-
-    session_doc = await db.user_sessions.find_one({"session_token": token}, {"_id": 0})
-    if not session_doc:
-        raise HTTPException(status_code=401, detail="Invalid session")
-
-    expires_at = session_doc.get("expires_at")
-    if isinstance(expires_at, str):
-        expires_at = datetime.fromisoformat(expires_at)
-    if isinstance(expires_at, datetime) and expires_at.tzinfo is None:
-        expires_at = expires_at.replace(tzinfo=timezone.utc)
-
-    if not isinstance(expires_at, datetime) or expires_at < now_utc():
-        await db.user_sessions.delete_one({"session_token": token})
-        raise HTTPException(status_code=401, detail="Session expired")
-
-    user_doc = await db.users.find_one({"user_id": session_doc["user_id"]}, {"_id": 0})
-    if not user_doc:
-        raise HTTPException(status_code=401, detail="User not found")
-
-    return user_doc
-
-
-async def normalize_orders(scope: Dict[str, Any], status: str) -> None:
-    # scope is either personal: {"user_id": ...} or team: {"team_id": ...}
-    query = dict(scope)
-    query["status"] = status
-    tasks = (
-        await db.tasks.find(query, {"_id": 0})
-        .sort([("order", 1), ("updated_at", 1)])
-        .to_list(5000)
-    )
-
-    ops = []
-    stamp = now_utc()
-    for idx, t in enumerate(tasks):
-        if t.get("order") != idx:
-            ops.append(
-                UpdateOne(
-                    {"task_id": t["task_id"]},
-                    {"$set": {"order": idx, "updated_at": stamp}},
-                )
-            )
-
-    if ops:
-        await db.tasks.bulk_write(ops, ordered=False)
-
-
-async def reminder_scheduler_loop() -> None:
-    # Background scheduler to generate reminders even when the user isn't actively browsing.
-    # Runs every 60 seconds.
-    import asyncio
-
-    while True:
-        try:
-            now = now_utc()
-            tasks = await db.tasks.find(
-                {
-                    "status": {"$ne": "done"},
-                    "reminder_at": {"$ne": None, "$lte": now},
-                    "reminder_sent_at": None,
-                },
-                {"_id": 0},
-            ).to_list(200)
-
-            for t in tasks:
-                recipients = set(t.get("assignee_user_ids", []))
-                if t.get("assignee_emails"):
-                    users = await db.users.find(
-                        {"email": {"$in": t["assignee_emails"]}},
-                        {"_id": 0},
-                    ).to_list(2000)
-                    recipients.update([u["user_id"] for u in users])
-
-                if not recipients:
-                    if t.get("user_id"):
-                        recipients.add(t["user_id"])
-
-                for uid in recipients:
-                    await create_notification(
-                        user_id=uid,
-                        notif_type="reminder",
-                        title="Task reminder",
-                        message=f"Due soon: {t['title']}",
-                        task_id=t["task_id"],
-                        team_id=t.get("team_id"),
-                        url="/tasks",
-                    )
-                    await send_web_push_to_user(
-                        uid,
-                        {"title": "TaskFlow", "body": f"Reminder: {t['title']}", "data": {"url": "/tasks"}},
-                    )
-
-                await db.tasks.update_one(
-                    {"task_id": t["task_id"]},
-                    {"$set": {"reminder_sent_at": now_utc(), "updated_at": now_utc()}},
-                )
-
-        except Exception as e:
-            logger.warning("reminder scheduler error: %s", str(e))
-
-        await asyncio.sleep(60)
-
-
-async def is_team_admin(team_id: str, user: Dict[str, Any]) -> bool:
-    mem = await db.team_members.find_one(
-        {"team_id": team_id, "user_id": user["user_id"], "status": "active"}, {"_id": 0}
-    )
-    if not mem:
-        return False
-    return mem.get("role") in ("owner", "admin")
-
-
-async def require_team_admin(team_id: str, user: Dict[str, Any]) -> None:
-    if not await is_team_admin(team_id, user):
-        raise HTTPException(status_code=403, detail="Team admin required")
-
-
 def _b64url(data: bytes) -> str:
     return base64.urlsafe_b64encode(data).decode("utf-8").rstrip("=")
 
 
-async def ensure_vapid_keys() -> Dict[str, str]:
-    doc = await db.app_settings.find_one({"key": "vapid"}, {"_id": 0})
-    if doc and doc.get("public_key_b64") and doc.get("private_key_pem"):
-        return {
-            "public_key_b64": doc["public_key_b64"],
-            "private_key_pem": doc["private_key_pem"],
-            "subject": doc.get("subject", "mailto:admin@taskflow"),
-        }
+# ── DB dependency ─────────────────────────────────────────────────────────────
 
+async def get_db() -> asyncpg.Pool:
+    return await get_pool()
+
+
+# ── VAPID / Push helpers ──────────────────────────────────────────────────────
+
+async def ensure_vapid_keys(pool: asyncpg.Pool) -> Dict[str, str]:
+    row = await pool.fetchrow(
+        "SELECT value FROM app_settings WHERE key = 'vapid'"
+    )
+    if row:
+        data = row["value"]
+        if isinstance(data, str):
+            data = json.loads(data)
+        if data.get("public_key_b64") and data.get("private_key_pem"):
+            return data
+
+    import tempfile
     v = Vapid()
     v.generate_keys()
-
-    # Client needs base64url VAPID public key (UncompressedPoint)
     public_key_bytes = v.public_key.public_bytes(Encoding.X962, PublicFormat.UncompressedPoint)
     public_key_b64 = _b64url(public_key_bytes)
-
-    # py-vapid can write PEM for private key; pywebpush accepts PEM.
-    import tempfile
-
     with tempfile.TemporaryDirectory() as d:
         priv_path = os.path.join(d, "vapid_private.pem")
         v.save_key(priv_path)
         private_key_pem = Path(priv_path).read_text()
 
-    subject = os.environ.get("VAPID_SUBJECT", "mailto:admin@taskflow")
-    await db.app_settings.update_one(
-        {"key": "vapid"},
-        {
-            "$set": {
-                "key": "vapid",
-                "public_key_b64": public_key_b64,
-                "private_key_pem": private_key_pem,
-                "subject": subject,
-                "updated_at": now_utc(),
-            },
-            "$setOnInsert": {"created_at": now_utc()},
-        },
-        upsert=True,
+    subject = os.environ.get("VAPID_SUBJECT", "mailto:admin@aekaminc.com")
+    data = {"public_key_b64": public_key_b64, "private_key_pem": private_key_pem, "subject": subject}
+    await pool.execute(
+        """
+        INSERT INTO app_settings (key, value, updated_at)
+        VALUES ('vapid', $1::jsonb, NOW())
+        ON CONFLICT (key) DO UPDATE SET value = $1::jsonb, updated_at = NOW()
+        """,
+        json.dumps(data),
     )
-    return {"public_key_b64": public_key_b64, "private_key_pem": private_key_pem, "subject": subject}
+    return data
 
 
 async def create_notification(
-    user_id: str,
-    notif_type: str,
-    title: str,
-    message: str,
-    task_id: Optional[str] = None,
-    team_id: Optional[str] = None,
-    url: Optional[str] = None,
-) -> Dict[str, Any]:
-    doc = {
-        "notification_id": f"notif_{uuid.uuid4().hex[:12]}",
-        "user_id": user_id,
-        "team_id": team_id,
-        "type": notif_type,
-        "title": title,
-        "message": message,
-        "task_id": task_id,
-        "url": url,
-        "created_at": now_utc(),
-        "read_at": None,
-    }
-    await db.notifications.insert_one(doc)
-    return doc
+    pool: asyncpg.Pool,
+    user_id: str, notif_type: str, title: str, message: str,
+    task_id: Optional[str] = None, team_id: Optional[str] = None, url: Optional[str] = None,
+) -> None:
+    await pool.execute(
+        """
+        INSERT INTO notifications (notification_id, user_id, team_id, type, title, message, task_id, url)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+        """,
+        f"notif_{uuid.uuid4().hex[:12]}", user_id, team_id, notif_type, title, message, task_id, url,
+    )
 
 
-async def send_web_push_to_user(user_id: str, payload: Dict[str, Any]) -> None:
-    keys = await ensure_vapid_keys()
-    subs = await db.push_subscriptions.find({"user_id": user_id}, {"_id": 0}).to_list(50)
-    if not subs:
+async def send_web_push_to_user(pool: asyncpg.Pool, user_id: str, payload: Dict[str, Any]) -> None:
+    keys = await ensure_vapid_keys(pool)
+    rows = await pool.fetch("SELECT * FROM push_subscriptions WHERE user_id = $1", user_id)
+    if not rows:
         return
-
-    vapid_claims = {"sub": keys["subject"]}
-
-    for sub in subs:
+    for sub in rows:
         try:
-            subscription_info = {
-                "endpoint": sub["endpoint"],
-                "keys": {"p256dh": sub["p256dh"], "auth": sub["auth"]},
-            }
             webpush(
-                subscription_info,
+                subscription_info={"endpoint": sub["endpoint"], "keys": {"p256dh": sub["p256dh"], "auth": sub["auth"]}},
                 data=json.dumps(payload),
                 vapid_private_key=keys["private_key_pem"],
-                vapid_claims=vapid_claims,
+                vapid_claims={"sub": keys["subject"]},
             )
         except WebPushException as e:
-            logger.warning("WebPush failed: %s", str(e))
             if getattr(e, "response", None) is not None and e.response.status_code in (404, 410):
-                await db.push_subscriptions.delete_one({"subscription_id": sub["subscription_id"]})
+                await pool.execute("DELETE FROM push_subscriptions WHERE subscription_id = $1", sub["subscription_id"])
 
 
-# -----------------------------
-# Models
-# -----------------------------
+async def get_visible_team_ids(pool: asyncpg.Pool, user_id: str) -> List[str]:
+    rows = await pool.fetch(
+        "SELECT team_id FROM team_members WHERE user_id = $1 AND status = 'active'", user_id
+    )
+    return [r["team_id"] for r in rows]
 
+
+async def normalize_orders(pool: asyncpg.Pool, scope_col: str, scope_val: str, status: str) -> None:
+    rows = await pool.fetch(
+        f"SELECT task_id FROM tasks WHERE {scope_col} = $1 AND status = $2 ORDER BY sort_order ASC, updated_at ASC",
+        scope_val, status,
+    )
+    for idx, row in enumerate(rows):
+        await pool.execute(
+            "UPDATE tasks SET sort_order = $1, updated_at = NOW() WHERE task_id = $2 AND sort_order != $1",
+            idx, row["task_id"],
+        )
+
+
+async def reminder_scheduler_loop(pool: asyncpg.Pool) -> None:
+    while True:
+        try:
+            now = now_utc()
+            rows = await pool.fetch(
+                "SELECT * FROM tasks WHERE status != 'done' AND reminder_at IS NOT NULL AND reminder_at <= $1 AND reminder_sent_at IS NULL",
+                now,
+            )
+            for t in rows:
+                recipients = set(t["assignee_user_ids"] or [])
+                if not recipients and t["user_id"]:
+                    recipients.add(t["user_id"])
+                for uid in recipients:
+                    await create_notification(pool, uid, "reminder", "Task reminder", f"Due soon: {t['title']}", t["task_id"], t.get("team_id"), "/tasks")
+                    await send_web_push_to_user(pool, uid, {"title": "Kartavya", "body": f"Reminder: {t['title']}", "data": {"url": "/tasks"}})
+                await pool.execute("UPDATE tasks SET reminder_sent_at = NOW(), updated_at = NOW() WHERE task_id = $1", t["task_id"])
+        except Exception as e:
+            logger.warning("reminder scheduler error: %s", str(e))
+        await asyncio.sleep(60)
+
+
+# ── Models ────────────────────────────────────────────────────────────────────
 
 class UserOut(BaseModel):
     user_id: str
@@ -301,13 +183,9 @@ class UserOut(BaseModel):
     picture: Optional[str] = None
 
 
-class AuthSessionIn(BaseModel):
-    session_id: str
-
-
 class CategoryCreate(BaseModel):
     name: str
-    color: str = "#7C3AED"
+    color: str = "#0082c6"
 
 
 class CategoryUpdate(BaseModel):
@@ -324,10 +202,6 @@ class CategoryOut(BaseModel):
     updated_at: datetime
 
 
-TeamRole = Literal["owner", "admin", "member"]
-TeamStatus = Literal["active", "invited"]
-
-
 class TeamCreate(BaseModel):
     name: str
 
@@ -342,12 +216,12 @@ class TeamOut(BaseModel):
 
 class TeamMemberAdd(BaseModel):
     email: str
-    role: TeamRole = "member"
+    role: str = "member"
 
 
 class TeamMemberUpdate(BaseModel):
-    role: Optional[TeamRole] = None
-    status: Optional[TeamStatus] = None
+    role: Optional[str] = None
+    status: Optional[str] = None
 
 
 class TeamMemberOut(BaseModel):
@@ -355,14 +229,10 @@ class TeamMemberOut(BaseModel):
     team_id: str
     email: str
     user_id: Optional[str] = None
-    role: TeamRole
-    status: TeamStatus
+    role: str
+    status: str
     created_at: datetime
     updated_at: datetime
-
-
-TaskStatus = Literal["todo", "in_progress", "done"]
-TaskPriority = Literal["low", "medium", "high", "urgent"]
 
 
 class Attachment(BaseModel):
@@ -378,23 +248,20 @@ class Subtask(BaseModel):
 
 
 class Recurrence(BaseModel):
-    rule: Literal["none", "daily", "weekly", "monthly"] = "none"
+    rule: str = "none"
     interval: int = 1
 
 
 class TaskCreate(BaseModel):
     title: str
     description: Optional[str] = None
-    status: TaskStatus = "todo"
-    priority: TaskPriority = "medium"
+    status: str = "todo"
+    priority: str = "medium"
     category_id: Optional[str] = None
     tags: List[str] = []
-
-    # Collaboration
     team_id: Optional[str] = None
     assignee_user_ids: List[str] = []
     assignee_emails: List[str] = []
-
     due_at: Optional[str] = None
     reminder_at: Optional[str] = None
     recurrence: Recurrence = Field(default_factory=Recurrence)
@@ -407,15 +274,13 @@ class TaskCreate(BaseModel):
 class TaskUpdate(BaseModel):
     title: Optional[str] = None
     description: Optional[str] = None
-    status: Optional[TaskStatus] = None
-    priority: Optional[TaskPriority] = None
+    status: Optional[str] = None
+    priority: Optional[str] = None
     category_id: Optional[str] = None
     tags: Optional[List[str]] = None
-
     team_id: Optional[str] = None
     assignee_user_ids: Optional[List[str]] = None
     assignee_emails: Optional[List[str]] = None
-
     due_at: Optional[str] = None
     reminder_at: Optional[str] = None
     recurrence: Optional[Recurrence] = None
@@ -427,35 +292,27 @@ class TaskUpdate(BaseModel):
 
 class TaskOut(BaseModel):
     task_id: str
-
-    # task belongs to either personal user or a team
     user_id: Optional[str] = None
     team_id: Optional[str] = None
-
     created_by_user_id: str
     assigned_by_user_id: Optional[str] = None
     completed_by_user_id: Optional[str] = None
-
     title: str
     description: Optional[str] = None
-    status: TaskStatus
-    priority: TaskPriority
+    status: str
+    priority: str
     category_id: Optional[str] = None
     tags: List[str] = []
-
     assignee_user_ids: List[str] = []
     assignee_emails: List[str] = []
-
     due_at: Optional[datetime] = None
     reminder_at: Optional[datetime] = None
     reminder_sent_at: Optional[datetime] = None
-
     recurrence: Recurrence = Field(default_factory=Recurrence)
     estimated_minutes: Optional[int] = None
     attachments: List[Attachment] = []
     custom_fields: Dict[str, Any] = {}
     subtasks: List[Subtask] = []
-
     order: int = 0
     created_at: datetime
     updated_at: datetime
@@ -463,7 +320,7 @@ class TaskOut(BaseModel):
 
 
 class TaskMoveIn(BaseModel):
-    status: TaskStatus
+    status: str
     order: int
 
 
@@ -477,7 +334,6 @@ class DashboardSummaryOut(BaseModel):
 
 class PushSubscriptionIn(BaseModel):
     model_config = ConfigDict(extra="ignore")
-
     endpoint: str
     keys: Dict[str, str]
 
@@ -500,772 +356,471 @@ class MarkReadIn(BaseModel):
     mark_all: bool = False
 
 
-# -----------------------------
-# Routes
-# -----------------------------
+# ── Helpers: row → model ──────────────────────────────────────────────────────
 
-
-@api_router.get("/")
-async def root():
-    return {"message": "TaskFlow API"}
-
-
-# ----- Auth -----
-
-
-@api_router.post("/auth/session", response_model=UserOut)
-async def create_session(payload: AuthSessionIn, response: Response):
-    emergent_url = "https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data"
-    r = requests.get(emergent_url, headers={"X-Session-ID": payload.session_id}, timeout=30)
-    if r.status_code != 200:
-        raise HTTPException(status_code=401, detail="Invalid session_id")
-
-    data = r.json()
-    email = data.get("email")
-    name = data.get("name") or email
-    picture = data.get("picture")
-    session_token = data.get("session_token")
-    if not (email and session_token):
-        raise HTTPException(status_code=500, detail="Auth provider error")
-
-    existing = await db.users.find_one({"email": email}, {"_id": 0})
-    if existing:
-        user_id = existing["user_id"]
-        await db.users.update_one(
-            {"email": email},
-            {"$set": {"name": name, "picture": picture, "updated_at": now_utc()}},
-        )
-    else:
-        user_id = f"user_{uuid.uuid4().hex[:12]}"
-        await db.users.insert_one(
-            {
-                "user_id": user_id,
-                "email": email,
-                "name": name,
-                "picture": picture,
-                "created_at": now_utc(),
-                "updated_at": now_utc(),
-            }
-        )
-
-    # Activate team invites by email
-    await db.team_members.update_many(
-        {"email": email, "status": "invited"},
-        {"$set": {"user_id": user_id, "status": "active", "updated_at": now_utc()}},
+def row_to_task(r) -> TaskOut:
+    attachments = r["attachments"] or []
+    if isinstance(attachments, str):
+        attachments = json.loads(attachments)
+    subtasks = r["subtasks"] or []
+    if isinstance(subtasks, str):
+        subtasks = json.loads(subtasks)
+    custom_fields = r["custom_fields"] or {}
+    if isinstance(custom_fields, str):
+        custom_fields = json.loads(custom_fields)
+    return TaskOut(
+        task_id=r["task_id"],
+        user_id=r["user_id"],
+        team_id=r["team_id"],
+        created_by_user_id=r["created_by_user_id"],
+        assigned_by_user_id=r["assigned_by_user_id"],
+        completed_by_user_id=r["completed_by_user_id"],
+        title=r["title"],
+        description=r["description"],
+        status=r["status"],
+        priority=r["priority"],
+        category_id=r["category_id"],
+        tags=list(r["tags"] or []),
+        assignee_user_ids=list(r["assignee_user_ids"] or []),
+        assignee_emails=list(r["assignee_emails"] or []),
+        due_at=r["due_at"],
+        reminder_at=r["reminder_at"],
+        reminder_sent_at=r["reminder_sent_at"],
+        recurrence=Recurrence(rule=r["recurrence_rule"] or "none", interval=r["recurrence_interval"] or 1),
+        estimated_minutes=r["estimated_minutes"],
+        attachments=[Attachment(**a) for a in attachments],
+        custom_fields=custom_fields,
+        subtasks=[Subtask(**s) for s in subtasks],
+        order=r["sort_order"] or 0,
+        created_at=r["created_at"],
+        updated_at=r["updated_at"],
+        completed_at=r["completed_at"],
     )
 
-    expires_at = now_utc() + timedelta(days=7)
-    await db.user_sessions.delete_many({"user_id": user_id})
-    await db.user_sessions.insert_one(
-        {
-            "user_id": user_id,
-            "session_token": session_token,
-            "expires_at": expires_at,
-            "created_at": now_utc(),
-        }
-    )
 
-    response.set_cookie(
-        key="session_token",
-        value=session_token,
-        httponly=True,
-        secure=True,
-        samesite="none",
-        max_age=7 * 24 * 60 * 60,
-        path="/",
-    )
-
-    return UserOut(user_id=user_id, email=email, name=name, picture=picture)
-
+# ── Auth routes ───────────────────────────────────────────────────────────────
 
 @api_router.get("/auth/me", response_model=UserOut)
-async def me(user: Dict[str, Any] = Depends(get_current_user)):
-    return UserOut(**user)
+async def me(user: Dict[str, Any] = Depends(require_user)):
+    return UserOut(user_id=user["user_id"], email=user["email"], name=user["name"], picture=user.get("avatar"))
 
 
 @api_router.post("/auth/logout")
-async def logout(request: Request, response: Response):
-    token = get_session_token_from_request(request)
-    if token:
-        await db.user_sessions.delete_one({"session_token": token})
-
-    response.delete_cookie(key="session_token", path="/")
+async def logout():
     return {"ok": True}
 
 
-# ----- Push (Web) -----
-
+# ── Push routes ───────────────────────────────────────────────────────────────
 
 @api_router.get("/push/vapid-public-key")
-async def get_vapid_public_key(user: Dict[str, Any] = Depends(get_current_user)):
-    keys = await ensure_vapid_keys()
+async def get_vapid_public_key(pool: asyncpg.Pool = Depends(get_db), user=Depends(require_user)):
+    keys = await ensure_vapid_keys(pool)
     return {"public_key": keys["public_key_b64"]}
 
 
 @api_router.post("/push/subscribe")
-async def subscribe_push(payload: PushSubscriptionIn, request: Request, user: Dict[str, Any] = Depends(get_current_user)):
+async def subscribe_push(payload: PushSubscriptionIn, request: Request, pool: asyncpg.Pool = Depends(get_db), user=Depends(require_user)):
     if not payload.keys or "p256dh" not in payload.keys or "auth" not in payload.keys:
         raise HTTPException(status_code=400, detail="Invalid subscription")
-
     ua = request.headers.get("user-agent", "")
-    doc = {
-        "subscription_id": f"sub_{uuid.uuid4().hex[:12]}",
-        "user_id": user["user_id"],
-        "endpoint": payload.endpoint,
-        "p256dh": payload.keys.get("p256dh"),
-        "auth": payload.keys.get("auth"),
-        "user_agent": ua,
-        "created_at": now_utc(),
-        "updated_at": now_utc(),
-    }
-
-    # Deduplicate by endpoint
-    await db.push_subscriptions.delete_many({"user_id": user["user_id"], "endpoint": payload.endpoint})
-    await db.push_subscriptions.insert_one(doc)
-
+    await pool.execute("DELETE FROM push_subscriptions WHERE user_id = $1 AND endpoint = $2", user["user_id"], payload.endpoint)
+    await pool.execute(
+        "INSERT INTO push_subscriptions (subscription_id, user_id, endpoint, p256dh, auth, user_agent) VALUES ($1,$2,$3,$4,$5,$6)",
+        f"sub_{uuid.uuid4().hex[:12]}", user["user_id"], payload.endpoint, payload.keys["p256dh"], payload.keys["auth"], ua,
+    )
     return {"ok": True}
 
 
 @api_router.post("/push/unsubscribe")
-async def unsubscribe_push(payload: PushSubscriptionIn, user: Dict[str, Any] = Depends(get_current_user)):
-    await db.push_subscriptions.delete_many({"user_id": user["user_id"], "endpoint": payload.endpoint})
+async def unsubscribe_push(payload: PushSubscriptionIn, pool: asyncpg.Pool = Depends(get_db), user=Depends(require_user)):
+    await pool.execute("DELETE FROM push_subscriptions WHERE user_id = $1 AND endpoint = $2", user["user_id"], payload.endpoint)
     return {"ok": True}
 
 
-# ----- Teams -----
-
+# ── Teams ─────────────────────────────────────────────────────────────────────
 
 @api_router.post("/teams", response_model=TeamOut)
-async def create_team(payload: TeamCreate, user: Dict[str, Any] = Depends(get_current_user)):
-    now = now_utc()
-    team = {
-        "team_id": f"team_{uuid.uuid4().hex[:12]}",
-        "name": payload.name,
-        "created_by": user["user_id"],
-        "created_at": now,
-        "updated_at": now,
-    }
-    await db.teams.insert_one(team)
-
-    # Owner membership
-    member = {
-        "member_id": f"mem_{uuid.uuid4().hex[:12]}",
-        "team_id": team["team_id"],
-        "email": user["email"],
-        "user_id": user["user_id"],
-        "role": "owner",
-        "status": "active",
-        "created_at": now,
-        "updated_at": now,
-    }
-    await db.team_members.insert_one(member)
-
-    return TeamOut(**team)
+async def create_team(payload: TeamCreate, pool: asyncpg.Pool = Depends(get_db), user=Depends(require_user)):
+    team_id = f"team_{uuid.uuid4().hex[:12]}"
+    row = await pool.fetchrow(
+        "INSERT INTO teams (team_id, name, created_by) VALUES ($1,$2,$3) RETURNING *",
+        team_id, payload.name, user["user_id"],
+    )
+    await pool.execute(
+        "INSERT INTO team_members (member_id, team_id, email, user_id, role, status) VALUES ($1,$2,$3,$4,'owner','active')",
+        f"mem_{uuid.uuid4().hex[:12]}", team_id, user["email"], user["user_id"],
+    )
+    return TeamOut(**dict(row))
 
 
 @api_router.get("/teams", response_model=List[TeamOut])
-async def list_teams(user: Dict[str, Any] = Depends(get_current_user)):
-    memberships = await db.team_members.find({"user_id": user["user_id"], "status": "active"}, {"_id": 0}).to_list(2000)
-    team_ids = [m["team_id"] for m in memberships]
-    teams = await db.teams.find({"team_id": {"$in": team_ids}}, {"_id": 0}).sort([("updated_at", -1)]).to_list(2000)
-    return [TeamOut(**t) for t in teams]
+async def list_teams(pool: asyncpg.Pool = Depends(get_db), user=Depends(require_user)):
+    team_ids = await get_visible_team_ids(pool, user["user_id"])
+    if not team_ids:
+        return []
+    rows = await pool.fetch("SELECT * FROM teams WHERE team_id = ANY($1::text[]) ORDER BY updated_at DESC", team_ids)
+    return [TeamOut(**dict(r)) for r in rows]
 
 
 @api_router.get("/teams/{team_id}")
-async def get_team(team_id: str, user: Dict[str, Any] = Depends(get_current_user)):
-    mem = await db.team_members.find_one({"team_id": team_id, "user_id": user["user_id"], "status": "active"}, {"_id": 0})
+async def get_team(team_id: str, pool: asyncpg.Pool = Depends(get_db), user=Depends(require_user)):
+    mem = await pool.fetchrow("SELECT * FROM team_members WHERE team_id=$1 AND user_id=$2 AND status='active'", team_id, user["user_id"])
     if not mem:
         raise HTTPException(status_code=403, detail="Not a team member")
-
-    team = await db.teams.find_one({"team_id": team_id}, {"_id": 0})
+    team = await pool.fetchrow("SELECT * FROM teams WHERE team_id=$1", team_id)
     if not team:
         raise HTTPException(status_code=404, detail="Team not found")
-
-    members = await db.team_members.find({"team_id": team_id}, {"_id": 0}).sort([("created_at", 1)]).to_list(2000)
-    return {
-        "team": team,
-        "members": members,
-        "your_role": mem.get("role"),
-    }
+    members = await pool.fetch("SELECT * FROM team_members WHERE team_id=$1 ORDER BY created_at ASC", team_id)
+    return {"team": dict(team), "members": [dict(m) for m in members], "your_role": mem["role"]}
 
 
 @api_router.post("/teams/{team_id}/members", response_model=TeamMemberOut)
-async def add_team_member(team_id: str, payload: TeamMemberAdd, user: Dict[str, Any] = Depends(get_current_user)):
-    await require_team_admin(team_id, user)
-    now = now_utc()
+async def add_team_member(team_id: str, payload: TeamMemberAdd, pool: asyncpg.Pool = Depends(get_db), user=Depends(require_user)):
+    mem = await pool.fetchrow("SELECT role FROM team_members WHERE team_id=$1 AND user_id=$2 AND status='active'", team_id, user["user_id"])
+    if not mem or mem["role"] not in ("owner", "admin"):
+        raise HTTPException(status_code=403, detail="Team admin required")
     email = payload.email.strip().lower()
-
-    existing_user = await db.users.find_one({"email": email}, {"_id": 0})
-    member_doc = {
-        "member_id": f"mem_{uuid.uuid4().hex[:12]}",
-        "team_id": team_id,
-        "email": email,
-        "user_id": existing_user.get("user_id") if existing_user else None,
-        "role": payload.role,
-        "status": "active" if existing_user else "invited",
-        "created_at": now,
-        "updated_at": now,
-    }
-
-    await db.team_members.delete_many({"team_id": team_id, "email": email})
-    await db.team_members.insert_one(member_doc)
-
-    # In-app notification if user exists
-    if existing_user:
-        await create_notification(
-            user_id=existing_user["user_id"],
-            notif_type="team_invite",
-            title="Added to team",
-            message=f"You were added to team: {team_id}",
-            team_id=team_id,
-            url="/teams",
-        )
-        await send_web_push_to_user(existing_user["user_id"], {"title": "TaskFlow", "body": "You were added to a team", "data": {"url": "/teams"}})
-
-    return TeamMemberOut(**member_doc)
+    existing_user = await pool.fetchrow("SELECT user_id FROM users WHERE email=$1", email)
+    uid = existing_user["user_id"] if existing_user else None
+    status = "active" if uid else "invited"
+    await pool.execute("DELETE FROM team_members WHERE team_id=$1 AND email=$2", team_id, email)
+    row = await pool.fetchrow(
+        "INSERT INTO team_members (member_id, team_id, email, user_id, role, status) VALUES ($1,$2,$3,$4,$5,$6) RETURNING *",
+        f"mem_{uuid.uuid4().hex[:12]}", team_id, email, uid, payload.role, status,
+    )
+    if uid:
+        await create_notification(pool, uid, "team_invite", "Added to team", f"You were added to a team", None, team_id, "/teams")
+        await send_web_push_to_user(pool, uid, {"title": "Kartavya", "body": "You were added to a team", "data": {"url": "/teams"}})
+    return TeamMemberOut(**dict(row))
 
 
 @api_router.put("/teams/{team_id}/members/{member_id}", response_model=TeamMemberOut)
-async def update_team_member(
-    team_id: str, member_id: str, payload: TeamMemberUpdate, user: Dict[str, Any] = Depends(get_current_user)
-):
-    await require_team_admin(team_id, user)
-
-    update = {k: v for k, v in payload.model_dump().items() if v is not None}
-    update["updated_at"] = now_utc()
-
-    res = await db.team_members.find_one_and_update(
-        {"team_id": team_id, "member_id": member_id},
-        {"$set": update},
-        projection={"_id": 0},
-        return_document=ReturnDocument.AFTER,
+async def update_team_member(team_id: str, member_id: str, payload: TeamMemberUpdate, pool: asyncpg.Pool = Depends(get_db), user=Depends(require_user)):
+    mem = await pool.fetchrow("SELECT role FROM team_members WHERE team_id=$1 AND user_id=$2 AND status='active'", team_id, user["user_id"])
+    if not mem or mem["role"] not in ("owner", "admin"):
+        raise HTTPException(status_code=403, detail="Team admin required")
+    updates, vals = [], []
+    if payload.role is not None:
+        updates.append(f"role=${len(vals)+1}"); vals.append(payload.role)
+    if payload.status is not None:
+        updates.append(f"status=${len(vals)+1}"); vals.append(payload.status)
+    if not updates:
+        raise HTTPException(status_code=400, detail="Nothing to update")
+    updates.append(f"updated_at=${len(vals)+1}"); vals.append(now_utc())
+    vals += [team_id, member_id]
+    row = await pool.fetchrow(
+        f"UPDATE team_members SET {', '.join(updates)} WHERE team_id=${len(vals)-1} AND member_id=${len(vals)} RETURNING *",
+        *vals,
     )
-    if not res:
+    if not row:
         raise HTTPException(status_code=404, detail="Member not found")
-    return TeamMemberOut(**res)
+    return TeamMemberOut(**dict(row))
 
 
 @api_router.delete("/teams/{team_id}/members/{member_id}")
-async def remove_team_member(team_id: str, member_id: str, user: Dict[str, Any] = Depends(get_current_user)):
-    await require_team_admin(team_id, user)
-    res = await db.team_members.delete_one({"team_id": team_id, "member_id": member_id})
-    if res.deleted_count == 0:
+async def remove_team_member(team_id: str, member_id: str, pool: asyncpg.Pool = Depends(get_db), user=Depends(require_user)):
+    mem = await pool.fetchrow("SELECT role FROM team_members WHERE team_id=$1 AND user_id=$2 AND status='active'", team_id, user["user_id"])
+    if not mem or mem["role"] not in ("owner", "admin"):
+        raise HTTPException(status_code=403, detail="Team admin required")
+    res = await pool.execute("DELETE FROM team_members WHERE team_id=$1 AND member_id=$2", team_id, member_id)
+    if res == "DELETE 0":
         raise HTTPException(status_code=404, detail="Member not found")
     return {"ok": True}
 
 
-# ----- Categories -----
-
+# ── Categories ────────────────────────────────────────────────────────────────
 
 @api_router.get("/categories", response_model=List[CategoryOut])
-async def list_categories(user: Dict[str, Any] = Depends(get_current_user)):
-    cats = (
-        await db.categories.find({"user_id": user["user_id"]}, {"_id": 0})
-        .sort([("updated_at", -1)])
-        .to_list(2000)
-    )
-    return [CategoryOut(**c) for c in cats]
+async def list_categories(pool: asyncpg.Pool = Depends(get_db), user=Depends(require_user)):
+    rows = await pool.fetch("SELECT * FROM categories WHERE user_id=$1 ORDER BY updated_at DESC", user["user_id"])
+    return [CategoryOut(**dict(r)) for r in rows]
 
 
 @api_router.post("/categories", response_model=CategoryOut)
-async def create_category(payload: CategoryCreate, user: Dict[str, Any] = Depends(get_current_user)):
-    now = now_utc()
-    doc = {
-        "category_id": f"cat_{uuid.uuid4().hex[:12]}",
-        "user_id": user["user_id"],
-        "name": payload.name,
-        "color": payload.color,
-        "created_at": now,
-        "updated_at": now,
-    }
-    await db.categories.insert_one(doc)
-    return CategoryOut(**doc)
-
-
-@api_router.put("/categories/{category_id}", response_model=CategoryOut)
-async def update_category(
-    category_id: str, payload: CategoryUpdate, user: Dict[str, Any] = Depends(get_current_user)
-):
-    update: Dict[str, Any] = {k: v for k, v in payload.model_dump().items() if v is not None}
-    update["updated_at"] = now_utc()
-    res = await db.categories.find_one_and_update(
-        {"user_id": user["user_id"], "category_id": category_id},
-        {"$set": update},
-        return_document=ReturnDocument.AFTER,
-        projection={"_id": 0},
+async def create_category(payload: CategoryCreate, pool: asyncpg.Pool = Depends(get_db), user=Depends(require_user)):
+    row = await pool.fetchrow(
+        "INSERT INTO categories (category_id, user_id, name, color) VALUES ($1,$2,$3,$4) RETURNING *",
+        f"cat_{uuid.uuid4().hex[:12]}", user["user_id"], payload.name, payload.color,
     )
-    if not res:
-        raise HTTPException(status_code=404, detail="Category not found")
-    return CategoryOut(**res)
+    return CategoryOut(**dict(row))
 
 
 @api_router.delete("/categories/{category_id}")
-async def delete_category(category_id: str, user: Dict[str, Any] = Depends(get_current_user)):
-    await db.tasks.update_many(
-        {"user_id": user["user_id"], "category_id": category_id},
-        {"$set": {"category_id": None, "updated_at": now_utc()}},
-    )
-    res = await db.categories.delete_one({"user_id": user["user_id"], "category_id": category_id})
-    if res.deleted_count == 0:
+async def delete_category(category_id: str, pool: asyncpg.Pool = Depends(get_db), user=Depends(require_user)):
+    await pool.execute("UPDATE tasks SET category_id=NULL, updated_at=NOW() WHERE user_id=$1 AND category_id=$2", user["user_id"], category_id)
+    res = await pool.execute("DELETE FROM categories WHERE user_id=$1 AND category_id=$2", user["user_id"], category_id)
+    if res == "DELETE 0":
         raise HTTPException(status_code=404, detail="Category not found")
     return {"ok": True}
 
 
-# ----- Tasks -----
-
-
-def _scope_query_for_task(user: Dict[str, Any], task: Dict[str, Any]) -> Dict[str, Any]:
-    if task.get("team_id"):
-        return {"team_id": task["team_id"]}
-    return {"user_id": task.get("user_id") or user["user_id"]}
-
-
-async def _visible_tasks_query(user: Dict[str, Any]) -> Dict[str, Any]:
-    team_ids = await db.team_members.distinct(
-        "team_id", {"user_id": user["user_id"], "status": "active"}
-    )
-    return {"$or": [{"user_id": user["user_id"]}, {"team_id": {"$in": team_ids}}]}
-
+# ── Tasks ─────────────────────────────────────────────────────────────────────
 
 @api_router.get("/tasks", response_model=List[TaskOut])
 async def list_tasks(
-    request: Request,
     status: Optional[str] = None,
     category_id: Optional[str] = None,
     q: Optional[str] = None,
-    due: Optional[str] = None,
     team_id: Optional[str] = None,
     assigned_to_me: Optional[bool] = None,
-    user: Dict[str, Any] = Depends(get_current_user),
+    pool: asyncpg.Pool = Depends(get_db),
+    user=Depends(require_user),
 ):
-    base = await _visible_tasks_query(user)
-    query: Dict[str, Any] = base
+    team_ids = await get_visible_team_ids(pool, user["user_id"])
+    conditions = ["(t.user_id=$1 OR t.team_id=ANY($2::text[]))"]
+    vals: list = [user["user_id"], team_ids]
 
     if team_id:
-        query = {"$and": [base, {"team_id": team_id}]}
-
-    and_filters: List[Dict[str, Any]] = []
-
+        conditions.append(f"t.team_id=${len(vals)+1}"); vals.append(team_id)
     if status:
-        and_filters.append({"status": status})
+        conditions.append(f"t.status=${len(vals)+1}"); vals.append(status)
     if category_id:
-        and_filters.append({"category_id": category_id})
+        conditions.append(f"t.category_id=${len(vals)+1}"); vals.append(category_id)
     if q:
-        and_filters.append({"title": {"$regex": q, "$options": "i"}})
+        conditions.append(f"t.title ILIKE ${len(vals)+1}"); vals.append(f"%{q}%")
     if assigned_to_me:
-        and_filters.append({"assignee_user_ids": user["user_id"]})
+        conditions.append(f"${len(vals)+1}=ANY(t.assignee_user_ids)"); vals.append(user["user_id"])
 
-    now = now_utc()
-    if due == "overdue":
-        and_filters.append({"due_at": {"$lt": now}})
-        and_filters.append({"status": {"$ne": "done"}})
-    elif due == "today":
-        start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-        end = start + timedelta(days=1)
-        and_filters.append({"due_at": {"$gte": start, "$lt": end}})
-    elif due == "week":
-        end = now + timedelta(days=7)
-        and_filters.append({"due_at": {"$gte": now, "$lt": end}})
-
-    if and_filters:
-        query = {"$and": [query] + and_filters}
-
-    tasks = await db.tasks.find(query, {"_id": 0}).sort([("status", 1), ("order", 1)]).to_list(5000)
-    return [TaskOut(**t) for t in tasks]
+    sql = f"SELECT * FROM tasks t WHERE {' AND '.join(conditions)} ORDER BY t.status ASC, t.sort_order ASC"
+    rows = await pool.fetch(sql, *vals)
+    return [row_to_task(r) for r in rows]
 
 
 @api_router.post("/tasks", response_model=TaskOut)
-async def create_task(payload: TaskCreate, user: Dict[str, Any] = Depends(get_current_user)):
-    now = now_utc()
-
-    # Determine ownership scope
+async def create_task(payload: TaskCreate, pool: asyncpg.Pool = Depends(get_db), user=Depends(require_user)):
     if payload.team_id:
-        mem = await db.team_members.find_one(
-            {"team_id": payload.team_id, "user_id": user["user_id"], "status": "active"}, {"_id": 0}
-        )
+        mem = await pool.fetchrow("SELECT 1 FROM team_members WHERE team_id=$1 AND user_id=$2 AND status='active'", payload.team_id, user["user_id"])
         if not mem:
             raise HTTPException(status_code=403, detail="Not a team member")
-        scope = {"team_id": payload.team_id}
         user_id_field = None
+        scope_col, scope_val = "team_id", payload.team_id
     else:
-        scope = {"user_id": user["user_id"]}
         user_id_field = user["user_id"]
+        scope_col, scope_val = "user_id", user["user_id"]
 
-    # Default reminder: 2 hours before due
     due_dt = parse_dt(payload.due_at)
     reminder_dt = parse_dt(payload.reminder_at)
     if due_dt and reminder_dt is None:
         reminder_dt = due_dt - timedelta(hours=2)
 
-    max_doc = (
-        await db.tasks.find({**scope, "status": payload.status}, {"_id": 0, "order": 1})
-        .sort([("order", -1)])
-        .to_list(1)
+    max_row = await pool.fetchrow(f"SELECT MAX(sort_order) AS mo FROM tasks WHERE {scope_col}=$1 AND status=$2", scope_val, payload.status)
+    next_order = (max_row["mo"] or -1) + 1
+
+    task_id = f"task_{uuid.uuid4().hex[:12]}"
+    assignee_emails = [e.strip().lower() for e in (payload.assignee_emails or []) if e.strip()]
+
+    row = await pool.fetchrow(
+        """
+        INSERT INTO tasks (
+            task_id, user_id, team_id, created_by_user_id, assigned_by_user_id,
+            title, description, status, priority, category_id, tags,
+            assignee_user_ids, assignee_emails, due_at, reminder_at,
+            recurrence_rule, recurrence_interval, estimated_minutes,
+            attachments, custom_fields, subtasks, sort_order
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::text[],$12::text[],$13::text[],$14,$15,$16,$17,$18,$19::jsonb,$20::jsonb,$21::jsonb,$22)
+        RETURNING *
+        """,
+        task_id, user_id_field, payload.team_id, user["user_id"],
+        user["user_id"] if (payload.assignee_user_ids or assignee_emails) else None,
+        payload.title, payload.description, payload.status, payload.priority, payload.category_id,
+        payload.tags or [], payload.assignee_user_ids or [], assignee_emails,
+        due_dt, reminder_dt,
+        payload.recurrence.rule, payload.recurrence.interval, payload.estimated_minutes,
+        json.dumps([a.model_dump() for a in payload.attachments or []]),
+        json.dumps(payload.custom_fields or {}),
+        json.dumps([s.model_dump() for s in payload.subtasks or []]),
+        next_order,
     )
-    next_order = int(max_doc[0]["order"] + 1) if max_doc else 0
 
-    doc = {
-        "task_id": f"task_{uuid.uuid4().hex[:12]}",
-        "user_id": user_id_field,
-        "team_id": payload.team_id,
-        "created_by_user_id": user["user_id"],
-        "assigned_by_user_id": user["user_id"] if (payload.assignee_user_ids or payload.assignee_emails) else None,
-        "completed_by_user_id": None,
-        "title": payload.title,
-        "description": payload.description,
-        "status": payload.status,
-        "priority": payload.priority,
-        "category_id": payload.category_id,
-        "tags": payload.tags or [],
-        "assignee_user_ids": payload.assignee_user_ids or [],
-        "assignee_emails": [e.strip().lower() for e in (payload.assignee_emails or []) if e.strip()],
-        "due_at": due_dt,
-        "reminder_at": reminder_dt,
-        "reminder_sent_at": None,
-        "recurrence": payload.recurrence.model_dump(),
-        "estimated_minutes": payload.estimated_minutes,
-        "attachments": [a.model_dump() for a in payload.attachments or []],
-        "custom_fields": payload.custom_fields or {},
-        "subtasks": [s.model_dump() for s in payload.subtasks or []],
-        "order": next_order,
-        "created_at": now,
-        "updated_at": now,
-        "completed_at": None,
-    }
-    await db.tasks.insert_one(doc)
+    for uid in set(payload.assignee_user_ids or []):
+        await create_notification(pool, uid, "assigned", "Task assigned", f"You were assigned: {payload.title}", task_id, payload.team_id, "/tasks")
+        await send_web_push_to_user(pool, uid, {"title": "Kartavya", "body": f"Assigned: {payload.title}", "data": {"url": "/tasks"}})
 
-    # Create assignment notifications
-    assigned_user_ids = set(doc["assignee_user_ids"])
-    if doc["assignee_emails"]:
-        users = await db.users.find({"email": {"$in": doc["assignee_emails"]}}, {"_id": 0}).to_list(2000)
-        assigned_user_ids.update([u["user_id"] for u in users])
-
-    for uid in assigned_user_ids:
-        await create_notification(
-            user_id=uid,
-            notif_type="assigned",
-            title="Task assigned",
-            message=f"You were assigned: {doc['title']}",
-            task_id=doc["task_id"],
-            team_id=doc.get("team_id"),
-            url="/tasks",
-        )
-        await send_web_push_to_user(
-            uid,
-            {"title": "TaskFlow", "body": f"Assigned: {doc['title']}", "data": {"url": "/tasks"}},
-        )
-
-    return TaskOut(**doc)
-
-
-@api_router.get("/tasks/{task_id}", response_model=TaskOut)
-async def get_task(task_id: str, user: Dict[str, Any] = Depends(get_current_user)):
-    base = await _visible_tasks_query(user)
-    doc = await db.tasks.find_one({"$and": [base, {"task_id": task_id}]}, {"_id": 0})
-    if not doc:
-        raise HTTPException(status_code=404, detail="Task not found")
-    return TaskOut(**doc)
+    return row_to_task(row)
 
 
 @api_router.put("/tasks/{task_id}", response_model=TaskOut)
-async def update_task(task_id: str, payload: TaskUpdate, user: Dict[str, Any] = Depends(get_current_user)):
-    base = await _visible_tasks_query(user)
-    existing = await db.tasks.find_one({"$and": [base, {"task_id": task_id}]}, {"_id": 0})
+async def update_task(task_id: str, payload: TaskUpdate, pool: asyncpg.Pool = Depends(get_db), user=Depends(require_user)):
+    team_ids = await get_visible_team_ids(pool, user["user_id"])
+    existing = await pool.fetchrow(
+        "SELECT * FROM tasks WHERE task_id=$1 AND (user_id=$2 OR team_id=ANY($3::text[]))",
+        task_id, user["user_id"], team_ids,
+    )
     if not existing:
         raise HTTPException(status_code=404, detail="Task not found")
 
-    # Team tasks: only admins can change assignments
-    if existing.get("team_id") and (payload.assignee_user_ids is not None or payload.assignee_emails is not None):
-        await require_team_admin(existing["team_id"], user)
-
-    update: Dict[str, Any] = {}
     data = payload.model_dump(exclude_unset=True)
+    updates, vals = [], []
 
+    simple = ["title", "description", "status", "priority", "category_id", "tags", "assignee_user_ids", "assignee_emails", "estimated_minutes"]
+    for k in simple:
+        if k in data:
+            updates.append(f"{k}=${len(vals)+1}" if k not in ("tags", "assignee_user_ids", "assignee_emails") else f"{k}=${len(vals)+1}::text[]")
+            vals.append(data[k])
+    for k in ("attachments", "custom_fields", "subtasks"):
+        if k in data and data[k] is not None:
+            updates.append(f"{k}=${len(vals)+1}::jsonb")
+            vals.append(json.dumps([i.model_dump() if hasattr(i, 'model_dump') else i for i in data[k]] if isinstance(data[k], list) else data[k]))
     if "due_at" in data:
-        update["due_at"] = parse_dt(data.get("due_at"))
-        data.pop("due_at", None)
+        updates.append(f"due_at=${len(vals)+1}"); vals.append(parse_dt(data["due_at"]))
     if "reminder_at" in data:
-        update["reminder_at"] = parse_dt(data.get("reminder_at"))
-        data.pop("reminder_at", None)
-    if "recurrence" in data and data["recurrence"] is not None:
-        update["recurrence"] = data["recurrence"].model_dump()
-        data.pop("recurrence", None)
+        updates.append(f"reminder_at=${len(vals)+1}"); vals.append(parse_dt(data["reminder_at"]))
+    if "recurrence" in data and data["recurrence"]:
+        rec = data["recurrence"]
+        updates.append(f"recurrence_rule=${len(vals)+1}"); vals.append(rec.get("rule", "none") if isinstance(rec, dict) else rec.rule)
+        updates.append(f"recurrence_interval=${len(vals)+1}"); vals.append(rec.get("interval", 1) if isinstance(rec, dict) else rec.interval)
 
-    # Normalize assignee emails
-    if "assignee_emails" in data and data["assignee_emails"] is not None:
-        update["assignee_emails"] = [e.strip().lower() for e in data["assignee_emails"] if e.strip()]
-        data.pop("assignee_emails", None)
-
-    for k, v in data.items():
-        update[k] = v
-
-    update["updated_at"] = now_utc()
-
-    old_status = existing.get("status")
-    new_status = update.get("status", old_status)
-
-    # If status changes, move to end of new column
-    scope = {"team_id": existing["team_id"]} if existing.get("team_id") else {"user_id": existing.get("user_id")}
+    old_status = existing["status"]
+    new_status = data.get("status", old_status)
     if new_status != old_status:
-        max_doc = (
-            await db.tasks.find({**scope, "status": new_status}, {"_id": 0, "order": 1})
-            .sort([("order", -1)])
-            .to_list(1)
-        )
-        update["order"] = int(max_doc[0]["order"] + 1) if max_doc else 0
+        scope_col = "team_id" if existing["team_id"] else "user_id"
+        scope_val = existing["team_id"] or existing["user_id"]
+        max_row = await pool.fetchrow(f"SELECT MAX(sort_order) AS mo FROM tasks WHERE {scope_col}=$1 AND status=$2", scope_val, new_status)
+        updates.append(f"sort_order=${len(vals)+1}"); vals.append((max_row["mo"] or -1) + 1)
 
-    # If assignment changed, set assigned_by
-    assignment_changed = False
-    if "assignee_user_ids" in update or "assignee_emails" in update:
-        assignment_changed = True
-        update["assigned_by_user_id"] = user["user_id"]
+    updates.append(f"updated_at=${len(vals)+1}"); vals.append(now_utc())
+    vals += [task_id]
 
-    res = await db.tasks.find_one_and_update(
-        {"task_id": task_id},
-        {"$set": update},
-        return_document=ReturnDocument.AFTER,
-        projection={"_id": 0},
+    row = await pool.fetchrow(
+        f"UPDATE tasks SET {', '.join(updates)} WHERE task_id=${len(vals)} RETURNING *",
+        *vals,
     )
 
-    if old_status != new_status:
-        await normalize_orders(scope, old_status)
-        await normalize_orders(scope, new_status)
+    if new_status != old_status:
+        scope_col = "team_id" if existing["team_id"] else "user_id"
+        scope_val = existing["team_id"] or existing["user_id"]
+        await normalize_orders(pool, scope_col, scope_val, old_status)
+        await normalize_orders(pool, scope_col, scope_val, new_status)
 
-    # Notify assignees on assignment change
-    if assignment_changed:
-        new_assignees = set(res.get("assignee_user_ids", []))
-        if res.get("assignee_emails"):
-            users = await db.users.find({"email": {"$in": res["assignee_emails"]}}, {"_id": 0}).to_list(2000)
-            new_assignees.update([u["user_id"] for u in users])
-        for uid in new_assignees:
-            await create_notification(
-                user_id=uid,
-                notif_type="assigned",
-                title="Task assigned",
-                message=f"You were assigned: {res['title']}",
-                task_id=res["task_id"],
-                team_id=res.get("team_id"),
-                url="/tasks",
-            )
-            await send_web_push_to_user(uid, {"title": "TaskFlow", "body": f"Assigned: {res['title']}", "data": {"url": "/tasks"}})
-
-    return TaskOut(**res)
+    return row_to_task(row)
 
 
 @api_router.delete("/tasks/{task_id}")
-async def delete_task(task_id: str, user: Dict[str, Any] = Depends(get_current_user)):
-    base = await _visible_tasks_query(user)
-    doc = await db.tasks.find_one({"$and": [base, {"task_id": task_id}]}, {"_id": 0})
+async def delete_task(task_id: str, pool: asyncpg.Pool = Depends(get_db), user=Depends(require_user)):
+    team_ids = await get_visible_team_ids(pool, user["user_id"])
+    doc = await pool.fetchrow("SELECT * FROM tasks WHERE task_id=$1 AND (user_id=$2 OR team_id=ANY($3::text[]))", task_id, user["user_id"], team_ids)
     if not doc:
         raise HTTPException(status_code=404, detail="Task not found")
-    await db.tasks.delete_one({"task_id": task_id})
-
-    scope = {"team_id": doc["team_id"]} if doc.get("team_id") else {"user_id": doc.get("user_id")}
-    await normalize_orders(scope, doc["status"])
-
+    await pool.execute("DELETE FROM tasks WHERE task_id=$1", task_id)
+    scope_col = "team_id" if doc["team_id"] else "user_id"
+    await normalize_orders(pool, scope_col, doc["team_id"] or doc["user_id"], doc["status"])
     return {"ok": True}
 
 
 @api_router.patch("/tasks/{task_id}/toggle", response_model=TaskOut)
-async def toggle_task(task_id: str, user: Dict[str, Any] = Depends(get_current_user)):
-    base = await _visible_tasks_query(user)
-    doc = await db.tasks.find_one({"$and": [base, {"task_id": task_id}]}, {"_id": 0})
-    if not doc:
-        raise HTTPException(status_code=404, detail="Task not found")
-
-    if doc["status"] == "done":
-        new_status: TaskStatus = "todo"
-        completed_at = None
-        completed_by = None
-    else:
-        new_status = "done"
-        completed_at = now_utc()
-        completed_by = user["user_id"]
-
-    scope = {"team_id": doc["team_id"]} if doc.get("team_id") else {"user_id": doc.get("user_id")}
-    max_doc = (
-        await db.tasks.find({**scope, "status": new_status}, {"_id": 0, "order": 1})
-        .sort([("order", -1)])
-        .to_list(1)
-    )
-    new_order = int(max_doc[0]["order"] + 1) if max_doc else 0
-
-    res = await db.tasks.find_one_and_update(
-        {"task_id": task_id},
-        {
-            "$set": {
-                "status": new_status,
-                "completed_at": completed_at,
-                "completed_by_user_id": completed_by,
-                "order": new_order,
-                "updated_at": now_utc(),
-            }
-        },
-        return_document=ReturnDocument.AFTER,
-        projection={"_id": 0},
-    )
-
-    await normalize_orders(scope, doc["status"])
-    await normalize_orders(scope, new_status)
-
-    # Completion notifications
-    if new_status == "done":
-        recipients = set(res.get("assignee_user_ids", []))
-        if res.get("assignee_emails"):
-            users = await db.users.find({"email": {"$in": res["assignee_emails"]}}, {"_id": 0}).to_list(2000)
-            recipients.update([u["user_id"] for u in users])
-        # notify assigner/manager too
-        if res.get("assigned_by_user_id"):
-            recipients.add(res["assigned_by_user_id"])
-
-        for uid in recipients:
-            await create_notification(
-                user_id=uid,
-                notif_type="completed",
-                title="Task completed",
-                message=f"Completed: {res['title']}",
-                task_id=res["task_id"],
-                team_id=res.get("team_id"),
-                url="/tasks",
-            )
-            await send_web_push_to_user(uid, {"title": "TaskFlow", "body": f"Completed: {res['title']}", "data": {"url": "/tasks"}})
-
-    return TaskOut(**res)
-
-
-@api_router.patch("/tasks/{task_id}/move", response_model=TaskOut)
-async def move_task(task_id: str, payload: TaskMoveIn, user: Dict[str, Any] = Depends(get_current_user)):
-    base = await _visible_tasks_query(user)
-    doc = await db.tasks.find_one({"$and": [base, {"task_id": task_id}]}, {"_id": 0})
+async def toggle_task(task_id: str, pool: asyncpg.Pool = Depends(get_db), user=Depends(require_user)):
+    team_ids = await get_visible_team_ids(pool, user["user_id"])
+    doc = await pool.fetchrow("SELECT * FROM tasks WHERE task_id=$1 AND (user_id=$2 OR team_id=ANY($3::text[]))", task_id, user["user_id"], team_ids)
     if not doc:
         raise HTTPException(status_code=404, detail="Task not found")
 
     old_status = doc["status"]
-    new_status = payload.status
+    new_status = "todo" if old_status == "done" else "done"
+    completed_at = now_utc() if new_status == "done" else None
+    completed_by = user["user_id"] if new_status == "done" else None
+    scope_col = "team_id" if doc["team_id"] else "user_id"
+    scope_val = doc["team_id"] or doc["user_id"]
+    max_row = await pool.fetchrow(f"SELECT MAX(sort_order) AS mo FROM tasks WHERE {scope_col}=$1 AND status=$2", scope_val, new_status)
+    new_order = (max_row["mo"] or -1) + 1
 
-    res = await db.tasks.find_one_and_update(
-        {"task_id": task_id},
-        {"$set": {"status": new_status, "order": payload.order, "updated_at": now_utc()}},
-        return_document=ReturnDocument.AFTER,
-        projection={"_id": 0},
+    row = await pool.fetchrow(
+        "UPDATE tasks SET status=$1, completed_at=$2, completed_by_user_id=$3, sort_order=$4, updated_at=NOW() WHERE task_id=$5 RETURNING *",
+        new_status, completed_at, completed_by, new_order, task_id,
     )
-
-    scope = {"team_id": doc["team_id"]} if doc.get("team_id") else {"user_id": doc.get("user_id")}
-    await normalize_orders(scope, old_status)
-    await normalize_orders(scope, new_status)
-
-    return TaskOut(**res)
+    await normalize_orders(pool, scope_col, scope_val, old_status)
+    await normalize_orders(pool, scope_col, scope_val, new_status)
+    return row_to_task(row)
 
 
-# ----- Notifications -----
+@api_router.patch("/tasks/{task_id}/move", response_model=TaskOut)
+async def move_task(task_id: str, payload: TaskMoveIn, pool: asyncpg.Pool = Depends(get_db), user=Depends(require_user)):
+    team_ids = await get_visible_team_ids(pool, user["user_id"])
+    doc = await pool.fetchrow("SELECT * FROM tasks WHERE task_id=$1 AND (user_id=$2 OR team_id=ANY($3::text[]))", task_id, user["user_id"], team_ids)
+    if not doc:
+        raise HTTPException(status_code=404, detail="Task not found")
+    old_status = doc["status"]
+    row = await pool.fetchrow(
+        "UPDATE tasks SET status=$1, sort_order=$2, updated_at=NOW() WHERE task_id=$3 RETURNING *",
+        payload.status, payload.order, task_id,
+    )
+    scope_col = "team_id" if doc["team_id"] else "user_id"
+    scope_val = doc["team_id"] or doc["user_id"]
+    await normalize_orders(pool, scope_col, scope_val, old_status)
+    await normalize_orders(pool, scope_col, scope_val, payload.status)
+    return row_to_task(row)
 
+
+# ── Notifications ─────────────────────────────────────────────────────────────
 
 @api_router.get("/notifications", response_model=List[NotificationOut])
-async def list_notifications(unread_only: bool = False, user: Dict[str, Any] = Depends(get_current_user)):
-    query: Dict[str, Any] = {"user_id": user["user_id"]}
+async def list_notifications(unread_only: bool = False, pool: asyncpg.Pool = Depends(get_db), user=Depends(require_user)):
     if unread_only:
-        query["read_at"] = None
-    items = await db.notifications.find(query, {"_id": 0}).sort([("created_at", -1)]).to_list(200)
-    return [NotificationOut(**n) for n in items]
+        rows = await pool.fetch("SELECT * FROM notifications WHERE user_id=$1 AND read_at IS NULL ORDER BY created_at DESC LIMIT 200", user["user_id"])
+    else:
+        rows = await pool.fetch("SELECT * FROM notifications WHERE user_id=$1 ORDER BY created_at DESC LIMIT 200", user["user_id"])
+    return [NotificationOut(**dict(r)) for r in rows]
 
 
 @api_router.post("/notifications/mark-read")
-async def mark_read(payload: MarkReadIn, user: Dict[str, Any] = Depends(get_current_user)):
+async def mark_read(payload: MarkReadIn, pool: asyncpg.Pool = Depends(get_db), user=Depends(require_user)):
     if payload.mark_all:
-        await db.notifications.update_many(
-            {"user_id": user["user_id"], "read_at": None},
-            {"$set": {"read_at": now_utc()}},
+        await pool.execute("UPDATE notifications SET read_at=NOW() WHERE user_id=$1 AND read_at IS NULL", user["user_id"])
+    elif payload.notification_ids:
+        await pool.execute(
+            "UPDATE notifications SET read_at=NOW() WHERE user_id=$1 AND notification_id=ANY($2::text[])",
+            user["user_id"], payload.notification_ids,
         )
-        return {"ok": True}
-
-    if not payload.notification_ids:
-        return {"ok": True}
-
-    await db.notifications.update_many(
-        {"user_id": user["user_id"], "notification_id": {"$in": payload.notification_ids}},
-        {"$set": {"read_at": now_utc()}},
-    )
     return {"ok": True}
 
 
 @api_router.post("/notifications/process")
-async def process_notifications(user: Dict[str, Any] = Depends(get_current_user)):
-    # Create reminder notifications for tasks where reminder time has passed and not sent.
-    # This endpoint is safe to call frequently (frontend polls when app is open).
-    base = await _visible_tasks_query(user)
+async def process_notifications(pool: asyncpg.Pool = Depends(get_db), user=Depends(require_user)):
+    team_ids = await get_visible_team_ids(pool, user["user_id"])
     now = now_utc()
-
-    tasks = await db.tasks.find(
-        {
-            "$and": [
-                base,
-                {"status": {"$ne": "done"}},
-                {"reminder_at": {"$ne": None, "$lte": now}},
-                {"reminder_sent_at": None},
-            ]
-        },
-        {"_id": 0},
-    ).to_list(100)
-
+    rows = await pool.fetch(
+        "SELECT * FROM tasks WHERE (user_id=$1 OR team_id=ANY($2::text[])) AND status!='done' AND reminder_at IS NOT NULL AND reminder_at<=$3 AND reminder_sent_at IS NULL",
+        user["user_id"], team_ids, now,
+    )
     created = 0
-    for t in tasks:
-        recipients = set(t.get("assignee_user_ids", []))
-        if t.get("assignee_emails"):
-            users = await db.users.find({"email": {"$in": t["assignee_emails"]}}, {"_id": 0}).to_list(2000)
-            recipients.update([u["user_id"] for u in users])
-
-        if not recipients:
-            # fallback: notify task owner
-            if t.get("user_id"):
-                recipients.add(t["user_id"])
-
+    for t in rows:
+        recipients = set(t["assignee_user_ids"] or [])
+        if not recipients and t["user_id"]:
+            recipients.add(t["user_id"])
         for uid in recipients:
-            await create_notification(
-                user_id=uid,
-                notif_type="reminder",
-                title="Task reminder",
-                message=f"Due soon: {t['title']}",
-                task_id=t["task_id"],
-                team_id=t.get("team_id"),
-                url="/tasks",
-            )
-            await send_web_push_to_user(uid, {"title": "TaskFlow", "body": f"Reminder: {t['title']}", "data": {"url": "/tasks"}})
+            await create_notification(pool, uid, "reminder", "Task reminder", f"Due soon: {t['title']}", t["task_id"], t["team_id"], "/tasks")
+            await send_web_push_to_user(pool, uid, {"title": "Kartavya", "body": f"Reminder: {t['title']}", "data": {"url": "/tasks"}})
             created += 1
-
-        await db.tasks.update_one(
-            {"task_id": t["task_id"]},
-            {"$set": {"reminder_sent_at": now_utc(), "updated_at": now_utc()}},
-        )
-
+        await pool.execute("UPDATE tasks SET reminder_sent_at=NOW(), updated_at=NOW() WHERE task_id=$1", t["task_id"])
     return {"ok": True, "created": created}
 
 
-# ----- Dashboard -----
-
+# ── Dashboard ─────────────────────────────────────────────────────────────────
 
 @api_router.get("/dashboard/summary", response_model=DashboardSummaryOut)
-async def dashboard_summary(user: Dict[str, Any] = Depends(get_current_user)):
-    base = await _visible_tasks_query(user)
+async def dashboard_summary(pool: asyncpg.Pool = Depends(get_db), user=Depends(require_user)):
+    team_ids = await get_visible_team_ids(pool, user["user_id"])
     now = now_utc()
     due_24h_end = now + timedelta(hours=24)
-
-    todo = await db.tasks.count_documents({"$and": [base, {"status": "todo"}]})
-    in_progress = await db.tasks.count_documents({"$and": [base, {"status": "in_progress"}]})
-    done = await db.tasks.count_documents({"$and": [base, {"status": "done"}]})
-
-    overdue = await db.tasks.count_documents(
-        {"$and": [base, {"status": {"$ne": "done"}}, {"due_at": {"$lt": now}}]}
-    )
-    due_24h = await db.tasks.count_documents(
-        {"$and": [base, {"status": {"$ne": "done"}}, {"due_at": {"$gte": now, "$lt": due_24h_end}}]}
-    )
-
-    return DashboardSummaryOut(
-        todo=todo, in_progress=in_progress, done=done, overdue=overdue, due_24h=due_24h
-    )
+    base = "(user_id=$1 OR team_id=ANY($2::text[]))"
+    todo        = await pool.fetchval(f"SELECT COUNT(*) FROM tasks WHERE {base} AND status='todo'", user["user_id"], team_ids)
+    in_progress = await pool.fetchval(f"SELECT COUNT(*) FROM tasks WHERE {base} AND status='in_progress'", user["user_id"], team_ids)
+    done        = await pool.fetchval(f"SELECT COUNT(*) FROM tasks WHERE {base} AND status='done'", user["user_id"], team_ids)
+    overdue     = await pool.fetchval(f"SELECT COUNT(*) FROM tasks WHERE {base} AND status!='done' AND due_at<$3", user["user_id"], team_ids, now)
+    due_24h     = await pool.fetchval(f"SELECT COUNT(*) FROM tasks WHERE {base} AND status!='done' AND due_at>=$3 AND due_at<$4", user["user_id"], team_ids, now, due_24h_end)
+    return DashboardSummaryOut(todo=todo, in_progress=in_progress, done=done, overdue=overdue, due_24h=due_24h)
 
 
-# Include router
+# ── Root ──────────────────────────────────────────────────────────────────────
+
+@api_router.get("/")
+async def root():
+    return {"message": "Kartavya API", "by": "Aekam Inc", "status": "healthy"}
+
+
+# ── App setup ─────────────────────────────────────────────────────────────────
+
+app.include_router(auth_router)
+app.include_router(health_router)
 app.include_router(api_router)
 
 app.add_middleware(
@@ -1279,52 +834,16 @@ app.add_middleware(
 
 @app.on_event("startup")
 async def startup():
-    try:
-        await db.users.create_index("email", unique=True)
-    except Exception:
-        pass
-    try:
-        await db.user_sessions.create_index("session_token", unique=True)
-    except Exception:
-        pass
-    try:
-        await db.categories.create_index([("user_id", 1), ("name", 1)])
-    except Exception:
-        pass
-    try:
-        await db.tasks.create_index([("user_id", 1), ("status", 1), ("order", 1)])
-        await db.tasks.create_index([("team_id", 1), ("status", 1), ("order", 1)])
-        await db.tasks.create_index([("reminder_at", 1), ("reminder_sent_at", 1)])
-    except Exception:
-        pass
-    try:
-        await db.teams.create_index("team_id", unique=True)
-        await db.team_members.create_index([("team_id", 1), ("email", 1)], unique=True)
-        await db.team_members.create_index([("user_id", 1), ("status", 1)])
-    except Exception:
-        pass
-    try:
-        await db.notifications.create_index([("user_id", 1), ("created_at", -1)])
-    except Exception:
-        pass
-    try:
-        await db.push_subscriptions.create_index([("user_id", 1), ("endpoint", 1)], unique=True)
-    except Exception:
-        pass
-
+    pool = await get_pool()
+    app.state.db = pool
     # Start background reminder scheduler
-    import asyncio
-
     if not getattr(app.state, "reminder_task", None):
-        app.state.reminder_task = asyncio.create_task(reminder_scheduler_loop())
-
+        app.state.reminder_task = asyncio.create_task(reminder_scheduler_loop(pool))
 
 
 @app.on_event("shutdown")
-async def shutdown_db_client():
-    # Stop scheduler
+async def shutdown():
     task = getattr(app.state, "reminder_task", None)
     if task:
         task.cancel()
-
-    client.close()
+    await close_pool()

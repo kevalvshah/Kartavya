@@ -1,12 +1,15 @@
-from fastapi import APIRouter, Request
+from fastapi import APIRouter
 from datetime import datetime
+from db import get_pool
+
 router = APIRouter(tags=["health"])
 
 @router.get("/api/health")
-async def health(request: Request):
+async def health():
     db_ok = False
     try:
-        await request.app.state.db.command("ping")
+        pool = await get_pool()
+        await pool.fetchval("SELECT 1")
         db_ok = True
     except Exception:
         pass
