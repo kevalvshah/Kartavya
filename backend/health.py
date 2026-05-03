@@ -13,4 +13,10 @@ async def health():
         db_ok = True
     except Exception:
         pass
-    return {"status": "ok" if db_ok else "degraded", "db": "connected" if db_ok else "unreachable", "app": "Kartavya", "by": "Aekam Inc", "time": datetime.utcnow().isoformat()}
+    return {
+        "status": "ok" if db_ok else "degraded",
+        "db": "connected" if db_ok else "unreachable",
+        "app": "Kartavya",
+        "by": "Aekam Inc",
+        "time": datetime.utcnow().isoformat()
+    }
