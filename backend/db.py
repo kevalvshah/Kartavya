@@ -1,5 +1,6 @@
 """
 db.py — Supabase/PostgreSQL async connection pool for Kartavya
+Uses Supabase connection pooler (port 6543) for cross-region Railway connectivity
 """
 import os
 import asyncpg
@@ -11,7 +12,9 @@ async def get_pool() -> asyncpg.Pool:
     global _pool
     if _pool is None:
         dsn = os.environ["DATABASE_URL"]
-        # Supabase requires SSL
+        # Use Supabase pooler port 6543 instead of direct 5432
+        dsn = dsn.replace(":5432/", ":6543/")
+        # Ensure SSL is set
         if "sslmode" not in dsn:
             dsn += "?sslmode=require"
         _pool = await asyncpg.create_pool(
@@ -19,7 +22,6 @@ async def get_pool() -> asyncpg.Pool:
             min_size=1,
             max_size=10,
             command_timeout=30,
-            ssl="require",
         )
     return _pool
 
