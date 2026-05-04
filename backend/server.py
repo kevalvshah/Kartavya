@@ -34,6 +34,27 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 app = FastAPI(title="Kartavya API", description="Team task management by Aekam Inc")
 api_router = APIRouter(prefix="/api")
 
+# ── CORS — must be registered BEFORE routers ──────────────────────────────────
+# Build allowed origins: start with hardcoded Vercel domains, then add any
+# extra origins from the CORS_ORIGINS env var (comma-separated).
+_DEFAULT_ORIGINS = [
+    "https://kartavya-aekam.vercel.app",
+    "https://kartavya-kevalvshah03-6145s-projects.vercel.app",
+    "https://kartavya-git-main-kevalvshah03-6145s-projects.vercel.app",
+    "http://localhost:3000",
+    "http://localhost:8080",
+]
+_extra = [o.strip() for o in os.environ.get("CORS_ORIGINS", "").split(",") if o.strip()]
+_ALLOWED_ORIGINS = list(dict.fromkeys(_DEFAULT_ORIGINS + _extra))  # deduplicate, preserve order
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_ALLOWED_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -548,19 +569,11 @@ async def unsubscribe_push(payload: PushSubscriptionIn, user=Depends(require_use
     return {"ok": True}
 
 
-# ── App setup ─────────────────────────────────────────────────────────────────
+# ── App setup — routers registered AFTER middleware ───────────────────────────
 
 app.include_router(auth_router)
 app.include_router(health_router)
 app.include_router(api_router)
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_credentials=True,
-    allow_origins=os.environ.get("CORS_ORIGINS", "*").split(","),
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 
 @app.on_event("startup")
@@ -574,6 +587,7 @@ async def startup():
         logger.info(f"DATABASE_URL format: postgresql://{user_part}:***@{host_part}")
     else:
         logger.info(f"DATABASE_URL: {dsn}")
+    logger.info(f"CORS allowed origins: {_ALLOWED_ORIGINS}")
     logger.info("Kartavya API starting — DB connects lazily on first request")
 
 
