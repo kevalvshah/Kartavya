@@ -33,9 +33,6 @@
     "web": {
       "favicon": "./assets/favicon.png"
     },
-    "plugins": [
-      "expo-router"
-    ],
     "scheme": "kartavya",
     "extra": {
       "apiUrl": "https://kartavya-production.up.railway.app"
