@@ -21,23 +21,15 @@
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#050e1a"
-      },
-      "edgeToEdgeLayoutEnabled": true
+      }
     },
     "ios": {
       "bundleIdentifier": "com.aekaminc.kartavya",
       "supportsTablet": true
     },
-    "web": {
-      "bundler": "metro"
-    },
     "plugins": [
       "expo-font",
-      "expo-splash-screen",
-      [
-        "@react-native-async-storage/async-storage",
-        { "StorageType": "persistent" }
-      ]
+      "expo-splash-screen"
     ],
     "extra": {
       "eas": {
