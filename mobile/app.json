@@ -1,40 +1,44 @@
 {
   "expo": {
     "name": "Kartavya",
-    "slug": "kartavya-aekaminc",
-    "owner": "aekaminc",
+    "slug": "kartavya",
     "version": "1.0.0",
     "orientation": "portrait",
-    "scheme": "kartavya",
-    "backgroundColor": "#050e1a",
-    "primaryColor": "#0082c6",
-    "userInterfaceStyle": "dark",
-    "splash": {
-      "backgroundColor": "#050e1a",
-      "resizeMode": "contain",
-      "image": "./assets/splash.png"
-    },
     "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#6366f1"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.aekaminc.kartavya"
+    },
     "android": {
       "package": "com.aekaminc.kartavya",
       "versionCode": 1,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#050e1a"
-      }
+        "backgroundColor": "#6366f1"
+      },
+      "permissions": [
+        "android.permission.INTERNET",
+        "android.permission.ACCESS_NETWORK_STATE"
+      ]
     },
-    "ios": {
-      "bundleIdentifier": "com.aekaminc.kartavya",
-      "supportsTablet": true
+    "web": {
+      "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-font",
-      "expo-splash-screen"
+      "expo-router"
     ],
+    "scheme": "kartavya",
     "extra": {
-      "eas": {
-        "projectId": "196c2be9-caab-49a6-a359-a2adbfc6d821"
-      }
+      "apiUrl": "https://kartavya-production.up.railway.app"
     }
   }
 }
