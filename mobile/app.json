@@ -1,0 +1,26 @@
+{
+  "name": "KartavyaMobile",
+  "displayName": "Kartavya",
+  "expo": {
+    "name": "Kartavya",
+    "slug": "kartavya",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "backgroundColor": "#050e1a",
+    "primaryColor": "#0082c6",
+    "android": {
+      "package": "com.aekaminc.kartavya",
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#050e1a"
+      }
+    },
+    "ios": {
+      "bundleIdentifier": "com.aekaminc.kartavya"
+    },
+    "plugins": [
+      "@react-native-async-storage/async-storage"
+    ]
+  }
+}
