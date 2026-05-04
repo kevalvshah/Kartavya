@@ -5,8 +5,10 @@ import { API_URL } from './config';
 export const api = axios.create({ baseURL: API_URL });
 
 api.interceptors.request.use(async (config) => {
-  const token = await AsyncStorage.getItem('auth_token');
-  if (token) config.headers.Authorization = `Bearer ${token}`;
+  try {
+    const token = await AsyncStorage.getItem('auth_token');
+    if (token) config.headers.Authorization = `Bearer ${token}`;
+  } catch (_) {}
   return config;
 });
 
@@ -19,11 +21,12 @@ export async function apiLogin(email, password) {
 
 export async function apiLogout() {
   try { await api.post('/auth/logout'); } catch (_) {}
-  await AsyncStorage.removeItem('auth_token');
-  await AsyncStorage.removeItem('auth_user');
+  await AsyncStorage.multiRemove(['auth_token', 'auth_user']);
 }
 
 export async function getUser() {
-  const s = await AsyncStorage.getItem('auth_user');
-  try { return s ? JSON.parse(s) : null; } catch { return null; }
+  try {
+    const s = await AsyncStorage.getItem('auth_user');
+    return s ? JSON.parse(s) : null;
+  } catch { return null; }
 }

@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, FlatList, TouchableOpacity, StyleSheet, TextInput, Alert } from 'react-native';
-import LinearGradient from 'react-native-linear-gradient';
+import { LinearGradient } from 'expo-linear-gradient';
 import { api, apiLogout, getUser } from '../api';
 import { K } from '../theme';
 
-export default function ClientPortalScreen() {
+export default function ClientPortalScreen({ onLogout }) {
   const [tasks, setTasks]       = useState([]);
   const [selected, setSelected] = useState(null);
   const [comments, setComments] = useState([]);
@@ -30,7 +30,10 @@ export default function ClientPortalScreen() {
     } catch (_) { Alert.alert('Error', 'Could not post comment'); }
   };
 
-  const STATUS = { todo: K.blue, in_progress: K.mid, done: K.teal };
+  const confirmLogout = () => Alert.alert('Sign out', 'Are you sure?', [
+    { text: 'Cancel', style: 'cancel' },
+    { text: 'Sign out', style: 'destructive', onPress: async () => { await apiLogout(); onLogout?.(); } },
+  ]);
 
   if (selected) return (
     <View style={s.root}>
@@ -44,7 +47,7 @@ export default function ClientPortalScreen() {
         data={comments}
         keyExtractor={(c) => c.comment_id}
         contentContainerStyle={s.commentList}
-        ListEmptyComponent={<Text style={s.empty}>No comments yet.</Text>}
+        ListEmptyComponent={<Text style={s.empty}>No comments yet. Be the first.</Text>}
         renderItem={({ item: c }) => (
           <View style={s.comment}>
             <LinearGradient colors={K.gradD} style={s.commAvatar}>
@@ -59,8 +62,7 @@ export default function ClientPortalScreen() {
       />
       <View style={s.inputRow}>
         <TextInput style={s.input} value={comment} onChangeText={setComment}
-          placeholder="Add a comment…" placeholderTextColor={K.muted}
-          multiline />
+          placeholder="Add a comment…" placeholderTextColor={K.muted} multiline />
         <TouchableOpacity onPress={postComment}>
           <LinearGradient colors={K.gradD} style={s.sendBtn}>
             <Text style={{ color: '#fff', fontWeight: '800' }}>Post</Text>
@@ -80,7 +82,7 @@ export default function ClientPortalScreen() {
           <Text style={s.brand}>KARTAVYA</Text>
           <Text style={s.brandSub}>Hi, {user?.name}</Text>
         </View>
-        <TouchableOpacity onPress={async () => { await apiLogout(); }} style={s.logoutBtn}>
+        <TouchableOpacity onPress={confirmLogout} style={s.logoutBtn}>
           <Text style={s.logoutText}>Sign out</Text>
         </TouchableOpacity>
       </View>
@@ -94,20 +96,12 @@ export default function ClientPortalScreen() {
           <TouchableOpacity style={s.taskCard} onPress={() => setSelected(t)}>
             <View style={s.taskTop}>
               <Text style={s.taskTitleText} numberOfLines={2}>{t.title}</Text>
-              <View style={[s.status, { backgroundColor: (STATUS[t.status] || K.teal) + '22' }]}>
-                <Text style={[s.statusText, { color: STATUS[t.status] || K.teal }]}>{t.status === 'in_progress' ? 'In Progress' : t.status}</Text>
+              <View style={[s.status, { backgroundColor: 'rgba(5,183,170,0.15)' }]}>
+                <Text style={[s.statusText, { color: K.teal }]}>{t.status === 'in_progress' ? 'In Progress' : t.status}</Text>
               </View>
             </View>
             {t.description && <Text style={s.desc} numberOfLines={2}>{t.description}</Text>}
             {t.due_at && <Text style={s.due}>Due {new Date(t.due_at).toLocaleDateString()}</Text>}
-            {(t.subtasks || []).length > 0 && (
-              <View style={s.prog}>
-                <View style={s.progTrack}>
-                  <View style={[s.progFill, { width: `${(t.subtasks.filter((s) => s.is_done).length / t.subtasks.length) * 100}%` }]} />
-                </View>
-                <Text style={s.progText}>{t.subtasks.filter((s) => s.is_done).length}/{t.subtasks.length}</Text>
-              </View>
-            )}
             <Text style={s.tapHint}>Tap to comment ›</Text>
           </TouchableOpacity>
         )}
@@ -134,13 +128,9 @@ const s = StyleSheet.create({
   statusText:   { fontSize: 9, fontWeight: '800', textTransform: 'uppercase' },
   desc:         { color: K.muted, fontSize: 12, marginTop: 8, lineHeight: 17 },
   due:          { color: K.mid, fontSize: 10, marginTop: 6, fontWeight: '600' },
-  prog:         { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 10 },
-  progTrack:    { flex: 1, height: 5, backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 3, overflow: 'hidden' },
-  progFill:     { height: 5, backgroundColor: K.teal, borderRadius: 3 },
-  progText:     { color: K.muted, fontSize: 9, fontWeight: '700' },
   tapHint:      { color: K.blue, fontSize: 10, marginTop: 10, fontWeight: '700' },
-  back:         { padding: 4, marginRight: 8 },
-  backText:     { color: K.blue, fontSize: 16, fontWeight: '700' },
+  back:         { marginRight: 8 },
+  backText:     { color: K.blue, fontSize: 18, fontWeight: '700' },
   taskTitle:    { color: '#fff', fontSize: 16, fontWeight: '900', flex: 1 },
   commentList:  { padding: 16, paddingBottom: 20 },
   comment:      { flexDirection: 'row', gap: 10, marginBottom: 14 },

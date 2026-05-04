@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, FlatList, TouchableOpacity, StyleSheet, TextInput, Alert } from 'react-native';
-import LinearGradient from 'react-native-linear-gradient';
+import { View, Text, FlatList, TouchableOpacity, StyleSheet, TextInput, Alert, Share } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import KHeader from '../components/KHeader';
 import { api } from '../api';
 import { K } from '../theme';
@@ -22,20 +22,16 @@ export default function AdminScreen() {
     if (!email.trim()) return;
     try {
       const r = await api.post('/admin/invites', { email: email.trim(), role });
-      Alert.alert('Invite created', `Share this link:\n${r.data.invite_link}`);
+      await Share.share({ message: `You've been invited to Kartavya! Tap the link to activate your account:\n\n${r.data.invite_link}`, title: 'Kartavya Invite' });
       setEmail(''); load();
-    } catch (err) {
-      Alert.alert('Error', err?.response?.data?.detail || 'Could not create invite');
-    }
+    } catch (err) { Alert.alert('Error', err?.response?.data?.detail || 'Could not create invite'); }
   };
 
-  const roleColor = { admin: K.blue, member: K.teal, client: '#8b5cf6' };
+  const roleColor = { admin: K.blue, member: K.teal, client: K.purple };
 
   return (
     <View style={s.root}>
       <KHeader title="Admin" subtitle="Manage users & invites" />
-
-      {/* Invite form */}
       <View style={s.inviteCard}>
         <Text style={s.inviteTitle}>Send Invite</Text>
         <TextInput style={s.input} value={email} onChangeText={setEmail}
@@ -44,30 +40,30 @@ export default function AdminScreen() {
         <View style={s.roleRow}>
           {['member', 'client'].map((r) => (
             <TouchableOpacity key={r} onPress={() => setRole(r)}
-              style={[s.roleChip, role === r && { backgroundColor: roleColor[r] + '22', borderColor: roleColor[r] }]}>
-              <Text style={[s.roleChipText, role === r && { color: roleColor[r] }]}>{r.charAt(0).toUpperCase() + r.slice(1)}</Text>
+              style={[s.roleChip, role === r && { backgroundColor: (roleColor[r] || K.muted) + '22', borderColor: roleColor[r] || K.muted }]}>
+              <Text style={[s.roleChipText, role === r && { color: roleColor[r] || K.muted }]}>{r.charAt(0).toUpperCase() + r.slice(1)}</Text>
             </TouchableOpacity>
           ))}
         </View>
         <TouchableOpacity onPress={sendInvite}>
           <LinearGradient colors={K.gradD} style={s.sendBtn}>
-            <Text style={s.sendBtnText}>Send Invite</Text>
+            <Text style={s.sendBtnText}>Create & Share Invite</Text>
           </LinearGradient>
         </TouchableOpacity>
       </View>
-
-      {/* Tab toggle */}
       <View style={s.tabs}>
         {['users', 'invites'].map((t) => (
           <TouchableOpacity key={t} onPress={() => setTab(t)}
             style={[s.tab, tab === t && s.tabActive]}>
-            <Text style={[s.tabText, tab === t && { color: K.blue }]}>{t === 'users' ? `Users (${users.length})` : `Pending (${invites.filter((i) => !i.accepted_at).length})`}</Text>
+            <Text style={[s.tabText, tab === t && { color: K.blue }]}>
+              {t === 'users' ? `Users (${users.length})` : `Pending (${invites.filter((i) => !i.accepted_at).length})`}
+            </Text>
           </TouchableOpacity>
         ))}
       </View>
-
       {tab === 'users' && (
         <FlatList data={users} keyExtractor={(u) => u.user_id} contentContainerStyle={s.list}
+          ListEmptyComponent={<Text style={s.empty}>No users yet.</Text>}
           renderItem={({ item: u }) => (
             <View style={s.userRow}>
               <LinearGradient colors={K.gradD} style={s.avatar}>
@@ -84,13 +80,14 @@ export default function AdminScreen() {
           )}
         />
       )}
-
       {tab === 'invites' && (
-        <FlatList data={invites.filter((i) => !i.accepted_at)} keyExtractor={(i) => i.invite_id}
+        <FlatList
+          data={invites.filter((i) => !i.accepted_at)}
+          keyExtractor={(i) => i.invite_id}
           contentContainerStyle={s.list}
           ListEmptyComponent={<Text style={s.empty}>No pending invites.</Text>}
           renderItem={({ item: inv }) => (
-            <View style={s.invRow}>
+            <View style={s.userRow}>
               <View style={{ flex: 1 }}>
                 <Text style={s.userName}>{inv.email}</Text>
                 <Text style={s.userEmail}>Expires {new Date(inv.expires_at).toLocaleDateString()}</Text>
@@ -123,7 +120,6 @@ const s = StyleSheet.create({
   list:         { padding: 16, paddingBottom: 40 },
   empty:        { color: K.muted, fontSize: 13, textAlign: 'center', marginTop: 20 },
   userRow:      { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: K.card, borderRadius: 12, padding: 12, marginBottom: 8, borderWidth: 1, borderColor: 'rgba(0,130,198,0.2)' },
-  invRow:       { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: K.card, borderRadius: 12, padding: 12, marginBottom: 8, borderWidth: 1, borderColor: 'rgba(0,130,198,0.2)' },
   avatar:       { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
   avatarText:   { color: '#fff', fontSize: 14, fontWeight: '800' },
   userName:     { color: '#fff', fontSize: 13, fontWeight: '700' },
