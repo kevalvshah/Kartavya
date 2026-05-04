@@ -1,40 +1,27 @@
-/* TaskFlow Service Worker (Web Push)
-   Minimal SW to display push notifications.
-*/
+/* Kartavya Service Worker — PWA offline support */
+const CACHE = 'kartavya-v1';
+const PRECACHE = ['/', '/static/js/main.chunk.js', '/static/css/main.chunk.css'];
 
-self.addEventListener("push", (event) => {
-  let data = {};
-  try {
-    data = event.data ? event.data.json() : {};
-  } catch (e) {
-    data = { title: "TaskFlow", body: event.data ? event.data.text() : "" };
-  }
-
-  const title = data.title || "TaskFlow";
-  const options = {
-    body: data.body || data.message || "",
-    icon: data.icon || "/favicon.ico",
-    badge: data.badge || "/favicon.ico",
-    data: data.data || {},
-  };
-
-  event.waitUntil(self.registration.showNotification(title, options));
+self.addEventListener('install', (e) => {
+  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(PRECACHE)).catch(() => {}));
+  self.skipWaiting();
 });
 
-self.addEventListener("notificationclick", (event) => {
-  event.notification.close();
-  const url = (event.notification.data && event.notification.data.url) || "/dashboard";
-  event.waitUntil(
-    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clientsArr) => {
-      const hadWindow = clientsArr.some((win) => {
-        if (win.url.includes(url) && "focus" in win) {
-          win.focus();
-          return true;
-        }
-        return false;
-      });
-      if (!hadWindow && self.clients.openWindow) return self.clients.openWindow(url);
-      return undefined;
-    }),
+self.addEventListener('activate', (e) => {
+  e.waitUntil(caches.keys().then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)))));
+  self.clients.claim();
+});
+
+self.addEventListener('fetch', (e) => {
+  if (e.request.method !== 'GET') return;
+  if (e.request.url.includes('/api/')) return; // never cache API calls
+  e.respondWith(
+    caches.match(e.request).then((cached) => cached || fetch(e.request).then((res) => {
+      if (res.status === 200) {
+        const clone = res.clone();
+        caches.open(CACHE).then((c) => c.put(e.request, clone));
+      }
+      return res;
+    }).catch(() => caches.match('/')))
   );
 });

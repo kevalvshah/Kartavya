@@ -1,0 +1,20 @@
+{
+  "short_name": "Kartavya",
+  "name": "Kartavya by Aekam Inc",
+  "description": "Team task management — invite-only, project boards, client portal",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#050e1a",
+  "theme_color": "#0082c6",
+  "icons": [
+    { "src": "/favicon.ico",   "sizes": "64x64 32x32 24x24 16x16", "type": "image/x-icon" },
+    { "src": "/logo192.png",   "sizes": "192x192",                  "type": "image/png" },
+    { "src": "/logo512.png",   "sizes": "512x512",                  "type": "image/png", "purpose": "any maskable" }
+  ],
+  "categories": ["productivity", "business"],
+  "shortcuts": [
+    { "name": "Dashboard", "url": "/dashboard", "description": "Go to Dashboard" },
+    { "name": "Projects",  "url": "/projects",  "description": "Open Projects" }
+  ]
+}
