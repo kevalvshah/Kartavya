@@ -38,7 +38,6 @@ const K = {
   gradD: "linear-gradient(135deg,#0082c6,#05b7aa)",
 };
 
-// Logo mark — used everywhere
 function KLogo({ size = 32 }) {
   return (
     <div style={{ width: size, height: size, borderRadius: size * 0.26, background: K.gradD,
@@ -51,17 +50,31 @@ function KLogo({ size = 32 }) {
   );
 }
 
-// Wordmark
 function KWordmark({ dark = false, size = "md" }) {
   const fs = size === "sm" ? 11 : 14;
   const sub = size === "sm" ? 7 : 8;
   return (
     <div>
       <div style={{ fontSize: fs, fontWeight: 800, letterSpacing: 2.5, textTransform: "uppercase",
-        color: dark ? "#fff" : K.dark }}> Kartavya</div>
+        color: dark ? "#fff" : K.dark }}>Kartavya</div>
       <div style={{ fontSize: sub, letterSpacing: 2.5, textTransform: "uppercase",
         color: K.teal, fontWeight: 700, marginTop: 1 }}>by Aekam Inc</div>
     </div>
+  );
+}
+
+// Role badge — used in user rows
+function RoleBadge({ role }) {
+  const cfg = {
+    admin:  { bg: "#0082c622", color: "#0082c6", label: "Admin" },
+    member: { bg: "#05b7aa22", color: "#05b7aa", label: "Member" },
+    client: { bg: "#8b5cf622", color: "#8b5cf6", label: "Client" },
+  }[role] || { bg: "#88888822", color: "#888", label: role };
+  return (
+    <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: 1.2, textTransform: "uppercase",
+      background: cfg.bg, color: cfg.color, padding: "3px 8px", borderRadius: 6, whiteSpace: "nowrap" }}>
+      {cfg.label}
+    </span>
   );
 }
 
@@ -127,16 +140,13 @@ const authBtn = {
 function AuthShell({ children, title, sub }) {
   return (
     <div style={{ minHeight: "100vh", display: "flex", fontFamily: "'Nunito',sans-serif", background: "#f4fafd" }}>
-      {/* Left dark panel */}
       <div style={{ width: 420, background: K.dark, display: "flex", flexDirection: "column",
         justifyContent: "space-between", padding: 44, flexShrink: 0 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <KLogo size={36} />
-          <KWordmark dark />
+          <KLogo size={36} /><KWordmark dark />
         </div>
         <div>
-          <h2 style={{ color: "#fff", fontSize: 30, fontWeight: 800, lineHeight: 1.25,
-            marginBottom: 12, letterSpacing: -0.5 }}>{title}</h2>
+          <h2 style={{ color: "#fff", fontSize: 30, fontWeight: 800, lineHeight: 1.25, marginBottom: 12, letterSpacing: -0.5 }}>{title}</h2>
           <p style={{ color: "#8aa5be", fontSize: 13, lineHeight: 1.7 }}>{sub}</p>
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -149,7 +159,6 @@ function AuthShell({ children, title, sub }) {
           ))}
         </div>
       </div>
-      {/* Right white panel */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center",
         padding: "48px 60px", maxWidth: 520, background: "#fff" }}>
         {children}
@@ -295,8 +304,7 @@ function Protected({ children, requiredRole }) {
         if (!live) return;
         window.__kartavya_user = r.data;
         localStorage.setItem("kartavya_user", JSON.stringify(r.data));
-        setUser(r.data);
-        setReady(true);
+        setUser(r.data); setReady(true);
       })
       .catch(() => {
         if (!live) return;
@@ -317,9 +325,7 @@ function Protected({ children, requiredRole }) {
     </div>
   );
   if (!ready) return null;
-  if (requiredRole && user?.role !== requiredRole && user?.role !== "admin") {
-    return <Navigate to="/dashboard" replace />;
-  }
+  if (requiredRole && user?.role !== requiredRole && user?.role !== "admin") return <Navigate to="/dashboard" replace />;
   return children;
 }
 
@@ -367,38 +373,33 @@ function Sidebar() {
   const isAdmin = user?.role === "admin";
 
   const nav = [
-    { to: "/dashboard",               label: "Dashboard",      Icon: LayoutGrid },
-    { to: "/projects",                 label: "Projects",       Icon: FolderKanban },
-    { to: "/tasks",                    label: "All Tasks",      Icon: ListTodo },
-    { to: "/teams",                    label: "Teams",          Icon: Users },
-    { to: "/settings/categories",      label: "Categories",     Icon: Settings },
-    { to: "/settings/notifications",   label: "Notifications",  Icon: Bell },
-    ...(isAdmin ? [{ to: "/admin", label: "Admin", Icon: ShieldCheck }] : []),
+    { to: "/dashboard",              label: "Dashboard",     Icon: LayoutGrid },
+    { to: "/projects",               label: "Projects",      Icon: FolderKanban },
+    { to: "/tasks",                  label: "All Tasks",     Icon: ListTodo },
+    { to: "/teams",                  label: "Teams",         Icon: Users },
+    { to: "/settings/categories",    label: "Categories",    Icon: Settings },
+    { to: "/settings/notifications", label: "Notifications", Icon: Bell },
+    ...(isAdmin ? [{ to: "/admin",   label: "Admin",         Icon: ShieldCheck }] : []),
   ];
 
   return (
     <aside className="rounded-3xl border border-border/70 bg-card/50 shadow-sm lg:sticky lg:top-6 lg:h-[calc(100vh-48px)] flex flex-col">
-      {/* Header */}
       <div className="flex items-center justify-between p-4 border-b border-border/60">
         <div className="flex items-center gap-3">
-          <KLogo size={34} />
-          <KWordmark size="sm" />
+          <KLogo size={34} /><KWordmark size="sm" />
         </div>
         <Button variant="ghost" size="icon" onClick={() => setTheme(theme === "dark" ? "light" : "dark")}>
           {theme === "dark" ? <Sun size={15} /> : <Moon size={15} />}
         </Button>
       </div>
 
-      {/* Nav */}
       <div className="flex-1 overflow-y-auto p-3 space-y-0.5">
         {nav.map(({ to, label, Icon }) => {
           const active = location.pathname === to || location.pathname.startsWith(to + "/");
           return (
             <button key={to} onClick={() => navigate(to)}
               className={cn("w-full rounded-2xl px-3 py-2.5 text-left text-sm font-semibold transition-all duration-150 flex items-center gap-2.5",
-                active
-                  ? "text-white shadow-sm"
-                  : "text-muted-foreground hover:bg-muted/40 hover:text-foreground")}
+                active ? "text-white shadow-sm" : "text-muted-foreground hover:bg-muted/40 hover:text-foreground")}
               style={active ? { background: K.gradD } : {}}>
               <Icon size={15} />
               {label}
@@ -408,10 +409,9 @@ function Sidebar() {
         })}
       </div>
 
-      {/* User footer */}
       <div className="p-3 border-t border-border/60">
-        <div className="flex items-center gap-2 px-2 py-1.5">
-          <div style={{ width: 28, height: 28, borderRadius: "50%", background: K.gradD, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 800, color: "#fff", flexShrink: 0 }}>
+        <div className="flex items-center gap-2.5 px-2 py-1.5">
+          <div style={{ width: 30, height: 30, borderRadius: "50%", background: K.gradD, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 800, color: "#fff", flexShrink: 0 }}>
             {(user?.name || "?")[0].toUpperCase()}
           </div>
           <div className="flex-1 min-w-0">
@@ -431,14 +431,9 @@ function Topbar({ unread, onOpenNotifications }) {
   const location = useLocation();
 
   const pageTitle = {
-    "/dashboard": "Dashboard",
-    "/projects": "Projects",
-    "/tasks": "All Tasks",
-    "/teams": "Teams",
-    "/settings/categories": "Categories",
-    "/settings/notifications": "Notifications",
-    "/admin": "Admin Panel",
-    "/client": "Client Portal",
+    "/dashboard": "Dashboard", "/projects": "Projects", "/tasks": "All Tasks",
+    "/teams": "Teams", "/settings/categories": "Categories",
+    "/settings/notifications": "Notifications", "/admin": "Admin Panel", "/client": "Client Portal",
   }[location.pathname] || "Kartavya";
 
   const logout = async () => {
@@ -539,10 +534,8 @@ function DashboardPage() {
         <StatCard label="Done"        value={summary?.done        ?? "—"} />
         <StatCard label="Overdue"     value={summary?.overdue     ?? "—"} danger />
       </div>
-
       <div className="grid gap-6 lg:grid-cols-12">
         <div className="lg:col-span-7 space-y-4">
-          {/* Quick add */}
           <div className="rounded-3xl border border-border/70 bg-card/50 p-5">
             <div className="text-sm font-bold mb-3">Quick add task</div>
             <div className="flex gap-2">
@@ -552,7 +545,6 @@ function DashboardPage() {
               <Button onClick={quickAdd} disabled={saving}><Plus size={15} /><span className="ml-1.5">Add</span></Button>
             </div>
           </div>
-          {/* Due soon */}
           <div className="rounded-3xl border border-border/70 bg-card/50 p-5">
             <div className="flex items-center justify-between">
               <div className="text-sm font-bold">Due in 24 hours</div>
@@ -561,8 +553,6 @@ function DashboardPage() {
             <p className="mt-2 text-sm text-muted-foreground">Head to Tasks or a Project board to act on these.</p>
           </div>
         </div>
-
-        {/* Recent projects */}
         <div className="lg:col-span-5">
           <div className="rounded-3xl border border-border/70 bg-card/50 p-5">
             <div className="flex items-center justify-between mb-4">
@@ -609,18 +599,15 @@ function ProjectsPage() {
     try {
       await api.post("/teams", { name: name.trim() });
       setName(""); setShowNew(false);
-      pushToast({ type: "success", title: "Project created" });
-      load();
+      pushToast({ type: "success", title: "Project created" }); load();
     } catch (_) { pushToast({ type: "error", title: "Could not create project" }); }
     finally { setCreating(false); }
   };
 
   const remove = async (p) => {
     if (!window.confirm(`Delete project "${p.name}"? All tasks in it will be deleted.`)) return;
-    try {
-      await api.delete(`/teams/${p.team_id}`);
-      pushToast({ type: "success", title: "Project deleted" }); load();
-    } catch (_) { pushToast({ type: "error", title: "Could not delete" }); }
+    try { await api.delete(`/teams/${p.team_id}`); pushToast({ type: "success", title: "Project deleted" }); load(); }
+    catch (_) { pushToast({ type: "error", title: "Could not delete" }); }
   };
 
   return (
@@ -632,7 +619,6 @@ function ProjectsPage() {
         </div>
         <Button onClick={() => setShowNew(true)}><Plus size={15} /><span className="ml-1.5">New project</span></Button>
       </div>
-
       {showNew && (
         <div className="rounded-3xl border border-border/70 bg-card/50 p-5 flex gap-3">
           <Input value={name} onChange={(e) => setName(e.target.value)}
@@ -642,7 +628,6 @@ function ProjectsPage() {
           <Button variant="ghost" onClick={() => setShowNew(false)}>Cancel</Button>
         </div>
       )}
-
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {projects.length === 0 && (
           <div className="col-span-3 rounded-3xl border border-dashed border-border p-10 text-center text-sm text-muted-foreground">
@@ -684,9 +669,9 @@ function ProjectBoardPage() {
   const [editorOpen, setEditorOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const cols = useMemo(() => [
-    { id: "todo", title: "To Do", color: K.blue },
-    { id: "in_progress", title: "In Progress", color: K.mid },
-    { id: "done", title: "Done", color: K.teal },
+    { id: "todo",        title: "To Do",       color: K.blue },
+    { id: "in_progress", title: "In Progress",  color: K.mid },
+    { id: "done",        title: "Done",         color: K.teal },
   ], []);
 
   const load = useCallback(async () => {
@@ -695,9 +680,7 @@ function ProjectBoardPage() {
       api.get("/tasks", { params: { team_id: projectId } }),
       api.get("/categories"),
     ]);
-    setProject(proj.data);
-    setTasks(t.data);
-    setCats(c.data);
+    setProject(proj.data); setTasks(t.data); setCats(c.data);
   }, [projectId]);
 
   useEffect(() => { load().catch(() => pushToast({ type: "error", title: "Could not load board" })); }, [load, pushToast]);
@@ -738,7 +721,6 @@ function ProjectBoardPage() {
           </Button>
         </div>
       </div>
-
       <DragDropContext onDragEnd={onDragEnd}>
         <div className="grid gap-4 lg:grid-cols-3">
           {cols.map((col) => (
@@ -759,9 +741,7 @@ function ProjectBoardPage() {
                         className="rounded-2xl border border-border/60 bg-background/50 p-3.5 shadow-sm cursor-pointer hover:border-border transition-colors">
                         <div className="flex items-start justify-between gap-2">
                           <div className="text-sm font-semibold leading-snug truncate">{t.title}</div>
-                          <Badge tone={t.priority === "urgent" ? "danger" : t.priority === "high" ? "warning" : "info"} className="shrink-0">
-                            {t.priority}
-                          </Badge>
+                          <Badge tone={t.priority === "urgent" ? "danger" : t.priority === "high" ? "warning" : "info"} className="shrink-0">{t.priority}</Badge>
                         </div>
                         {t.description && <div className="mt-1.5 text-xs text-muted-foreground line-clamp-2">{t.description}</div>}
                         {t.category_id && <div className="mt-2 text-xs text-muted-foreground">{catName(t.category_id)}</div>}
@@ -785,7 +765,6 @@ function ProjectBoardPage() {
           ))}
         </div>
       </DragDropContext>
-
       <TaskEditor
         key={editing ? editing.task_id : "new"}
         open={editorOpen} onOpenChange={setEditorOpen}
@@ -794,10 +773,7 @@ function ProjectBoardPage() {
         defaultTeamId={projectId}
         onSaved={(task) => {
           setEditorOpen(false); setEditing(null);
-          setTasks((prev) => {
-            const e = prev.some((t) => t.task_id === task.task_id);
-            return e ? prev.map((t) => t.task_id === task.task_id ? task : t) : [task, ...prev];
-          });
+          setTasks((prev) => { const e = prev.some((t) => t.task_id === task.task_id); return e ? prev.map((t) => t.task_id === task.task_id ? task : t) : [task, ...prev]; });
         }}
       />
     </div>
@@ -906,7 +882,7 @@ function TaskEditor({ open, onOpenChange, editing, categories, teams, defaultTea
   const [yourRole, setYourRole] = useState("member");
   const [loadingMembers, setLoadingMembers] = useState(false);
 
-  const blank = { title: "", description: "", status: "todo", priority: "medium", category_id: "", tags: "", team_id: defaultTeamId || "", assign_scope: "none", assignee_user_ids: [], due_at: "", reminder_at: "", estimated_minutes: "", recurrence_rule: "none", recurrence_interval: 1, attachments: [{ name: "", url: "" }], custom_fields_text: "{}", subtasks: [{ title: "", is_done: false }] };
+  const blank = { title: "", description: "", status: "todo", priority: "medium", category_id: "", tags: "", team_id: defaultTeamId || "", assign_scope: "none", assignee_user_ids: [], due_at: "", reminder_at: "", estimated_minutes: "", recurrence_rule: "none", recurrence_interval: 1, attachments: [], custom_fields_text: "{}", subtasks: [] };
 
   const initial = useMemo(() => {
     if (!editing) return blank;
@@ -917,9 +893,9 @@ function TaskEditor({ open, onOpenChange, editing, categories, teams, defaultTea
       due_at: toLocal(editing.due_at), reminder_at: toLocal(editing.reminder_at),
       estimated_minutes: editing.estimated_minutes ? String(editing.estimated_minutes) : "",
       recurrence_rule: editing.recurrence?.rule || "none", recurrence_interval: editing.recurrence?.interval || 1,
-      attachments: (editing.attachments || []).length ? editing.attachments : [{ name: "", url: "" }],
+      attachments: editing.attachments || [],
       custom_fields_text: JSON.stringify(editing.custom_fields || {}, null, 2),
-      subtasks: (editing.subtasks || []).length ? editing.subtasks : [{ title: "", is_done: false }],
+      subtasks: editing.subtasks || [],
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editing, defaultTeamId]);
@@ -980,7 +956,7 @@ function TaskEditor({ open, onOpenChange, editing, categories, teams, defaultTea
           <F label="Project"><Select value={form.team_id} onChange={(v) => setForm((p) => ({ ...p, team_id: v, assign_scope: "none", assignee_user_ids: [] }))} options={[{ value: "", label: "Personal" }, ...teams.map((t) => ({ value: t.team_id, label: t.name }))]} /></F>
           <F label="Status"><Select value={form.status} onChange={(v) => upd("status", v)} options={[{ value: "todo", label: "Todo" }, { value: "in_progress", label: "In progress" }, { value: "done", label: "Done" }]} /></F>
           <F label="Priority"><Select value={form.priority} onChange={(v) => upd("priority", v)} options={[{ value: "low", label: "Low" }, { value: "medium", label: "Medium" }, { value: "high", label: "High" }, { value: "urgent", label: "Urgent" }]} /></F>
-          <F label="Category"><Select value={form.category_id} onChange={(v) => upd("category_id", v)} options={[{ value: "", label: "None" }, ...categories.map((c) => ({ value: c.category_id, label: c.name }))]} /></F>
+          <F label="Category"><Select value={form.category_id} onChange={(v) => upd(  "category_id", v)} options={[{ value: "", label: "None" }, ...categories.map((c) => ({ value: c.category_id, label: c.name }))]} /></F>
         </div>
         <div className="grid gap-3 md:grid-cols-2">
           <F label="Due date"><Input type="datetime-local" value={form.due_at} onChange={(e) => upd("due_at", e.target.value)} /></F>
@@ -988,7 +964,7 @@ function TaskEditor({ open, onOpenChange, editing, categories, teams, defaultTea
         </div>
         <div className="grid gap-3 md:grid-cols-2">
           <F label="Tags"><Input value={form.tags} onChange={(e) => upd("tags", e.target.value)} placeholder="Design, review… (comma-separated)" /></F>
-          <F label="Estimated minutes"><Input value={form.estimated_minutes} onChange={(e) => upd("estimated_minutes", e.target.value)} placeholder="e.g., 45" /></F>
+          <F label="Est. minutes"><Input value={form.estimated_minutes} onChange={(e) => upd("estimated_minutes", e.target.value)} placeholder="e.g., 45" /></F>
         </div>
         {form.team_id && canAssign && (
           <F label="Assignment">
@@ -1010,14 +986,14 @@ function TaskEditor({ open, onOpenChange, editing, categories, teams, defaultTea
         )}
         <F label="Subtasks">
           <div className="space-y-2">
-            {form.subtasks.map((s, i) => (
+            {(form.subtasks || []).map((s, i) => (
               <div key={i} className="flex items-center gap-2">
                 <input type="checkbox" checked={!!s.is_done} onChange={(e) => setForm((p) => ({ ...p, subtasks: p.subtasks.map((x, j) => j === i ? { ...x, is_done: e.target.checked } : x) }))} />
                 <Input value={s.title} onChange={(e) => setForm((p) => ({ ...p, subtasks: p.subtasks.map((x, j) => j === i ? { ...x, title: e.target.value } : x) }))} placeholder={`Subtask ${i + 1}`} />
                 <Button variant="ghost" onClick={() => setForm((p) => ({ ...p, subtasks: p.subtasks.filter((_, j) => j !== i) }))}>✕</Button>
               </div>
             ))}
-            <Button variant="ghost" onClick={() => setForm((p) => ({ ...p, subtasks: [...p.subtasks, { title: "", is_done: false }] }))}>+ Add subtask</Button>
+            <Button variant="ghost" onClick={() => setForm((p) => ({ ...p, subtasks: [...(p.subtasks || []), { title: "", is_done: false }] }))}>+ Add subtask</Button>
           </div>
         </F>
       </div>
@@ -1084,6 +1060,7 @@ function AdminPage() {
   const [inviteRole, setInviteRole] = useState("member");
   const [sending, setSending] = useState(false);
   const [copiedId, setCopiedId] = useState(null);
+  const [changingRole, setChangingRole] = useState(null); // user_id being changed
 
   const load = () => Promise.all([
     api.get("/admin/users").then((r) => setUsers(r.data)).catch(() => {}),
@@ -1096,7 +1073,7 @@ function AdminPage() {
     setSending(true);
     try {
       const r = await api.post("/admin/invites", { email: inviteEmail.trim(), role: inviteRole });
-      pushToast({ type: "success", title: "Invite created", message: r.data.invite_link });
+      pushToast({ type: "success", title: "Invite created — copy link below" });
       setInviteEmail(""); load();
     } catch (err) {
       pushToast({ type: "error", title: "Could not create invite", message: err?.response?.data?.detail });
@@ -1115,14 +1092,18 @@ function AdminPage() {
   };
 
   const removeUser = async (u) => {
-    if (!window.confirm(`Remove ${u.name}?`)) return;
+    if (!window.confirm(`Remove ${u.name} (${u.email})? This cannot be undone.`)) return;
     await api.delete(`/admin/users/${u.user_id}`).catch(() => {});
     pushToast({ type: "success", title: "User removed" }); load();
   };
 
   const changeRole = async (u, role) => {
-    await api.put(`/admin/users/${u.user_id}/role`, { role }).catch(() => {});
-    load();
+    setChangingRole(u.user_id);
+    try {
+      await api.put(`/admin/users/${u.user_id}/role`, { role });
+      setUsers((prev) => prev.map((x) => x.user_id === u.user_id ? { ...x, role } : x));
+    } catch (_) { pushToast({ type: "error", title: "Could not change role" }); }
+    finally { setChangingRole(null); }
   };
 
   return (
@@ -1137,7 +1118,8 @@ function AdminPage() {
           <Input value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && sendInvite()}
             placeholder="client@company.com" type="email" />
-          <Select value={inviteRole} onChange={setInviteRole} options={[{ value: "member", label: "Member" }, { value: "client", label: "Client" }]} />
+          <Select value={inviteRole} onChange={setInviteRole}
+            options={[{ value: "member", label: "Member" }, { value: "client", label: "Client" }]} />
           <Button onClick={sendInvite} disabled={sending}>{sending ? "Sending…" : "Send Invite"}</Button>
         </div>
         <p className="mt-2 text-xs text-muted-foreground">Members get full workspace access. Clients see only tasks you share with them.</p>
@@ -1151,35 +1133,58 @@ function AdminPage() {
             <div key={inv.invite_id} className="flex items-center gap-3 border-b border-border/40 px-5 py-3.5">
               <div className="flex-1 min-w-0">
                 <div className="text-sm font-semibold">{inv.email}</div>
-                <div className="text-xs text-muted-foreground">
-                  <span className="capitalize">{inv.role}</span> · Expires {new Date(inv.expires_at).toLocaleDateString()}
+                <div className="text-xs text-muted-foreground flex items-center gap-2 mt-0.5">
+                  <RoleBadge role={inv.role} />
+                  <span>Expires {new Date(inv.expires_at).toLocaleDateString()}</span>
                 </div>
               </div>
               <button onClick={() => copyLink(inv.invite_link, inv.invite_id)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border border-border/60 hover:bg-muted/40 transition-colors">
-                {copiedId === inv.invite_id ? <><Check size={11} /> Copied</> : <><Copy size={11} /> Copy link</>}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border border-border/60 hover:bg-muted/40 transition-colors whitespace-nowrap">
+                {copiedId === inv.invite_id ? <><Check size={11} /> Copied!</> : <><Copy size={11} /> Copy link</>}
               </button>
-              <Button variant="ghost" onClick={() => revokeInvite(inv.invite_id)} className="px-2 h-8"><Trash2 size={13} /></Button>
+              <Button variant="ghost" onClick={() => revokeInvite(inv.invite_id)} className="px-2 h-8 shrink-0">
+                <Trash2 size={13} />
+              </Button>
             </div>
           ))}
         </div>
       )}
 
-      {/* Users */}
+      {/* All users */}
       <div className="rounded-3xl border border-border/70 bg-card/50 overflow-hidden">
-        <div className="px-5 py-3 border-b border-border/60 text-sm font-bold">All Users ({users.length})</div>
+        <div className="px-5 py-3 border-b border-border/60 flex items-center justify-between">
+          <div className="text-sm font-bold">All Users</div>
+          <div className="text-xs text-muted-foreground">{users.length} total</div>
+        </div>
         {users.map((u) => (
-          <div key={u.user_id} className="flex items-center gap-3 border-b border-border/40 px-5 py-3.5">
-            <div style={{ width: 32, height: 32, borderRadius: "50%", background: K.gradD, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 800, color: "#fff", flexShrink: 0 }}>
+          <div key={u.user_id} className="flex items-center gap-3 border-b border-border/40 px-5 py-4">
+            {/* Avatar */}
+            <div style={{ width: 36, height: 36, borderRadius: "50%", background: K.gradD, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 800, color: "#fff", flexShrink: 0 }}>
               {(u.name || "?")[0].toUpperCase()}
             </div>
+            {/* Name + email */}
             <div className="flex-1 min-w-0">
-              <div className="text-sm font-semibold">{u.name}</div>
-              <div className="text-xs text-muted-foreground">{u.email}</div>
+              <div className="text-sm font-semibold truncate">{u.name}</div>
+              <div className="text-xs text-muted-foreground truncate">{u.email}</div>
             </div>
-            <Select value={u.role} onChange={(role) => changeRole(u, role)}
-              options={[{ value: "admin", label: "Admin" }, { value: "member", label: "Member" }, { value: "client", label: "Client" }]} />
-            <Button variant="ghost" onClick={() => removeUser(u)} className="px-2 h-8"><Trash2 size={13} /></Button>
+            {/* Current role badge */}
+            <RoleBadge role={u.role} />
+            {/* Role change dropdown */}
+            <div className="w-32 shrink-0">
+              <Select
+                value={u.role}
+                onChange={(role) => changeRole(u, role)}
+                options={[
+                  { value: "admin",  label: "Admin" },
+                  { value: "member", label: "Member" },
+                  { value: "client", label: "Client" },
+                ]}
+              />
+            </div>
+            {/* Delete */}
+            <Button variant="ghost" onClick={() => removeUser(u)} className="px-2 h-8 shrink-0">
+              <Trash2 size={13} />
+            </Button>
           </div>
         ))}
       </div>
@@ -1219,11 +1224,9 @@ function ClientPortal() {
 
   return (
     <div style={{ minHeight: "100vh", background: K.dark, fontFamily: "'Nunito',sans-serif", padding: 24 }}>
-      {/* Header */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 28 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <KLogo size={36} />
-          <KWordmark dark />
+          <KLogo size={36} /><KWordmark dark />
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <span style={{ fontSize: 13, color: "#8aa5be" }}>Hi, {user?.name}</span>
@@ -1233,9 +1236,7 @@ function ClientPortal() {
           </button>
         </div>
       </div>
-
       <div style={{ display: "grid", gridTemplateColumns: selected ? "1fr 400px" : "1fr", gap: 20, maxWidth: 1200, margin: "0 auto" }}>
-        {/* Task list */}
         <div>
           <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: 2.5, textTransform: "uppercase", color: K.teal, marginBottom: 16 }}>Your Updates</div>
           {tasks.length === 0 && <div style={{ color: "#8aa5be", fontSize: 14 }}>No tasks shared with you yet.</div>}
@@ -1257,7 +1258,7 @@ function ClientPortal() {
               {(t.subtasks || []).length > 0 && (
                 <div style={{ marginTop: 10 }}>
                   <div style={{ height: 4, background: "rgba(255,255,255,.08)", borderRadius: 4, overflow: "hidden" }}>
-                    <div style={{ height: "100%", background: K.gradD, borderRadius: 4, width: `${(t.subtasks.filter((s) => s.is_done).length / t.subtasks.length) * 100}%`, transition: "width .3s" }} />
+                    <div style={{ height: "100%", background: K.gradD, borderRadius: 4, width: `${(t.subtasks.filter((s) => s.is_done).length / t.subtasks.length) * 100}%` }} />
                   </div>
                   <div style={{ fontSize: 11, color: "#8aa5be", marginTop: 4 }}>{t.subtasks.filter((s) => s.is_done).length}/{t.subtasks.length} subtasks complete</div>
                 </div>
@@ -1265,14 +1266,12 @@ function ClientPortal() {
             </div>
           ))}
         </div>
-
-        {/* Comments panel */}
         {selected && (
           <div style={{ background: K.card, border: "1px solid rgba(255,255,255,.08)", borderRadius: 20, padding: 20, display: "flex", flexDirection: "column", maxHeight: "80vh" }}>
             <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: 2, textTransform: "uppercase", color: K.teal, marginBottom: 4 }}>Comments</div>
             <div style={{ fontSize: 14, fontWeight: 700, color: "#fff", marginBottom: 16, borderBottom: "1px solid rgba(255,255,255,.08)", paddingBottom: 12 }}>{selected.title}</div>
             <div style={{ flex: 1, overflowY: "auto", marginBottom: 16 }}>
-              {comments.length === 0 && <div style={{ color: "#8aa5be", fontSize: 13 }}>No comments yet. Be the first.</div>}
+              {comments.length === 0 && <div style={{ color: "#8aa5be", fontSize: 13 }}>No comments yet.</div>}
               {comments.map((c) => (
                 <div key={c.comment_id} style={{ marginBottom: 12 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
