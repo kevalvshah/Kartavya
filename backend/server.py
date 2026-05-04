@@ -1,7 +1,7 @@
 """
 server.py — Kartavya API by Aekam Inc
 Database: Supabase PostgreSQL via asyncpg
-Auth: JWT (email + password)
+Auth: JWT (email + password), invite-only
 """
 
 import asyncio
@@ -20,8 +20,9 @@ from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field
 from starlette.middleware.cors import CORSMiddleware
 
-from auth_router import require_user
+from auth_router import require_user, require_admin
 from auth_router import router as auth_router
+from invite_router import router as invite_router
 from db import close_pool, get_pool
 from health import router as health_router
 
@@ -34,9 +35,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 app = FastAPI(title="Kartavya API", description="Team task management by Aekam Inc")
 api_router = APIRouter(prefix="/api")
 
-# ── CORS — must be registered BEFORE routers ──────────────────────────────────
-# Build allowed origins: start with hardcoded Vercel domains, then add any
-# extra origins from the CORS_ORIGINS env var (comma-separated).
+# ── CORS — registered BEFORE routers ─────────────────────────────────────────
 _DEFAULT_ORIGINS = [
     "https://kartavya-aekam.vercel.app",
     "https://kartavya-kevalvshah03-6145s-projects.vercel.app",
@@ -45,7 +44,7 @@ _DEFAULT_ORIGINS = [
     "http://localhost:8080",
 ]
 _extra = [o.strip() for o in os.environ.get("CORS_ORIGINS", "").split(",") if o.strip()]
-_ALLOWED_ORIGINS = list(dict.fromkeys(_DEFAULT_ORIGINS + _extra))  # deduplicate, preserve order
+_ALLOWED_ORIGINS = list(dict.fromkeys(_DEFAULT_ORIGINS + _extra))
 
 app.add_middleware(
     CORSMiddleware,
@@ -56,7 +55,7 @@ app.add_middleware(
 )
 
 
-# ── Helpers ──────────────────────────────────────────────────────────────────
+# ── Helpers ───────────────────────────────────────────────────────────────────
 
 def now_utc() -> datetime:
     return datetime.now(timezone.utc)
@@ -72,10 +71,6 @@ def parse_dt(value: Optional[str]) -> Optional[datetime]:
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=timezone.utc)
     return dt
-
-
-def _b64url(data: bytes) -> str:
-    return base64.urlsafe_b64encode(data).decode("utf-8").rstrip("=")
 
 
 async def get_db() -> asyncpg.Pool:
@@ -108,27 +103,7 @@ async def create_notification(pool, user_id, notif_type, title, message, task_id
     )
 
 
-async def reminder_scheduler_loop(pool: asyncpg.Pool) -> None:
-    while True:
-        try:
-            now = now_utc()
-            rows = await pool.fetch(
-                "SELECT * FROM tasks WHERE status != 'done' AND reminder_at IS NOT NULL AND reminder_at <= $1 AND reminder_sent_at IS NULL",
-                now,
-            )
-            for t in rows:
-                recipients = set(t["assignee_user_ids"] or [])
-                if not recipients and t["user_id"]:
-                    recipients.add(t["user_id"])
-                for uid in recipients:
-                    await create_notification(pool, uid, "reminder", "Task reminder", f"Due soon: {t['title']}", t["task_id"], t.get("team_id"), "/tasks")
-                await pool.execute("UPDATE tasks SET reminder_sent_at = NOW(), updated_at = NOW() WHERE task_id = $1", t["task_id"])
-        except Exception as e:
-            logger.warning("reminder scheduler error: %s", str(e))
-        await asyncio.sleep(60)
-
-
-# ── Models ──────────────────────────────────────────────────────────────────
+# ── Models ────────────────────────────────────────────────────────────────────
 
 class CategoryCreate(BaseModel):
     name: str
@@ -252,6 +227,17 @@ class TaskMoveIn(BaseModel):
     status: str
     order: int
 
+class CommentCreate(BaseModel):
+    body: str = Field(..., min_length=1, max_length=4000)
+
+class CommentOut(BaseModel):
+    comment_id: str
+    task_id: str
+    user_id: str
+    user_name: str
+    body: str
+    created_at: datetime
+
 class DashboardSummaryOut(BaseModel):
     todo: int
     in_progress: int
@@ -285,9 +271,6 @@ def row_to_task(r) -> TaskOut:
     def parse_json(v, default):
         if isinstance(v, str): return json.loads(v)
         return v if v is not None else default
-    attachments = parse_json(r["attachments"], [])
-    subtasks = parse_json(r["subtasks"], [])
-    custom_fields = parse_json(r["custom_fields"], {})
     return TaskOut(
         task_id=r["task_id"], user_id=r["user_id"], team_id=r["team_id"],
         created_by_user_id=r["created_by_user_id"], assigned_by_user_id=r["assigned_by_user_id"],
@@ -298,14 +281,14 @@ def row_to_task(r) -> TaskOut:
         due_at=r["due_at"], reminder_at=r["reminder_at"], reminder_sent_at=r["reminder_sent_at"],
         recurrence=Recurrence(rule=r["recurrence_rule"] or "none", interval=r["recurrence_interval"] or 1),
         estimated_minutes=r["estimated_minutes"],
-        attachments=[Attachment(**a) for a in attachments],
-        custom_fields=custom_fields,
-        subtasks=[Subtask(**s) for s in subtasks],
+        attachments=[Attachment(**a) for a in parse_json(r["attachments"], [])],
+        custom_fields=parse_json(r["custom_fields"], {}),
+        subtasks=[Subtask(**s) for s in parse_json(r["subtasks"], [])],
         order=r["sort_order"] or 0, created_at=r["created_at"], updated_at=r["updated_at"], completed_at=r["completed_at"],
     )
 
 
-# ── Routes ───────────────────────────────────────────────────────────────────
+# ── Routes ────────────────────────────────────────────────────────────────────
 
 @api_router.get("/")
 async def root():
@@ -313,11 +296,79 @@ async def root():
 
 @api_router.get("/auth/me")
 async def me(user=Depends(require_user)):
-    return {"user_id": user["user_id"], "email": user["email"], "name": user["name"], "picture": user.get("avatar")}
+    return {"user_id": user["user_id"], "email": user["email"], "name": user["name"],
+            "role": user.get("role", "member"), "picture": user.get("avatar")}
 
 @api_router.post("/auth/logout")
 async def logout(): return {"ok": True}
 
+
+# ── Client portal routes (clients only see their assigned tasks) ──────────────
+
+@api_router.get("/client/tasks", response_model=List[TaskOut])
+async def client_tasks(pool=Depends(get_db), user=Depends(require_user)):
+    """Clients see only tasks they've been explicitly linked to."""
+    rows = await pool.fetch(
+        "SELECT t.* FROM tasks t JOIN task_clients tc ON tc.task_id=t.task_id WHERE tc.user_id=$1 ORDER BY t.updated_at DESC",
+        user["user_id"],
+    )
+    return [row_to_task(r) for r in rows]
+
+
+@api_router.post("/tasks/{task_id}/clients/{target_user_id}")
+async def add_client_to_task(task_id: str, target_user_id: str, pool=Depends(get_db), user=Depends(require_admin)):
+    """Admin links a client user to a specific task so they can see it."""
+    await pool.execute(
+        "INSERT INTO task_clients (id, task_id, user_id, invited_by) VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING",
+        f"tc_{uuid.uuid4().hex[:12]}", task_id, target_user_id, user["user_id"],
+    )
+    return {"ok": True}
+
+
+@api_router.delete("/tasks/{task_id}/clients/{target_user_id}")
+async def remove_client_from_task(task_id: str, target_user_id: str, pool=Depends(get_db), user=Depends(require_admin)):
+    await pool.execute("DELETE FROM task_clients WHERE task_id=$1 AND user_id=$2", task_id, target_user_id)
+    return {"ok": True}
+
+
+# ── Comments ──────────────────────────────────────────────────────────────────
+
+@api_router.get("/tasks/{task_id}/comments", response_model=List[CommentOut])
+async def list_comments(task_id: str, pool=Depends(get_db), user=Depends(require_user)):
+    # Access check: admin/member must own or be in team; client must be in task_clients
+    if user.get("role") == "client":
+        access = await pool.fetchrow("SELECT 1 FROM task_clients WHERE task_id=$1 AND user_id=$2", task_id, user["user_id"])
+        if not access:
+            raise HTTPException(status_code=403, detail="Access denied")
+    rows = await pool.fetch(
+        """SELECT c.comment_id, c.task_id, c.user_id, u.name AS user_name, c.body, c.created_at
+           FROM task_comments c JOIN users u ON u.user_id=c.user_id
+           WHERE c.task_id=$1 ORDER BY c.created_at ASC""",
+        task_id,
+    )
+    return [CommentOut(**dict(r)) for r in rows]
+
+
+@api_router.post("/tasks/{task_id}/comments", response_model=CommentOut)
+async def add_comment(task_id: str, body: CommentCreate, pool=Depends(get_db), user=Depends(require_user)):
+    # Access check
+    if user.get("role") == "client":
+        access = await pool.fetchrow("SELECT 1 FROM task_clients WHERE task_id=$1 AND user_id=$2", task_id, user["user_id"])
+        if not access:
+            raise HTTPException(status_code=403, detail="Access denied")
+    comment_id = f"cmt_{uuid.uuid4().hex[:12]}"
+    row = await pool.fetchrow(
+        """INSERT INTO task_comments (comment_id, task_id, user_id, body)
+           VALUES ($1,$2,$3,$4) RETURNING *""",
+        comment_id, task_id, user["user_id"], body.body,
+    )
+    return CommentOut(
+        comment_id=row["comment_id"], task_id=row["task_id"], user_id=row["user_id"],
+        user_name=user["name"], body=row["body"], created_at=row["created_at"],
+    )
+
+
+# ── Teams ─────────────────────────────────────────────────────────────────────
 
 @api_router.get("/teams", response_model=List[TeamOut])
 async def list_teams(pool=Depends(get_db), user=Depends(require_user)):
@@ -374,6 +425,8 @@ async def remove_team_member(team_id: str, member_id: str, pool=Depends(get_db),
     return {"ok": True}
 
 
+# ── Categories ────────────────────────────────────────────────────────────────
+
 @api_router.get("/categories", response_model=List[CategoryOut])
 async def list_categories(pool=Depends(get_db), user=Depends(require_user)):
     rows = await pool.fetch("SELECT * FROM categories WHERE user_id=$1 ORDER BY updated_at DESC", user["user_id"])
@@ -391,6 +444,8 @@ async def delete_category(category_id: str, pool=Depends(get_db), user=Depends(r
     await pool.execute("DELETE FROM categories WHERE user_id=$1 AND category_id=$2", user["user_id"], category_id)
     return {"ok": True}
 
+
+# ── Tasks ─────────────────────────────────────────────────────────────────────
 
 @api_router.get("/tasks", response_model=List[TaskOut])
 async def list_tasks(status: Optional[str]=None, category_id: Optional[str]=None, q: Optional[str]=None, team_id: Optional[str]=None, assigned_to_me: Optional[bool]=None, pool=Depends(get_db), user=Depends(require_user)):
@@ -515,6 +570,8 @@ async def move_task(task_id: str, payload: TaskMoveIn, pool=Depends(get_db), use
     return row_to_task(row)
 
 
+# ── Notifications ─────────────────────────────────────────────────────────────
+
 @api_router.get("/notifications", response_model=List[NotificationOut])
 async def list_notifications(unread_only: bool=False, pool=Depends(get_db), user=Depends(require_user)):
     sql = "SELECT * FROM notifications WHERE user_id=$1" + (" AND read_at IS NULL" if unread_only else "") + " ORDER BY created_at DESC LIMIT 200"
@@ -543,6 +600,8 @@ async def process_notifications(pool=Depends(get_db), user=Depends(require_user)
     return {"ok": True, "created": len(rows)}
 
 
+# ── Dashboard ─────────────────────────────────────────────────────────────────
+
 @api_router.get("/dashboard/summary", response_model=DashboardSummaryOut)
 async def dashboard_summary(pool=Depends(get_db), user=Depends(require_user)):
     team_ids = await get_visible_team_ids(pool, user["user_id"])
@@ -569,16 +628,16 @@ async def unsubscribe_push(payload: PushSubscriptionIn, user=Depends(require_use
     return {"ok": True}
 
 
-# ── App setup — routers registered AFTER middleware ───────────────────────────
+# ── App setup ─────────────────────────────────────────────────────────────────
 
 app.include_router(auth_router)
+app.include_router(invite_router)
 app.include_router(health_router)
 app.include_router(api_router)
 
 
 @app.on_event("startup")
 async def startup():
-    # Log the DATABASE_URL format for debugging (mask password)
     dsn = os.environ.get("DATABASE_URL", "NOT SET")
     if "@" in dsn:
         parts = dsn.split("@")
