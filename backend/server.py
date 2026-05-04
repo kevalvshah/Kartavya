@@ -35,27 +35,27 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 app = FastAPI(title="Kartavya API", description="Team task management by Aekam Inc")
 api_router = APIRouter(prefix="/api")
 
-# ── CORS — registered BEFORE routers ─────────────────────────────────────────
-_DEFAULT_ORIGINS = [
+# ── CORS — registered BEFORE routers ───────────────────────────────────
+DEFAULT_ORIGINS = [
     "https://kartavya-aekam.vercel.app",
     "https://kartavya-kevalvshah03-6145s-projects.vercel.app",
     "https://kartavya-git-main-kevalvshah03-6145s-projects.vercel.app",
     "http://localhost:3000",
     "http://localhost:8080",
 ]
-_extra = [o.strip() for o in os.environ.get("CORS_ORIGINS", "").split(",") if o.strip()]
-_ALLOWED_ORIGINS = list(dict.fromkeys(_DEFAULT_ORIGINS + _extra))
+extra = [o.strip() for o in os.environ.get("CORS_ORIGINS", "").split(",") if o.strip()]
+ALLOWED_ORIGINS = list(dict.fromkeys(DEFAULT_ORIGINS + extra))
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=_ALLOWED_ORIGINS,
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 
-# ── Helpers ───────────────────────────────────────────────────────────────────
+# ── Helpers ────────────────────────────────────────────────────
 
 def now_utc() -> datetime:
     return datetime.now(timezone.utc)
@@ -84,26 +84,62 @@ async def get_visible_team_ids(pool: asyncpg.Pool, user_id: str) -> List[str]:
     return [r["team_id"] for r in rows]
 
 
-async def normalize_orders(pool: asyncpg.Pool, scope_col: str, scope_val: str, status: str) -> None:
+async def normalize_orders(pool, scope_col, scope_val, status):
     rows = await pool.fetch(
-        f"SELECT task_id FROM tasks WHERE {scope_col} = $1 AND status = $2 ORDER BY sort_order ASC, updated_at ASC",
+        f"SELECT task_id FROM tasks WHERE {scope_col}=$1 AND status=$2 ORDER BY sort_order ASC, updated_at ASC",
         scope_val, status,
     )
     for idx, row in enumerate(rows):
         await pool.execute(
-            "UPDATE tasks SET sort_order = $1, updated_at = NOW() WHERE task_id = $2 AND sort_order != $1",
+            "UPDATE tasks SET sort_order=$1, updated_at=NOW() WHERE task_id=$2 AND sort_order!=$1",
             idx, row["task_id"],
         )
 
 
 async def create_notification(pool, user_id, notif_type, title, message, task_id=None, team_id=None, url=None):
     await pool.execute(
-        "INSERT INTO notifications (notification_id, user_id, team_id, type, title, message, task_id, url) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)",
+        "INSERT INTO notifications (notification_id,user_id,team_id,type,title,message,task_id,url) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)",
         f"notif_{uuid.uuid4().hex[:12]}", user_id, team_id, notif_type, title, message, task_id, url,
     )
 
 
-# ── Models ────────────────────────────────────────────────────────────────────
+async def ensure_default_columns(pool, team_id: str):
+    """Create default columns for a new project if none exist yet."""
+    existing = await pool.fetchval("SELECT COUNT(*) FROM project_columns WHERE team_id=$1", team_id)
+    if existing == 0:
+        defaults = [
+            ("To Do",       "#0082c6", 0, False),
+            ("In Progress", "#03a1b6", 1, False),
+            ("Done",        "#05b7aa", 2, True),
+        ]
+        for name, color, order, is_done in defaults:
+            await pool.execute(
+                "INSERT INTO project_columns (column_id,team_id,name,color,sort_order,is_done) VALUES ($1,$2,$3,$4,$5,$6)",
+                f"col_{uuid.uuid4().hex[:12]}", team_id, name, color, order, is_done,
+            )
+
+
+# ── Models ────────────────────────────────────────────────────
+
+class ProjectColumnCreate(BaseModel):
+    name: str
+    color: str = "#0082c6"
+    is_done: bool = False
+
+class ProjectColumnUpdate(BaseModel):
+    name: Optional[str] = None
+    color: Optional[str] = None
+    is_done: Optional[bool] = None
+    sort_order: Optional[int] = None
+
+class ProjectColumnOut(BaseModel):
+    column_id: str
+    team_id: str
+    name: str
+    color: str
+    sort_order: int
+    is_done: bool
+    created_at: datetime
 
 class CategoryCreate(BaseModel):
     name: str
@@ -163,6 +199,7 @@ class TaskCreate(BaseModel):
     title: str
     description: Optional[str] = None
     status: str = "todo"
+    column_id: Optional[str] = None
     priority: str = "medium"
     category_id: Optional[str] = None
     tags: List[str] = []
@@ -181,6 +218,7 @@ class TaskUpdate(BaseModel):
     title: Optional[str] = None
     description: Optional[str] = None
     status: Optional[str] = None
+    column_id: Optional[str] = None
     priority: Optional[str] = None
     category_id: Optional[str] = None
     tags: Optional[List[str]] = None
@@ -199,6 +237,7 @@ class TaskOut(BaseModel):
     task_id: str
     user_id: Optional[str] = None
     team_id: Optional[str] = None
+    column_id: Optional[str] = None
     created_by_user_id: str
     assigned_by_user_id: Optional[str] = None
     completed_by_user_id: Optional[str] = None
@@ -224,7 +263,7 @@ class TaskOut(BaseModel):
     completed_at: Optional[datetime] = None
 
 class TaskMoveIn(BaseModel):
-    status: str
+    column_id: str
     order: int
 
 class CommentCreate(BaseModel):
@@ -273,6 +312,7 @@ def row_to_task(r) -> TaskOut:
         return v if v is not None else default
     return TaskOut(
         task_id=r["task_id"], user_id=r["user_id"], team_id=r["team_id"],
+        column_id=r.get("column_id"),
         created_by_user_id=r["created_by_user_id"], assigned_by_user_id=r["assigned_by_user_id"],
         completed_by_user_id=r["completed_by_user_id"], title=r["title"], description=r["description"],
         status=r["status"], priority=r["priority"], category_id=r["category_id"],
@@ -284,11 +324,12 @@ def row_to_task(r) -> TaskOut:
         attachments=[Attachment(**a) for a in parse_json(r["attachments"], [])],
         custom_fields=parse_json(r["custom_fields"], {}),
         subtasks=[Subtask(**s) for s in parse_json(r["subtasks"], [])],
-        order=r["sort_order"] or 0, created_at=r["created_at"], updated_at=r["updated_at"], completed_at=r["completed_at"],
+        order=r["sort_order"] or 0, created_at=r["created_at"], updated_at=r["updated_at"],
+        completed_at=r["completed_at"],
     )
 
 
-# ── Routes ────────────────────────────────────────────────────────────────────
+# ── Routes ─────────────────────────────────────────────────────
 
 @api_router.get("/")
 async def root():
@@ -303,27 +344,97 @@ async def me(user=Depends(require_user)):
 async def logout(): return {"ok": True}
 
 
-# ── Client portal routes (clients only see their assigned tasks) ──────────────
+# ── Project Columns ───────────────────────────────────────────
+
+@api_router.get("/projects/{team_id}/columns", response_model=List[ProjectColumnOut])
+async def list_columns(team_id: str, pool=Depends(get_db), user=Depends(require_user)):
+    """Get all columns for a project. Creates defaults if none exist yet."""
+    mem = await pool.fetchrow("SELECT 1 FROM team_members WHERE team_id=$1 AND user_id=$2 AND status='active'", team_id, user["user_id"])
+    if not mem: raise HTTPException(status_code=403, detail="Not a project member")
+    await ensure_default_columns(pool, team_id)
+    rows = await pool.fetch("SELECT * FROM project_columns WHERE team_id=$1 ORDER BY sort_order ASC", team_id)
+    return [ProjectColumnOut(**dict(r)) for r in rows]
+
+
+@api_router.post("/projects/{team_id}/columns", response_model=ProjectColumnOut)
+async def create_column(team_id: str, payload: ProjectColumnCreate, pool=Depends(get_db), user=Depends(require_user)):
+    mem = await pool.fetchrow("SELECT role FROM team_members WHERE team_id=$1 AND user_id=$2 AND status='active'", team_id, user["user_id"])
+    if not mem or mem["role"] not in ("owner", "admin"): raise HTTPException(status_code=403, detail="Owner or admin required")
+    max_order = await pool.fetchval("SELECT COALESCE(MAX(sort_order),0) FROM project_columns WHERE team_id=$1", team_id)
+    column_id = f"col_{uuid.uuid4().hex[:12]}"
+    row = await pool.fetchrow(
+        "INSERT INTO project_columns (column_id,team_id,name,color,sort_order,is_done) VALUES ($1,$2,$3,$4,$5,$6) RETURNING *",
+        column_id, team_id, payload.name, payload.color, max_order + 1, payload.is_done,
+    )
+    return ProjectColumnOut(**dict(row))
+
+
+@api_router.put("/projects/{team_id}/columns/{column_id}", response_model=ProjectColumnOut)
+async def update_column(team_id: str, column_id: str, payload: ProjectColumnUpdate, pool=Depends(get_db), user=Depends(require_user)):
+    mem = await pool.fetchrow("SELECT role FROM team_members WHERE team_id=$1 AND user_id=$2 AND status='active'", team_id, user["user_id"])
+    if not mem or mem["role"] not in ("owner", "admin"): raise HTTPException(status_code=403)
+    updates, vals = [], []
+    if payload.name is not None: updates.append(f"name=${len(vals)+1}"); vals.append(payload.name)
+    if payload.color is not None: updates.append(f"color=${len(vals)+1}"); vals.append(payload.color)
+    if payload.is_done is not None: updates.append(f"is_done=${len(vals)+1}"); vals.append(payload.is_done)
+    if payload.sort_order is not None: updates.append(f"sort_order=${len(vals)+1}"); vals.append(payload.sort_order)
+    if not updates: raise HTTPException(status_code=400, detail="Nothing to update")
+    updates.append(f"updated_at=${len(vals)+1}"); vals.append(now_utc())
+    vals += [team_id, column_id]
+    row = await pool.fetchrow(
+        f"UPDATE project_columns SET {', '.join(updates)} WHERE team_id=${len(vals)-1} AND column_id=${len(vals)} RETURNING *",
+        *vals
+    )
+    if not row: raise HTTPException(status_code=404)
+    return ProjectColumnOut(**dict(row))
+
+
+@api_router.delete("/projects/{team_id}/columns/{column_id}")
+async def delete_column(team_id: str, column_id: str, pool=Depends(get_db), user=Depends(require_user)):
+    mem = await pool.fetchrow("SELECT role FROM team_members WHERE team_id=$1 AND user_id=$2 AND status='active'", team_id, user["user_id"])
+    if not mem or mem["role"] not in ("owner", "admin"): raise HTTPException(status_code=403)
+    # Count remaining columns
+    remaining = await pool.fetchval("SELECT COUNT(*) FROM project_columns WHERE team_id=$1", team_id)
+    if remaining <= 1: raise HTTPException(status_code=400, detail="Cannot delete the last column")
+    # Move tasks in this column to the first remaining column
+    first_col = await pool.fetchrow(
+        "SELECT column_id FROM project_columns WHERE team_id=$1 AND column_id!=$2 ORDER BY sort_order ASC LIMIT 1",
+        team_id, column_id
+    )
+    if first_col:
+        await pool.execute("UPDATE tasks SET column_id=$1 WHERE column_id=$2", first_col["column_id"], column_id)
+    await pool.execute("DELETE FROM project_columns WHERE team_id=$1 AND column_id=$2", team_id, column_id)
+    return {"ok": True}
+
+
+@api_router.post("/projects/{team_id}/columns/reorder")
+async def reorder_columns(team_id: str, body: dict, pool=Depends(get_db), user=Depends(require_user)):
+    """body: {ordered_ids: [column_id, ...]}"""
+    mem = await pool.fetchrow("SELECT role FROM team_members WHERE team_id=$1 AND user_id=$2 AND status='active'", team_id, user["user_id"])
+    if not mem or mem["role"] not in ("owner", "admin"): raise HTTPException(status_code=403)
+    ordered_ids = body.get("ordered_ids", [])
+    for idx, cid in enumerate(ordered_ids):
+        await pool.execute("UPDATE project_columns SET sort_order=$1 WHERE column_id=$2 AND team_id=$3", idx, cid, team_id)
+    return {"ok": True}
+
+
+# ── Client portal ──────────────────────────────────────────
 
 @api_router.get("/client/tasks", response_model=List[TaskOut])
 async def client_tasks(pool=Depends(get_db), user=Depends(require_user)):
-    """Clients see only tasks they've been explicitly linked to."""
     rows = await pool.fetch(
         "SELECT t.* FROM tasks t JOIN task_clients tc ON tc.task_id=t.task_id WHERE tc.user_id=$1 ORDER BY t.updated_at DESC",
         user["user_id"],
     )
     return [row_to_task(r) for r in rows]
 
-
 @api_router.post("/tasks/{task_id}/clients/{target_user_id}")
 async def add_client_to_task(task_id: str, target_user_id: str, pool=Depends(get_db), user=Depends(require_admin)):
-    """Admin links a client user to a specific task so they can see it."""
     await pool.execute(
-        "INSERT INTO task_clients (id, task_id, user_id, invited_by) VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING",
+        "INSERT INTO task_clients (id,task_id,user_id,invited_by) VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING",
         f"tc_{uuid.uuid4().hex[:12]}", task_id, target_user_id, user["user_id"],
     )
     return {"ok": True}
-
 
 @api_router.delete("/tasks/{task_id}/clients/{target_user_id}")
 async def remove_client_from_task(task_id: str, target_user_id: str, pool=Depends(get_db), user=Depends(require_admin)):
@@ -331,57 +442,50 @@ async def remove_client_from_task(task_id: str, target_user_id: str, pool=Depend
     return {"ok": True}
 
 
-# ── Comments ──────────────────────────────────────────────────────────────────
+# ── Comments ──────────────────────────────────────────────────
 
 @api_router.get("/tasks/{task_id}/comments", response_model=List[CommentOut])
 async def list_comments(task_id: str, pool=Depends(get_db), user=Depends(require_user)):
-    # Access check: admin/member must own or be in team; client must be in task_clients
     if user.get("role") == "client":
         access = await pool.fetchrow("SELECT 1 FROM task_clients WHERE task_id=$1 AND user_id=$2", task_id, user["user_id"])
-        if not access:
-            raise HTTPException(status_code=403, detail="Access denied")
+        if not access: raise HTTPException(status_code=403)
     rows = await pool.fetch(
-        """SELECT c.comment_id, c.task_id, c.user_id, u.name AS user_name, c.body, c.created_at
-           FROM task_comments c JOIN users u ON u.user_id=c.user_id
-           WHERE c.task_id=$1 ORDER BY c.created_at ASC""",
+        "SELECT c.comment_id,c.task_id,c.user_id,u.name AS user_name,c.body,c.created_at "
+        "FROM task_comments c JOIN users u ON u.user_id=c.user_id WHERE c.task_id=$1 ORDER BY c.created_at ASC",
         task_id,
     )
     return [CommentOut(**dict(r)) for r in rows]
 
-
 @api_router.post("/tasks/{task_id}/comments", response_model=CommentOut)
 async def add_comment(task_id: str, body: CommentCreate, pool=Depends(get_db), user=Depends(require_user)):
-    # Access check
     if user.get("role") == "client":
         access = await pool.fetchrow("SELECT 1 FROM task_clients WHERE task_id=$1 AND user_id=$2", task_id, user["user_id"])
-        if not access:
-            raise HTTPException(status_code=403, detail="Access denied")
+        if not access: raise HTTPException(status_code=403)
     comment_id = f"cmt_{uuid.uuid4().hex[:12]}"
     row = await pool.fetchrow(
-        """INSERT INTO task_comments (comment_id, task_id, user_id, body)
-           VALUES ($1,$2,$3,$4) RETURNING *""",
+        "INSERT INTO task_comments (comment_id,task_id,user_id,body) VALUES ($1,$2,$3,$4) RETURNING *",
         comment_id, task_id, user["user_id"], body.body,
     )
-    return CommentOut(
-        comment_id=row["comment_id"], task_id=row["task_id"], user_id=row["user_id"],
-        user_name=user["name"], body=row["body"], created_at=row["created_at"],
-    )
+    return CommentOut(comment_id=row["comment_id"], task_id=row["task_id"], user_id=row["user_id"],
+                      user_name=user["name"], body=row["body"], created_at=row["created_at"])
 
 
-# ── Teams ─────────────────────────────────────────────────────────────────────
+# ── Teams ──────────────────────────────────────────────────────
 
 @api_router.get("/teams", response_model=List[TeamOut])
 async def list_teams(pool=Depends(get_db), user=Depends(require_user)):
     team_ids = await get_visible_team_ids(pool, user["user_id"])
     if not team_ids: return []
-    rows = await pool.fetch("SELECT * FROM teams WHERE team_id = ANY($1::text[]) ORDER BY updated_at DESC", team_ids)
+    rows = await pool.fetch("SELECT * FROM teams WHERE team_id=ANY($1::text[]) ORDER BY updated_at DESC", team_ids)
     return [TeamOut(**dict(r)) for r in rows]
 
 @api_router.post("/teams", response_model=TeamOut)
 async def create_team(payload: TeamCreate, pool=Depends(get_db), user=Depends(require_user)):
     team_id = f"team_{uuid.uuid4().hex[:12]}"
-    row = await pool.fetchrow("INSERT INTO teams (team_id, name, created_by) VALUES ($1,$2,$3) RETURNING *", team_id, payload.name, user["user_id"])
-    await pool.execute("INSERT INTO team_members (member_id, team_id, email, user_id, role, status) VALUES ($1,$2,$3,$4,'owner','active')", f"mem_{uuid.uuid4().hex[:12]}", team_id, user["email"], user["user_id"])
+    row = await pool.fetchrow("INSERT INTO teams (team_id,name,created_by) VALUES ($1,$2,$3) RETURNING *", team_id, payload.name, user["user_id"])
+    await pool.execute("INSERT INTO team_members (member_id,team_id,email,user_id,role,status) VALUES ($1,$2,$3,$4,'owner','active')",
+        f"mem_{uuid.uuid4().hex[:12]}", team_id, user["email"], user["user_id"])
+    await ensure_default_columns(pool, team_id)
     return TeamOut(**dict(row))
 
 @api_router.get("/teams/{team_id}")
@@ -395,19 +499,20 @@ async def get_team(team_id: str, pool=Depends(get_db), user=Depends(require_user
 @api_router.post("/teams/{team_id}/members", response_model=TeamMemberOut)
 async def add_team_member(team_id: str, payload: TeamMemberAdd, pool=Depends(get_db), user=Depends(require_user)):
     mem = await pool.fetchrow("SELECT role FROM team_members WHERE team_id=$1 AND user_id=$2 AND status='active'", team_id, user["user_id"])
-    if not mem or mem["role"] not in ("owner", "admin"): raise HTTPException(status_code=403, detail="Admin required")
+    if not mem or mem["role"] not in ("owner", "admin"): raise HTTPException(status_code=403)
     email = payload.email.strip().lower()
     existing_user = await pool.fetchrow("SELECT user_id FROM users WHERE email=$1", email)
     uid = existing_user["user_id"] if existing_user else None
     await pool.execute("DELETE FROM team_members WHERE team_id=$1 AND email=$2", team_id, email)
-    row = await pool.fetchrow("INSERT INTO team_members (member_id, team_id, email, user_id, role, status) VALUES ($1,$2,$3,$4,$5,$6) RETURNING *",
+    row = await pool.fetchrow(
+        "INSERT INTO team_members (member_id,team_id,email,user_id,role,status) VALUES ($1,$2,$3,$4,$5,$6) RETURNING *",
         f"mem_{uuid.uuid4().hex[:12]}", team_id, email, uid, payload.role, "active" if uid else "invited")
     return TeamMemberOut(**dict(row))
 
 @api_router.put("/teams/{team_id}/members/{member_id}", response_model=TeamMemberOut)
 async def update_team_member(team_id: str, member_id: str, payload: TeamMemberUpdate, pool=Depends(get_db), user=Depends(require_user)):
     mem = await pool.fetchrow("SELECT role FROM team_members WHERE team_id=$1 AND user_id=$2 AND status='active'", team_id, user["user_id"])
-    if not mem or mem["role"] not in ("owner", "admin"): raise HTTPException(status_code=403, detail="Admin required")
+    if not mem or mem["role"] not in ("owner", "admin"): raise HTTPException(status_code=403)
     updates, vals = [], []
     if payload.role: updates.append(f"role=${len(vals)+1}"); vals.append(payload.role)
     if payload.status: updates.append(f"status=${len(vals)+1}"); vals.append(payload.status)
@@ -425,7 +530,7 @@ async def remove_team_member(team_id: str, member_id: str, pool=Depends(get_db),
     return {"ok": True}
 
 
-# ── Categories ────────────────────────────────────────────────────────────────
+# ── Categories ────────────────────────────────────────────────
 
 @api_router.get("/categories", response_model=List[CategoryOut])
 async def list_categories(pool=Depends(get_db), user=Depends(require_user)):
@@ -434,21 +539,23 @@ async def list_categories(pool=Depends(get_db), user=Depends(require_user)):
 
 @api_router.post("/categories", response_model=CategoryOut)
 async def create_category(payload: CategoryCreate, pool=Depends(get_db), user=Depends(require_user)):
-    row = await pool.fetchrow("INSERT INTO categories (category_id, user_id, name, color) VALUES ($1,$2,$3,$4) RETURNING *",
+    row = await pool.fetchrow("INSERT INTO categories (category_id,user_id,name,color) VALUES ($1,$2,$3,$4) RETURNING *",
         f"cat_{uuid.uuid4().hex[:12]}", user["user_id"], payload.name, payload.color)
     return CategoryOut(**dict(row))
 
 @api_router.delete("/categories/{category_id}")
 async def delete_category(category_id: str, pool=Depends(get_db), user=Depends(require_user)):
-    await pool.execute("UPDATE tasks SET category_id=NULL, updated_at=NOW() WHERE user_id=$1 AND category_id=$2", user["user_id"], category_id)
+    await pool.execute("UPDATE tasks SET category_id=NULL,updated_at=NOW() WHERE user_id=$1 AND category_id=$2", user["user_id"], category_id)
     await pool.execute("DELETE FROM categories WHERE user_id=$1 AND category_id=$2", user["user_id"], category_id)
     return {"ok": True}
 
 
-# ── Tasks ─────────────────────────────────────────────────────────────────────
+# ── Tasks ────────────────────────────────────────────────────────
 
 @api_router.get("/tasks", response_model=List[TaskOut])
-async def list_tasks(status: Optional[str]=None, category_id: Optional[str]=None, q: Optional[str]=None, team_id: Optional[str]=None, assigned_to_me: Optional[bool]=None, pool=Depends(get_db), user=Depends(require_user)):
+async def list_tasks(status: Optional[str]=None, category_id: Optional[str]=None, q: Optional[str]=None,
+                     team_id: Optional[str]=None, assigned_to_me: Optional[bool]=None,
+                     pool=Depends(get_db), user=Depends(require_user)):
     team_ids = await get_visible_team_ids(pool, user["user_id"])
     conditions = ["(t.user_id=$1 OR t.team_id=ANY($2::text[]))"]
     vals: list = [user["user_id"], team_ids]
@@ -457,7 +564,9 @@ async def list_tasks(status: Optional[str]=None, category_id: Optional[str]=None
     if category_id: conditions.append(f"t.category_id=${len(vals)+1}"); vals.append(category_id)
     if q: conditions.append(f"t.title ILIKE ${len(vals)+1}"); vals.append(f"%{q}%")
     if assigned_to_me: conditions.append(f"${len(vals)+1}=ANY(t.assignee_user_ids)"); vals.append(user["user_id"])
-    rows = await pool.fetch(f"SELECT * FROM tasks t WHERE {' AND '.join(conditions)} ORDER BY t.status ASC, t.sort_order ASC", *vals)
+    rows = await pool.fetch(
+        f"SELECT * FROM tasks t WHERE {' AND '.join(conditions)} ORDER BY t.sort_order ASC", *vals
+    )
     return [row_to_task(r) for r in rows]
 
 @api_router.post("/tasks", response_model=TaskOut)
@@ -468,21 +577,42 @@ async def create_task(payload: TaskCreate, pool=Depends(get_db), user=Depends(re
         user_id_field, scope_col, scope_val = None, "team_id", payload.team_id
     else:
         user_id_field, scope_col, scope_val = user["user_id"], "user_id", user["user_id"]
+
+    # Resolve column_id — if not provided, use the first column of the project
+    column_id = payload.column_id
+    if not column_id and payload.team_id:
+        first_col = await pool.fetchrow(
+            "SELECT column_id FROM project_columns WHERE team_id=$1 ORDER BY sort_order ASC LIMIT 1",
+            payload.team_id
+        )
+        column_id = first_col["column_id"] if first_col else None
+
+    # Derive status from column's is_done flag
+    status = payload.status
+    if column_id:
+        col = await pool.fetchrow("SELECT is_done FROM project_columns WHERE column_id=$1", column_id)
+        if col:
+            status = "done" if col["is_done"] else ("todo" if payload.status == "todo" else payload.status)
+
     due_dt = parse_dt(payload.due_at)
     reminder_dt = parse_dt(payload.reminder_at) or (due_dt - timedelta(hours=2) if due_dt else None)
-    max_row = await pool.fetchrow(f"SELECT MAX(sort_order) AS mo FROM tasks WHERE {scope_col}=$1 AND status=$2", scope_val, payload.status)
+    max_row = await pool.fetchrow(f"SELECT MAX(sort_order) AS mo FROM tasks WHERE {scope_col}=$1 AND status=$2", scope_val, status)
     next_order = (max_row["mo"] or -1) + 1
     task_id = f"task_{uuid.uuid4().hex[:12]}"
     row = await pool.fetchrow("""
-        INSERT INTO tasks (task_id, user_id, team_id, created_by_user_id, assigned_by_user_id, title, description, status, priority,
-            category_id, tags, assignee_user_ids, assignee_emails, due_at, reminder_at, recurrence_rule, recurrence_interval,
-            estimated_minutes, attachments, custom_fields, subtasks, sort_order)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::text[],$12::text[],$13::text[],$14,$15,$16,$17,$18,$19::jsonb,$20::jsonb,$21::jsonb,$22) RETURNING *""",
-        task_id, user_id_field, payload.team_id, user["user_id"],
+        INSERT INTO tasks (task_id,user_id,team_id,column_id,created_by_user_id,assigned_by_user_id,
+            title,description,status,priority,category_id,tags,assignee_user_ids,assignee_emails,
+            due_at,reminder_at,recurrence_rule,recurrence_interval,estimated_minutes,
+            attachments,custom_fields,subtasks,sort_order)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::text[],$13::text[],$14::text[],
+                $15,$16,$17,$18,$19,$20::jsonb,$21::jsonb,$22::jsonb,$23) RETURNING *""",
+        task_id, user_id_field, payload.team_id, column_id, user["user_id"],
         user["user_id"] if (payload.assignee_user_ids or payload.assignee_emails) else None,
-        payload.title, payload.description, payload.status, payload.priority, payload.category_id,
-        payload.tags or [], payload.assignee_user_ids or [], [e.strip().lower() for e in payload.assignee_emails if e.strip()],
-        due_dt, reminder_dt, payload.recurrence.rule, payload.recurrence.interval, payload.estimated_minutes,
+        payload.title, payload.description, status, payload.priority, payload.category_id,
+        payload.tags or [], payload.assignee_user_ids or [],
+        [e.strip().lower() for e in payload.assignee_emails if e.strip()],
+        due_dt, reminder_dt, payload.recurrence.rule, payload.recurrence.interval,
+        payload.estimated_minutes,
         json.dumps([a.model_dump() for a in payload.attachments or []]),
         json.dumps(payload.custom_fields or {}),
         json.dumps([s.model_dump() for s in payload.subtasks or []]),
@@ -498,7 +628,7 @@ async def update_task(task_id: str, payload: TaskUpdate, pool=Depends(get_db), u
     if not existing: raise HTTPException(status_code=404)
     data = payload.model_dump(exclude_unset=True)
     updates, vals = [], []
-    for k in ["title","description","status","priority","category_id","estimated_minutes"]:
+    for k in ["title","description","status","priority","category_id","estimated_minutes","column_id"]:
         if k in data: updates.append(f"{k}=${len(vals)+1}"); vals.append(data[k])
     for k in ["tags","assignee_user_ids","assignee_emails"]:
         if k in data: updates.append(f"{k}=${len(vals)+1}::text[]"); vals.append(data[k])
@@ -513,21 +643,9 @@ async def update_task(task_id: str, payload: TaskUpdate, pool=Depends(get_db), u
         rec = data["recurrence"]
         updates.append(f"recurrence_rule=${len(vals)+1}"); vals.append(rec.get("rule","none") if isinstance(rec,dict) else rec.rule)
         updates.append(f"recurrence_interval=${len(vals)+1}"); vals.append(rec.get("interval",1) if isinstance(rec,dict) else rec.interval)
-    old_status = existing["status"]
-    new_status = data.get("status", old_status)
-    if new_status != old_status:
-        scope_col = "team_id" if existing["team_id"] else "user_id"
-        scope_val = existing["team_id"] or existing["user_id"]
-        max_row = await pool.fetchrow(f"SELECT MAX(sort_order) AS mo FROM tasks WHERE {scope_col}=$1 AND status=$2", scope_val, new_status)
-        updates.append(f"sort_order=${len(vals)+1}"); vals.append((max_row["mo"] or -1)+1)
     updates.append(f"updated_at=${len(vals)+1}"); vals.append(now_utc())
     vals.append(task_id)
     row = await pool.fetchrow(f"UPDATE tasks SET {', '.join(updates)} WHERE task_id=${len(vals)} RETURNING *", *vals)
-    if new_status != old_status:
-        scope_col = "team_id" if existing["team_id"] else "user_id"
-        scope_val = existing["team_id"] or existing["user_id"]
-        await normalize_orders(pool, scope_col, scope_val, old_status)
-        await normalize_orders(pool, scope_col, scope_val, new_status)
     return row_to_task(row)
 
 @api_router.delete("/tasks/{task_id}")
@@ -536,8 +654,6 @@ async def delete_task(task_id: str, pool=Depends(get_db), user=Depends(require_u
     doc = await pool.fetchrow("SELECT * FROM tasks WHERE task_id=$1 AND (user_id=$2 OR team_id=ANY($3::text[]))", task_id, user["user_id"], team_ids)
     if not doc: raise HTTPException(status_code=404)
     await pool.execute("DELETE FROM tasks WHERE task_id=$1", task_id)
-    scope_col = "team_id" if doc["team_id"] else "user_id"
-    await normalize_orders(pool, scope_col, doc["team_id"] or doc["user_id"], doc["status"])
     return {"ok": True}
 
 @api_router.patch("/tasks/{task_id}/toggle", response_model=TaskOut)
@@ -550,27 +666,36 @@ async def toggle_task(task_id: str, pool=Depends(get_db), user=Depends(require_u
     scope_col = "team_id" if doc["team_id"] else "user_id"
     scope_val = doc["team_id"] or doc["user_id"]
     max_row = await pool.fetchrow(f"SELECT MAX(sort_order) AS mo FROM tasks WHERE {scope_col}=$1 AND status=$2", scope_val, new_status)
-    row = await pool.fetchrow("UPDATE tasks SET status=$1, completed_at=$2, completed_by_user_id=$3, sort_order=$4, updated_at=NOW() WHERE task_id=$5 RETURNING *",
-        new_status, now_utc() if new_status=="done" else None, user["user_id"] if new_status=="done" else None, (max_row["mo"] or -1)+1, task_id)
+    row = await pool.fetchrow(
+        "UPDATE tasks SET status=$1,completed_at=$2,completed_by_user_id=$3,sort_order=$4,updated_at=NOW() WHERE task_id=$5 RETURNING *",
+        new_status, now_utc() if new_status=="done" else None,
+        user["user_id"] if new_status=="done" else None, (max_row["mo"] or -1)+1, task_id)
     await normalize_orders(pool, scope_col, scope_val, old_status)
     await normalize_orders(pool, scope_col, scope_val, new_status)
     return row_to_task(row)
 
 @api_router.patch("/tasks/{task_id}/move", response_model=TaskOut)
 async def move_task(task_id: str, payload: TaskMoveIn, pool=Depends(get_db), user=Depends(require_user)):
+    """Move a task to a different column (and update status accordingly)."""
     team_ids = await get_visible_team_ids(pool, user["user_id"])
     doc = await pool.fetchrow("SELECT * FROM tasks WHERE task_id=$1 AND (user_id=$2 OR team_id=ANY($3::text[]))", task_id, user["user_id"], team_ids)
     if not doc: raise HTTPException(status_code=404)
-    old_status = doc["status"]
-    row = await pool.fetchrow("UPDATE tasks SET status=$1, sort_order=$2, updated_at=NOW() WHERE task_id=$3 RETURNING *", payload.status, payload.order, task_id)
-    scope_col = "team_id" if doc["team_id"] else "user_id"
-    scope_val = doc["team_id"] or doc["user_id"]
-    await normalize_orders(pool, scope_col, scope_val, old_status)
-    await normalize_orders(pool, scope_col, scope_val, payload.status)
+    # Derive status from the target column's is_done flag
+    col = await pool.fetchrow("SELECT * FROM project_columns WHERE column_id=$1", payload.column_id)
+    new_status = doc["status"]
+    if col:
+        if col["is_done"]:
+            new_status = "done"
+        elif doc["status"] == "done":
+            new_status = "in_progress"
+    row = await pool.fetchrow(
+        "UPDATE tasks SET column_id=$1,status=$2,sort_order=$3,updated_at=NOW() WHERE task_id=$4 RETURNING *",
+        payload.column_id, new_status, payload.order, task_id
+    )
     return row_to_task(row)
 
 
-# ── Notifications ─────────────────────────────────────────────────────────────
+# ── Notifications ──────────────────────────────────────────
 
 @api_router.get("/notifications", response_model=List[NotificationOut])
 async def list_notifications(unread_only: bool=False, pool=Depends(get_db), user=Depends(require_user)):
@@ -596,11 +721,11 @@ async def process_notifications(pool=Depends(get_db), user=Depends(require_user)
         if not recipients and t["user_id"]: recipients.add(t["user_id"])
         for uid in recipients:
             await create_notification(pool, uid, "reminder", "Task reminder", f"Due soon: {t['title']}", t["task_id"], t["team_id"], "/tasks")
-        await pool.execute("UPDATE tasks SET reminder_sent_at=NOW(), updated_at=NOW() WHERE task_id=$1", t["task_id"])
+        await pool.execute("UPDATE tasks SET reminder_sent_at=NOW(),updated_at=NOW() WHERE task_id=$1", t["task_id"])
     return {"ok": True, "created": len(rows)}
 
 
-# ── Dashboard ─────────────────────────────────────────────────────────────────
+# ── Dashboard ──────────────────────────────────────────────────
 
 @api_router.get("/dashboard/summary", response_model=DashboardSummaryOut)
 async def dashboard_summary(pool=Depends(get_db), user=Depends(require_user)):
@@ -628,7 +753,7 @@ async def unsubscribe_push(payload: PushSubscriptionIn, user=Depends(require_use
     return {"ok": True}
 
 
-# ── App setup ─────────────────────────────────────────────────────────────────
+# ── App setup ─────────────────────────────────────────────────
 
 app.include_router(auth_router)
 app.include_router(invite_router)
@@ -646,8 +771,8 @@ async def startup():
         logger.info(f"DATABASE_URL format: postgresql://{user_part}:***@{host_part}")
     else:
         logger.info(f"DATABASE_URL: {dsn}")
-    logger.info(f"CORS allowed origins: {_ALLOWED_ORIGINS}")
-    logger.info("Kartavya API starting — DB connects lazily on first request")
+    logger.info(f"CORS allowed origins: {ALLOWED_ORIGINS}")
+    logger.info("Kartavya API starting")
 
 
 @app.on_event("shutdown")
