@@ -1,6 +1,7 @@
 """
 auth_router.py — Kartavya by Aekam Inc
-JWT email/password auth backed by Supabase PostgreSQL
+Invite-only auth. No public registration.
+Roles: admin | member | client
 """
 import hashlib
 import hmac
@@ -60,9 +61,15 @@ async def require_user(request: Request, credentials: Optional[HTTPAuthorization
     return dict(user)
 
 
-class RegisterBody(BaseModel):
+async def require_admin(user=Depends(require_user)):
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return user
+
+
+class AcceptInviteBody(BaseModel):
+    token: str
     name: str = Field(..., min_length=1, max_length=100)
-    email: EmailStr
     password: str = Field(..., min_length=8, max_length=128)
 
 
@@ -72,25 +79,46 @@ class LoginBody(BaseModel):
 
 
 def _safe_user(u: dict) -> dict:
-    return {"id": u["user_id"], "user_id": u["user_id"], "name": u["name"], "email": u["email"], "avatar": u.get("avatar")}
+    return {
+        "id": u["user_id"],
+        "user_id": u["user_id"],
+        "name": u["name"],
+        "email": u["email"],
+        "role": u.get("role", "member"),
+        "avatar": u.get("avatar"),
+    }
 
 
-@router.post("/register")
-async def register(body: RegisterBody):
+@router.post("/accept-invite")
+async def accept_invite(body: AcceptInviteBody):
+    """Called when a user clicks their invite link and sets their password."""
     pool = await get_pool()
-    existing = await pool.fetchrow("SELECT 1 FROM users WHERE email=$1", body.email.lower())
+    invite = await pool.fetchrow(
+        "SELECT * FROM invites WHERE token=$1 AND accepted_at IS NULL AND expires_at > NOW()",
+        body.token,
+    )
+    if not invite:
+        raise HTTPException(status_code=400, detail="Invite link is invalid or has expired")
+
+    existing = await pool.fetchrow("SELECT user_id FROM users WHERE email=$1", invite["email"])
     if existing:
-        raise HTTPException(status_code=409, detail="Email already registered")
+        raise HTTPException(status_code=409, detail="An account with this email already exists")
+
     salt = uuid.uuid4().hex
     user_id = f"user_{uuid.uuid4().hex[:12]}"
+    role = invite["role"]  # "member" or "client"
+
     await pool.execute(
-        "INSERT INTO users (user_id, name, email, password_hash, salt) VALUES ($1,$2,$3,$4,$5)",
-        user_id, body.name, body.email.lower(), _hash_password(body.password, salt), salt,
+        "INSERT INTO users (user_id, name, email, password_hash, salt, role) VALUES ($1,$2,$3,$4,$5,$6)",
+        user_id, body.name, invite["email"], _hash_password(body.password, salt), salt, role,
     )
-    # Activate any pending team invites
+    await pool.execute(
+        "UPDATE invites SET accepted_at=NOW() WHERE token=$1", body.token
+    )
+    # Activate any pending team invites for this email
     await pool.execute(
         "UPDATE team_members SET user_id=$1, status='active', updated_at=NOW() WHERE email=$2 AND status='invited'",
-        user_id, body.email.lower(),
+        user_id, invite["email"],
     )
     user = await pool.fetchrow("SELECT * FROM users WHERE user_id=$1", user_id)
     return {"token": _create_token(user_id), "user": _safe_user(dict(user))}
