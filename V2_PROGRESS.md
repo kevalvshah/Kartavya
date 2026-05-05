@@ -1,58 +1,78 @@
 # Kartavya v2 — Daily Progress Log
 
-## Day 1-2 ✅ — 2026-05-05
-
-### What landed
-- **Branch:** `v2-plan` created from `main`
-- **DB migrations applied to Supabase (prod):**
-  - `field_definitions` + `field_values` (custom fields)
-  - `saved_views` + `dashboards`
-  - `automations` + `project_templates` + `task_templates`
-  - `activity_events` (full index set)
-  - `time_entries` (full index set)
-  - `mentions`
+## Days 1-2 ✅ — 2026-05-05
+- Branch `v2-plan` from `main`
+- All 5 DB migrations applied: field_definitions, field_values, saved_views, dashboards, automations, project_templates, task_templates, activity_events, time_entries, mentions
 - Backend router scaffold: fields, views, automations, activity, dashboards, templates, time_entries
 - Backend services: activity_logger, automation_engine, mentions, storage
-- Design system tokens: Inter font, color tokens (light+dark), spacing, typography
+- Design system tokens: Inter font, full color token set (light+dark), spacing scale, typography
 - Frontend pages: AutomationsPage, ActivityFeedPage, TimeReportPage
+
+## Day 3 ✅ — 2026-05-05
+- `server.py` updated: all 7 v2 routers mounted, activity logging + automation fire wired into create_task/update_task, @mentions into add_comment, full_name in all display queries
+- Custom field components (7): StatusField, PersonField, DateField, NumberField, DropdownField, TextField, FilesField + FieldRenderer dispatcher
+- TaskDrawer: right-slide, details/activity/time tabs, inline save, custom fields grid, comments, timer buttons
+- KanbanCard v2: priority dot, due date, assignee avatars, field chips, approval badge
+- useFields hook: useFieldDefs + useFieldValues with CRUD helpers
+
+## Week 1 Complete ✅ — 2026-05-05
+
+### Days 4-5
+
+**KanbanView.jsx**
+- Native HTML5 drag-and-drop (no deps)
+- Column grouping, card ordering, drop zone hints
+- TaskDrawer on card click, optimistic task updates
+
+**TableView.jsx**
+- Sort by title / priority / due date (click column header)
+- Full-text filter input
+- Group by: column | status | priority | none
+- Custom field column picker (checkbox toggle per field)
+- Overdue highlighting, approval badge, created_by_name display
+- TaskDrawer on row click
+
+**CalendarView.jsx**
+- Month grid, prev/next navigation
+- Tasks shown as priority-coloured dots on their due date
+- Overflow count (+N more)
+- Day click → new task, dot click → TaskDrawer
+
+**ProjectBoardPage.jsx**
+- View switcher pill: Kanban / Table / Calendar
+- SavedViewsPicker: load saved views, save current view with name prompt
+- FieldManager panel: list fields, add (name + type), delete
+- NewTaskModal: title + column + priority
+- Add Column button (kanban only)
+- Lazy field value loading per task
+- Loading skeleton
+
+**Hooks (4)**
+- `useViews` — saveView, updateView, deleteView
+- `useActivity` — useTeamActivity + useTaskActivity
+- `useTimeEntries` — start/stop timer, live elapsed counter, manual entry, delete
+- `useAutomations` — create, toggle, remove
+
+**index.css** — animations (fadeIn, slideInR, pulse), sr-only, focus rings
 
 ---
 
-## Day 3 ✅ — 2026-05-05
+## Week 1 Demo checklist
+- [ ] Open a project → see Kanban with cards
+- [ ] Drag card between columns → persists on refresh
+- [ ] Click card → TaskDrawer opens, edit title (blur-to-save)
+- [ ] Add a custom field (Fields ▾ → type name → Add)
+- [ ] Field appears on card and in drawer
+- [ ] Switch to Table view → sort by priority, filter by text
+- [ ] Group by column in table
+- [ ] Switch to Calendar → tasks with due dates appear as dots
+- [ ] Save current view → reappears in dropdown
+- [ ] Create new task from + New Task button
 
-### What landed
-- **server.py updated:** all 7 v2 routers mounted (`fields`, `views`, `automations`, `activity`, `dashboards`, `templates`, `time`). Activity logging + automation firing wired into `create_task` and `update_task`. `@mentions` fan-out wired into `add_comment`. `full_name` used in all display queries.
-- **Custom field components (7):**
-  - `StatusField` — coloured pill selector with configurable options
-  - `PersonField` — searchable member picker with avatar
-  - `DateField` — date input with relative display (Today / Tomorrow / X days ago) + overdue colouring
-  - `NumberField` — numeric input with optional prefix/suffix (e.g. `$`, `hrs`)
-  - `DropdownField` — single-select from config options
-  - `TextField` — inline click-to-edit, single-line or multiline
-  - `FilesField` — file list + upload button (calls `/api/upload`)
-  - `FieldRenderer` — dispatcher, all field types routed here
-- **TaskDrawer** — right-slide drawer replacing old modal:
-  - Inline title editing (blur-to-save)
-  - Priority select + due date
-  - Description textarea (blur-to-save)
-  - Custom fields grid (auto-save on change)
-  - Comments thread with @mention hint
-  - Activity tab — full per-task event log
-  - Time tab — start/stop timer
-  - Loading skeleton while fetching
-- **KanbanCard v2** — compact dense card:
-  - Priority colour dot
-  - Due date with overdue warning
-  - Assignee avatar stack (max 3 + overflow count)
-  - Custom field chips (first 2 fields)
-  - Approval pending badge (⏳)
-- **useFields hook** — `useFieldDefs(teamId)` + `useFieldValues(taskId)` with create/update/delete helpers
+---
 
-### What's next (Day 4)
-- `TableView.jsx` — sortable, filterable, groupable, column picker shows custom fields
-- `KanbanView.jsx` — refactored to use new KanbanCard + TaskDrawer + drag-and-drop
-- `CalendarView.jsx` — month grid with task dots and drag-to-reschedule
-- Wire `ProjectBoardPage` to use all three views + saved views switcher
-
-### Blockers
-- None
+## What's next (Week 2 — Day 6)
+- Activity logger wired into assign + field_changed mutations
+- Activity panel in TaskDrawer fully populated from API
+- Project-level ActivityFeedPage with actor/type/date filters
+- @mention autocomplete in comment textarea (typeahead on @)

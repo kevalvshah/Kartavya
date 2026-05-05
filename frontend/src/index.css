@@ -1,65 +1,12 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+/* Kartavya v2 global styles */
+@import './lib/tokens.css';
 
-body {
-    margin: 0;
-    font-family:
-        -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen",
-        "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue",
-        sans-serif;
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-}
+@keyframes fadeIn   { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:none} }
+@keyframes slideInR { from{transform:translateX(100%)} to{transform:none} }
+@keyframes pulse    { 0%,100%{opacity:0.5} 50%{opacity:1} }
 
-code {
-    font-family:
-        source-code-pro, Menlo, Monaco, Consolas, "Courier New", monospace;
-}
+.anim-fade  { animation:fadeIn   0.18s ease-out; }
+.anim-slide { animation:slideInR 0.22s cubic-bezier(.25,.8,.25,1); }
+.sr-only    { position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap; }
 
-@layer base {
-    [data-debug-wrapper="true"] {
-        display: contents !important;
-    }
-
-    [data-debug-wrapper="true"] > * {
-        margin-left: inherit;
-        margin-right: inherit;
-        margin-top: inherit;
-        margin-bottom: inherit;
-        padding-left: inherit;
-        padding-right: inherit;
-        padding-top: inherit;
-        padding-bottom: inherit;
-        column-gap: inherit;
-        row-gap: inherit;
-        gap: inherit;
-        border-left-width: inherit;
-        border-right-width: inherit;
-        border-top-width: inherit;
-        border-bottom-width: inherit;
-        border-left-style: inherit;
-        border-right-style: inherit;
-        border-top-style: inherit;
-        border-bottom-style: inherit;
-        border-left-color: inherit;
-        border-right-color: inherit;
-        border-top-color: inherit;
-        border-bottom-color: inherit;
-    }
-}
-
-/* ── Typography refinement ────────────────────────────────────────────────────
-   The original styling leaned on font-weight 800/900 everywhere, which made the
-   UI feel shouty and dated. Default to 400 for body text, 500 for emphasis. */
-body, .font-bold, .font-semibold {
-  font-weight: 400;
-}
-h1, h2, h3, h4, h5, h6,
-.text-foreground, .page-title {
-  font-weight: 500;
-}
-/* Tailwind utility overrides — keep weights moderate */
-.font-bold     { font-weight: 500 !important; }
-.font-semibold { font-weight: 500 !important; }
-.font-extrabold, .font-black { font-weight: 600 !important; }
+:focus-visible { outline:2px solid var(--accent-default);outline-offset:2px; }
