@@ -1,0 +1,198 @@
+/**
+ * Modern Full-Width Layout System
+ * Professional grid-based design with proper spacing
+ */
+
+/* Root layout container */
+.app-container {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  grid-template-rows: auto 1fr;
+  grid-template-areas:
+    "sidebar header"
+    "sidebar main";
+  gap: 0;
+  background: var(--app-bg);
+}
+
+/* Mobile: Stack layout */
+@media (max-width: 1023px) {
+  .app-container {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "header"
+      "main";
+  }
+}
+
+/* Sidebar area */
+.layout-sidebar {
+  grid-area: sidebar;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+  border-right: 1px solid var(--border);
+  background: var(--card-bg);
+}
+
+/* Header area */
+.layout-header {
+  grid-area: header;
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  border-bottom: 1px solid var(--border);
+  background: var(--card-bg);
+  backdrop-filter: blur(8px);
+}
+
+/* Main content area */
+.layout-main {
+  grid-area: main;
+  min-height: calc(100vh - 72px);
+  padding: 0;
+}
+
+/* Content wrapper with smart max-width */
+.content-wrapper {
+  width: 100%;
+  padding: 24px 32px;
+  margin: 0 auto;
+}
+
+/* Different content types */
+.content-wrapper--dashboard {
+  max-width: 1600px; /* Dashboard gets more width for stats grid */
+}
+
+.content-wrapper--kanban {
+  max-width: 100%; /* Kanban uses full width */
+  padding: 24px;
+}
+
+.content-wrapper--list {
+  max-width: 1800px; /* Lists get table width */
+}
+
+.content-wrapper--form {
+  max-width: 900px; /* Forms are narrower for readability */
+}
+
+/* Responsive padding */
+@media (max-width: 768px) {
+  .content-wrapper {
+    padding: 16px;
+  }
+}
+
+/* Grid Systems */
+.grid-auto {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 20px;
+}
+
+.grid-2 {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 24px;
+}
+
+.grid-3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+}
+
+.grid-4 {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 20px;
+}
+
+/* Responsive grids */
+@media (max-width: 1280px) {
+  .grid-4 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .grid-2,
+  .grid-3,
+  .grid-4 {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Card layouts */
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 24px;
+}
+
+/* Split layouts */
+.split-layout {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 32px;
+}
+
+@media (max-width: 1024px) {
+  .split-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Kanban board layout */
+.kanban-container {
+  display: flex;
+  gap: 20px;
+  overflow-x: auto;
+  padding-bottom: 16px;
+  min-height: 600px;
+}
+
+.kanban-column {
+  flex: 0 0 320px;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Table layouts */
+.table-container {
+  width: 100%;
+  overflow-x: auto;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  background: var(--card-bg);
+}
+
+/* Section spacing */
+.section-spacing {
+  margin-bottom: 32px;
+}
+
+.section-spacing:last-child {
+  margin-bottom: 0;
+}
+
+/* Header spacing */
+.page-header {
+  margin-bottom: 28px;
+}
+
+.page-title {
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+  margin-bottom: 6px;
+}
+
+.page-subtitle {
+  font-size: 14px;
+  color: var(--text-muted);
+}

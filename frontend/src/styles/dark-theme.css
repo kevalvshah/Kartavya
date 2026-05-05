@@ -1,0 +1,75 @@
+/**
+ * Modern Dark Theme
+ * Professional color system with proper contrast
+ */
+
+:root {
+  /* Brand colors */
+  --brand-blue: #0082c6;
+  --brand-mid: #03a1b6;
+  --brand-teal: #05b7aa;
+  --brand-gradient: linear-gradient(90deg, #0082c6, #03a1b6, #05b7aa);
+  
+  /* Semantic colors */
+  --success: #10b981;
+  --warning: #f59e0b;
+  --error: #ef4444;
+  --info: #3b82f6;
+}
+
+/* Light theme */
+:root {
+  --app-bg: #f8fafc;
+  --card-bg: #ffffff;
+  --input-bg: #f8fafc;
+  --border: #e2e8f0;
+  --text-primary: #0f172a;
+  --text-secondary: #334155;
+  --text-muted: #64748b;
+  --overlay: rgba(0, 0, 0, 0.5);
+}
+
+/* Dark theme */
+.dark,
+:root.dark {
+  --app-bg: #0a0e17;
+  --card-bg: #0f1420;
+  --input-bg: #1a1f2e;
+  --border: #1e2533;
+  --text-primary: #f8fafc;
+  --text-secondary: #cbd5e1;
+  --text-muted: #64748b;
+  --overlay: rgba(0, 0, 0, 0.7);
+}
+
+/* Global styles */
+body {
+  background: var(--app-bg);
+  color: var(--text-primary);
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+/* Selection */
+::selection {
+  background: rgba(0, 130, 198, 0.3);
+  color: var(--text-primary);
+}
