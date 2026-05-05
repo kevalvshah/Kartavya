@@ -1,0 +1,84 @@
+/* Full-width layout - Remove auto margins */
+
+/* Remove default max-width and center alignment */
+.main-content,
+.app-container,
+.page-wrapper {
+  max-width: none !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+  width: 100% !important;
+}
+
+/* Ensure full width for all major containers */
+body,
+#root,
+#__next,
+.app {
+  width: 100% !important;
+  max-width: 100% !important;
+}
+
+/* Container adjustments */
+.container {
+  max-width: none !important;
+  padding-left: 1rem;
+  padding-right: 1rem;
+  width: 100%;
+}
+
+/* Responsive padding */
+@media (min-width: 640px) {
+  .container {
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .container {
+    padding-left: 2rem;
+    padding-right: 2rem;
+  }
+}
+
+/* Sidebar + Content Layout */
+.layout-with-sidebar {
+  display: flex;
+  width: 100%;
+  min-height: 100vh;
+}
+
+.layout-sidebar {
+  flex-shrink: 0;
+  width: 16rem; /* 256px */
+}
+
+.layout-main {
+  flex: 1;
+  min-width: 0; /* Prevent flex overflow */
+  width: 100%;
+}
+
+/* Mobile: Sidebar overlay */
+@media (max-width: 768px) {
+  .layout-sidebar {
+    position: fixed;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    z-index: 40;
+    transform: translateX(-100%);
+    transition: transform 0.3s ease-in-out;
+    background: white;
+    box-shadow: 2px 0 8px rgba(0, 0, 0, 0.1);
+  }
+
+  .layout-sidebar.open {
+    transform: translateX(0);
+  }
+
+  .layout-main {
+    margin-left: 0;
+  }
+}
