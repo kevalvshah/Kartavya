@@ -1,143 +1,235 @@
 """
 auth_router.py — Kartavya by Aekam Inc
-Invite-only auth. No public registration.
-Roles: admin | member | client
+When a user accepts an invite the full_name/position/company/member_role
+from the invite row are copied into the new users row.
 """
-import hashlib
-import hmac
 import os
+import re
 import uuid
-from datetime import datetime, timedelta
+import hashlib
+import secrets
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from pydantic import BaseModel, EmailStr
 import jwt
-from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from pydantic import BaseModel, EmailStr, Field
 
 from db import get_pool
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
-security = HTTPBearer(auto_error=False)
 
-JWT_SECRET = os.environ["JWT_SECRET"]
-JWT_ALGORITHM = "HS256"
-JWT_TTL_DAYS = 30
+SECRET_KEY = os.environ.get("SECRET_KEY", "change-me-in-production")
+ALGORITHM = "HS256"
+TOKEN_TTL_HOURS = 24 * 7   # 1 week
 
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
 
 def _hash_password(password: str, salt: str) -> str:
-    return hashlib.pbkdf2_hmac("sha256", password.encode(), salt.encode(), 260_000).hex()
+    return hashlib.pbkdf2_hmac(
+        "sha256", password.encode(), salt.encode(), 260_000
+    ).hex()
 
 
-def _verify_password(password: str, salt: str, stored: str) -> bool:
-    return hmac.compare_digest(_hash_password(password, salt), stored)
+def _make_token(user_id: str, role: str) -> str:
+    payload = {
+        "sub": user_id,
+        "role": role,
+        "exp": datetime.now(timezone.utc) + timedelta(hours=TOKEN_TTL_HOURS),
+    }
+    return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
 
-def _create_token(user_id: str) -> str:
-    return jwt.encode(
-        {"sub": user_id, "exp": datetime.utcnow() + timedelta(days=JWT_TTL_DAYS), "iat": datetime.utcnow()},
-        JWT_SECRET, algorithm=JWT_ALGORITHM,
-    )
-
-
-def _decode_token(token: str) -> Optional[str]:
-    try:
-        return jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])["sub"]
-    except jwt.PyJWTError:
-        return None
-
-
-async def require_user(request: Request, credentials: Optional[HTTPAuthorizationCredentials] = Depends(security)):
-    token = credentials.credentials if credentials else request.cookies.get("session_token")
+async def require_user(request: Request, pool=Depends(get_pool)) -> dict:
+    token = request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
+    if not token:
+        token = request.cookies.get("auth_token", "")
     if not token:
         raise HTTPException(status_code=401, detail="Not authenticated")
-    user_id = _decode_token(token)
-    if not user_id:
-        raise HTTPException(status_code=401, detail="Invalid or expired token")
-    pool = await get_pool()
-    user = await pool.fetchrow("SELECT * FROM users WHERE user_id=$1", user_id)
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token expired")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    user = await pool.fetchrow(
+        "SELECT user_id, email, name, full_name, role, position, company_name, member_role, receives_approval_emails FROM users WHERE user_id=$1",
+        payload["sub"],
+    )
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
     return dict(user)
 
 
-async def require_admin(user=Depends(require_user)):
-    if user.get("role") != "admin":
+async def require_admin(request: Request, pool=Depends(get_pool)) -> dict:
+    user = await require_user(request, pool)
+    if user["role"] != "admin":
         raise HTTPException(status_code=403, detail="Admin access required")
     return user
 
 
-class AcceptInviteBody(BaseModel):
-    token: str
-    name: str = Field(..., min_length=1, max_length=100)
-    password: str = Field(..., min_length=8, max_length=128)
-
+# ---------------------------------------------------------------------------
+# Models
+# ---------------------------------------------------------------------------
 
 class LoginBody(BaseModel):
     email: EmailStr
     password: str
 
 
-def _safe_user(u: dict) -> dict:
+class AcceptInviteBody(BaseModel):
+    token: str
+    password: str
+    # Users can override / confirm profile fields on sign-up
+    full_name: Optional[str] = None
+    position: Optional[str] = None
+    company_name: Optional[str] = None
+    member_role: Optional[str] = None
+
+
+class ChangePasswordBody(BaseModel):
+    current_password: str
+    new_password: str
+
+
+# ---------------------------------------------------------------------------
+# Routes
+# ---------------------------------------------------------------------------
+
+@router.post("/login")
+async def login(body: LoginBody, response: Response, pool=Depends(get_pool)):
+    user = await pool.fetchrow(
+        "SELECT * FROM users WHERE email=$1", body.email.lower()
+    )
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+
+    pw_hash = _hash_password(body.password, user["salt"])
+    if pw_hash != user["password_hash"]:
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+
+    token = _make_token(user["user_id"], user["role"])
+    response.set_cookie(
+        "auth_token", token,
+        httponly=True, samesite="lax", secure=True,
+        max_age=TOKEN_TTL_HOURS * 3600,
+    )
     return {
-        "id": u["user_id"],
-        "user_id": u["user_id"],
-        "name": u["name"],
-        "email": u["email"],
-        "role": u.get("role", "member"),
-        "avatar": u.get("avatar"),
+        "token": token,
+        "user": {
+            "user_id": user["user_id"],
+            "email": user["email"],
+            "name": user.get("full_name") or user["name"],
+            "full_name": user.get("full_name") or user["name"],
+            "role": user["role"],
+            "position": user.get("position"),
+            "company_name": user.get("company_name"),
+            "member_role": user.get("member_role"),
+            "receives_approval_emails": user.get("receives_approval_emails", True),
+        },
     }
 
 
 @router.post("/accept-invite")
-async def accept_invite(body: AcceptInviteBody):
-    """Called when a user clicks their invite link and sets their password."""
-    pool = await get_pool()
+async def accept_invite(
+    body: AcceptInviteBody,
+    response: Response,
+    pool=Depends(get_pool),
+):
+    """Accept an invite and create the user account."""
     invite = await pool.fetchrow(
         "SELECT * FROM invites WHERE token=$1 AND accepted_at IS NULL AND expires_at > NOW()",
         body.token,
     )
     if not invite:
-        raise HTTPException(status_code=400, detail="Invite link is invalid or has expired")
+        raise HTTPException(status_code=400, detail="Invalid or expired invite link")
 
-    existing = await pool.fetchrow("SELECT user_id FROM users WHERE email=$1", invite["email"])
-    if existing:
-        raise HTTPException(status_code=409, detail="An account with this email already exists")
+    email = invite["email"]
+    role  = invite["role"]
 
-    salt = uuid.uuid4().hex
-    user_id = f"user_{uuid.uuid4().hex[:12]}"
-    role = invite["role"]  # "member" or "client"
+    # Merge: invite defaults, overridden by anything the user typed on the sign-up form
+    full_name    = body.full_name    or invite.get("full_name")    or email.split("@")[0].title()
+    position     = body.position     or invite.get("position")
+    company_name = body.company_name or invite.get("company_name")
+    member_role  = body.member_role  or invite.get("member_role")
+    receives_approval_emails = invite.get("receives_approval_emails", True)
 
-    await pool.execute(
-        "INSERT INTO users (user_id, name, email, password_hash, salt, role) VALUES ($1,$2,$3,$4,$5,$6)",
-        user_id, body.name, invite["email"], _hash_password(body.password, salt), salt, role,
-    )
+    salt     = secrets.token_hex(16)
+    pw_hash  = _hash_password(body.password, salt)
+    user_id  = f"usr_{uuid.uuid4().hex[:12]}"
+
+    try:
+        await pool.execute(
+            """
+            INSERT INTO users
+              (user_id, email, name, full_name, password_hash, salt, role,
+               position, company_name, member_role, receives_approval_emails)
+            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+            """,
+            user_id, email, full_name, full_name, pw_hash, salt, role,
+            position, company_name, member_role, receives_approval_emails,
+        )
+    except Exception:
+        raise HTTPException(status_code=409, detail="Email already registered")
+
+    # Mark invite accepted
     await pool.execute(
         "UPDATE invites SET accepted_at=NOW() WHERE token=$1", body.token
     )
-    # Activate any pending team invites for this email
-    await pool.execute(
-        "UPDATE team_members SET user_id=$1, status='active', updated_at=NOW() WHERE email=$2 AND status='invited'",
-        user_id, invite["email"],
+
+    token_str = _make_token(user_id, role)
+    response.set_cookie(
+        "auth_token", token_str,
+        httponly=True, samesite="lax", secure=True,
+        max_age=TOKEN_TTL_HOURS * 3600,
     )
-    user = await pool.fetchrow("SELECT * FROM users WHERE user_id=$1", user_id)
-    return {"token": _create_token(user_id), "user": _safe_user(dict(user))}
-
-
-@router.post("/login")
-async def login(body: LoginBody):
-    pool = await get_pool()
-    user = await pool.fetchrow("SELECT * FROM users WHERE email=$1", body.email.lower())
-    if not user or not _verify_password(body.password, user["salt"], user["password_hash"]):
-        raise HTTPException(status_code=401, detail="Invalid email or password")
-    return {"token": _create_token(user["user_id"]), "user": _safe_user(dict(user))}
+    return {
+        "token": token_str,
+        "user": {
+            "user_id": user_id,
+            "email": email,
+            "name": full_name,
+            "full_name": full_name,
+            "role": role,
+            "position": position,
+            "company_name": company_name,
+            "member_role": member_role,
+            "receives_approval_emails": receives_approval_emails,
+        },
+    }
 
 
 @router.post("/logout")
-async def logout():
+async def logout(response: Response):
+    response.delete_cookie("auth_token")
     return {"ok": True}
 
 
 @router.get("/me")
-async def me(current_user: dict = Depends(require_user)):
-    return _safe_user(current_user)
+async def me(user=Depends(require_user)):
+    return user
+
+
+@router.post("/change-password")
+async def change_password(
+    body: ChangePasswordBody,
+    pool=Depends(get_pool),
+    user=Depends(require_user),
+):
+    row = await pool.fetchrow(
+        "SELECT password_hash, salt FROM users WHERE user_id=$1", user["user_id"]
+    )
+    if _hash_password(body.current_password, row["salt"]) != row["password_hash"]:
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
+
+    new_salt   = secrets.token_hex(16)
+    new_hash   = _hash_password(body.new_password, new_salt)
+    await pool.execute(
+        "UPDATE users SET password_hash=$1, salt=$2, updated_at=NOW() WHERE user_id=$3",
+        new_hash, new_salt, user["user_id"],
+    )
+    return {"ok": True}

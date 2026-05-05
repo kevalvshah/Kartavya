@@ -1,5 +1,6 @@
 """
-email_service.py - Email service using AWS SES ONLY
+email_service.py — AWS SES email service for Kartavya
+Added: send_approval_request_email, send_approval_decision_email (with full names)
 """
 
 import logging
@@ -7,15 +8,13 @@ import os
 
 logger = logging.getLogger(__name__)
 
-FROM_EMAIL = os.environ.get("FROM_EMAIL", "noreply@kartavya.app")
+FROM_EMAIL   = os.environ.get("FROM_EMAIL", "noreply@kartavya.app")
 FRONTEND_URL = os.environ.get("FRONTEND_URL", "https://kartavya-aekam.vercel.app")
 
-# AWS SES Configuration (REQUIRED)
-AWS_ACCESS_KEY_ID = os.environ.get("AWS_ACCESS_KEY_ID")
+AWS_ACCESS_KEY_ID     = os.environ.get("AWS_ACCESS_KEY_ID")
 AWS_SECRET_ACCESS_KEY = os.environ.get("AWS_SECRET_ACCESS_KEY")
-AWS_REGION = os.environ.get("AWS_REGION", "us-east-1")
+AWS_REGION            = os.environ.get("AWS_REGION", "us-east-1")
 
-# Initialize AWS SES client
 ses_client = None
 if AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY:
     try:
@@ -24,255 +23,243 @@ if AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY:
             'ses',
             aws_access_key_id=AWS_ACCESS_KEY_ID,
             aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
-            region_name=AWS_REGION
+            region_name=AWS_REGION,
         )
-        logger.info(f"✅ AWS SES configured successfully (Region: {AWS_REGION})")
+        logger.info(f"✅ AWS SES ready (region={AWS_REGION})")
     except ImportError:
-        logger.error("❌ boto3 not installed! Run: pip install boto3")
+        logger.error("❌ boto3 not installed")
     except Exception as e:
-        logger.error(f"❌ AWS SES initialization failed: {str(e)}")
+        logger.error(f"❌ SES init failed: {e}")
 else:
-    logger.warning("⚠️  AWS SES not configured - emails will not be sent")
+    logger.warning("⚠️  AWS SES not configured — emails disabled")
 
+
+# ---------------------------------------------------------------------------
+# Core send
+# ---------------------------------------------------------------------------
 
 def send_email(to_email: str, subject: str, html_content: str) -> bool:
-    """
-    Send email using AWS SES
-    """
     if not ses_client:
-        logger.warning(f"AWS SES not configured. Would send to {to_email}: {subject}")
+        logger.warning(f"[DRY RUN] Would send '{subject}' to {to_email}")
         return False
-    
     try:
-        response = ses_client.send_email(
+        resp = ses_client.send_email(
             Source=FROM_EMAIL,
             Destination={'ToAddresses': [to_email]},
             Message={
                 'Subject': {'Data': subject, 'Charset': 'UTF-8'},
-                'Body': {'Html': {'Data': html_content, 'Charset': 'UTF-8'}}
-            }
+                'Body':    {'Html': {'Data': html_content, 'Charset': 'UTF-8'}},
+            },
         )
-        logger.info(f"✅ Email sent to {to_email}: {response['MessageId']}")
+        logger.info(f"✅ Sent '{subject}' to {to_email}: {resp['MessageId']}")
         return True
     except Exception as e:
-        logger.error(f"❌ Failed to send email to {to_email}: {str(e)}")
+        logger.error(f"❌ SES send failed to {to_email}: {e}")
         return False
 
 
-def send_approval_notification_email(user_email: str, user_name: str, task_title: str, 
-                                     notification_type: str, notes: str = None):
+# ---------------------------------------------------------------------------
+# Templates
+# ---------------------------------------------------------------------------
+
+BRAND = "linear-gradient(135deg,#0082c6 0%,#05b7aa 100%)"
+
+
+def _base(header_html: str, body_html: str) -> str:
+    return f"""
+    <!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+    <style>body{{margin:0;padding:20px;background:#f0f4ff;font-family:'Segoe UI',Arial,sans-serif;color:#1e293b}}</style>
+    </head><body>
+    <div style="max-width:600px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 12px rgba(0,0,0,.1)">
+      <div style="background:{BRAND};padding:28px 24px;text-align:center">{header_html}</div>
+      <div style="padding:28px 24px">{body_html}</div>
+      <div style="background:#f8faff;padding:16px 24px;text-align:center;border-top:1px solid #e2e8f0">
+        <p style="color:#64748b;font-size:12px;margin:0">Kartavya Task Management &bull; Aekam Inc</p>
+      </div>
+    </div></body></html>
     """
-    Send approval workflow notification emails
-    
-    notification_type: 'request', 'approved', 'rejected'
-    """
-    
-    if notification_type == 'request':
-        subject = f"Approval Required: {task_title}"
-        color = "#f59e0b"  # Orange
-        icon = "⏳"
-        action_text = "Review & Approve"
-        message = f"<p>A task requires your approval:</p>"
-        if notes:
-            message += f'<p style="color: #6b7280; font-style: italic;">"{notes}"</p>'
-        
-    elif notification_type == 'approved':
-        subject = f"✅ Task Approved: {task_title}"
-        color = "#10b981"  # Green
-        icon = "✅"
-        action_text = "View Task"
-        message = f"<p>Great news! Your task has been approved and moved forward.</p>"
-        if notes:
-            message += f'<p style="color: #6b7280; font-style: italic;">Approver note: "{notes}"</p>'
-        
-    else:  # rejected
-        subject = f"❌ Task Rejected: {task_title}"
-        color = "#ef4444"  # Red
-        icon = "❌"
-        action_text = "View Task"
-        message = f"<p>Your task has been rejected and requires revisions.</p>"
-        if notes:
-            message += f'<p style="color: #dc2626; font-weight: 500;">Reason: {notes}</p>'
-    
-    html_content = f"""
-    <html>
-      <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
-        <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
-          <h2 style="color: {color}; margin-bottom: 20px;">{icon} {subject}</h2>
-          <p>Hi {user_name},</p>
-          {message}
-          <div style="background: #f3f4f6; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid {color};">
-            <h3 style="margin-top: 0; color: #1f2937;">{task_title}</h3>
-          </div>
-          <p>
-            <a href="{FRONTEND_URL}/tasks" 
-               style="background: {color}; color: white; padding: 12px 24px; 
-                      text-decoration: none; border-radius: 6px; display: inline-block;
-                      font-weight: 500;">
-              {action_text}
-            </a>
-          </p>
-          <hr style="margin: 30px 0; border: none; border-top: 1px solid #e5e7eb;">
-          <p style="color: #6b7280; font-size: 12px;">
-            This is an automated email from Kartavya Task Management System by Aekam Inc.
-          </p>
+
+
+def send_approval_request_email(
+    to_email: str,
+    to_name: str,
+    task_id: str,
+    task_title: str,
+    requester_name: str,
+    project_name: str,
+    notes: str = None,
+):
+    """Email sent to owner/admin when someone requests approval."""
+    subject = f"\u23f3 Approval Required: {task_title}"
+    approve_url = f"{FRONTEND_URL}/tasks/{task_id}/approve"
+    reject_url  = f"{FRONTEND_URL}/tasks/{task_id}/reject"
+    dash_url    = f"{FRONTEND_URL}/approvals"
+
+    notes_html = (
+        f'<p style="color:#78350f;font-style:italic;margin:12px 0 0">Note: {notes}</p>'
+        if notes else ""
+    )
+
+    header = '<h1 style="color:#fff;margin:0;font-size:22px">&#x23F3; New Approval Request</h1>'
+    body   = f"""
+        <p>Hi <strong>{to_name}</strong>,</p>
+        <p><strong>{requester_name}</strong> has submitted a task for your approval in <strong>{project_name}</strong>:</p>
+        <div style="background:#fef3c7;border-left:4px solid #f59e0b;padding:16px 20px;border-radius:8px;margin:20px 0">
+          <h3 style="margin:0 0 6px;color:#78350f">{task_title}</h3>
+          <p style="margin:0;font-size:13px;color:#92400e">Project: {project_name} &bull; Requested by: {requester_name}</p>
+          {notes_html}
         </div>
-      </body>
-    </html>
-    """
-    
-    return send_email(user_email, subject, html_content)
-
-
-def send_task_assignment_email(user_email: str, user_name: str, task_title: str, task_id: str, team_name: str = None):
-    """
-    Send task assignment notification
-    """
-    subject = f"New Task Assigned: {task_title}"
-    
-    team_info = f" in {team_name}" if team_name else ""
-    
-    html_content = f"""
-    <html>
-      <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
-        <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
-          <h2 style="color: #6366f1; margin-bottom: 20px;">New Task Assigned</h2>
-          <p>Hi {user_name},</p>
-          <p>You have been assigned a new task{team_info}:</p>
-          <div style="background: #f3f4f6; padding: 20px; border-radius: 8px; margin: 20px 0;">
-            <h3 style="margin-top: 0; color: #1f2937;">{task_title}</h3>
-            <p style="color: #6b7280; font-size: 14px; margin: 5px 0;">Task ID: {task_id}</p>
-          </div>
-          <p>
-            <a href="{FRONTEND_URL}/tasks" 
-               style="background: #6366f1; color: white; padding: 12px 24px; 
-                      text-decoration: none; border-radius: 6px; display: inline-block;
-                      font-weight: 500;">
-              View Task
-            </a>
-          </p>
-          <hr style="margin: 30px 0; border: none; border-top: 1px solid #e5e7eb;">
-          <p style="color: #6b7280; font-size: 12px;">
-            This is an automated email from Kartavya Task Management System by Aekam Inc.
-          </p>
+        <div style="text-align:center;margin:28px 0">
+          <a href="{approve_url}" style="background:#10b981;color:#fff;padding:13px 28px;text-decoration:none;border-radius:8px;font-weight:600;margin:4px;display:inline-block">&#x2713; Approve</a>
+          <a href="{reject_url}"  style="background:#ef4444;color:#fff;padding:13px 28px;text-decoration:none;border-radius:8px;font-weight:600;margin:4px;display:inline-block">&#x2717; Reject</a>
         </div>
-      </body>
-    </html>
+        <p style="text-align:center"><a href="{dash_url}" style="color:#0082c6;font-size:14px">View all pending approvals &rarr;</a></p>
     """
-    
-    return send_email(user_email, subject, html_content)
+    return send_email(to_email, subject, _base(header, body))
 
 
-def send_team_invite_email(to_email: str, team_name: str, inviter_name: str, invite_token: str):
+def send_approval_decision_email(
+    to_email: str,
+    to_name: str,
+    task_title: str,
+    approved: bool,
+    approver_name: str,
+    project_name: str,
+    notes: str = None,
+):
+    """Email sent to task creator when owner approves or rejects."""
+    if approved:
+        subject   = f"\u2705 Approved: {task_title}"
+        color     = "#10b981"
+        icon      = "\u2705"
+        status    = "APPROVED"
+        msg       = "Your task has been approved and moved to the next stage."
+    else:
+        subject   = f"\u274c Rejected: {task_title}"
+        color     = "#ef4444"
+        icon      = "\u274c"
+        status    = "REJECTED"
+        msg       = "Your task has been rejected. Please review the notes below."
+
+    notes_html = (
+        f'<div style="margin-top:14px;padding-top:14px;border-top:1px solid {color}">'
+        f'<strong>Notes from {approver_name}:</strong>'
+        f'<p style="font-style:italic;color:#475569;margin:6px 0 0">{notes}</p></div>'
+    ) if notes else ""
+
+    header = f'<h1 style="color:#fff;margin:0;font-size:22px">{icon} Task {status}</h1>'
+    body   = f"""
+        <p>Hi <strong>{to_name}</strong>,</p>
+        <p>{msg}</p>
+        <div style="background:#f0fdf4;border-left:4px solid {color};padding:16px 20px;border-radius:8px;margin:20px 0">
+          <h3 style="margin:0 0 8px;color:#1e293b">{task_title}</h3>
+          <p style="margin:0;font-size:13px;color:#475569">
+            Project: {project_name} &bull; Decision by: <strong>{approver_name}</strong>
+          </p>
+          {notes_html}
+        </div>
+        <div style="text-align:center;margin:28px 0">
+          <a href="{FRONTEND_URL}" style="background:#0082c6;color:#fff;padding:13px 28px;text-decoration:none;border-radius:8px;font-weight:600">View Dashboard</a>
+        </div>
     """
-    Send team invitation email
-    """
+    return send_email(to_email, subject, _base(header, body))
+
+
+def send_team_invite_email(
+    to_email: str,
+    to_name: str,
+    team_name: str,
+    inviter_name: str,
+    invite_token: str,
+    role: str = "member",
+):
     invite_url = f"{FRONTEND_URL}/accept-invite?token={invite_token}"
-    
-    subject = f"You've been invited to join {team_name}"
-    
-    html_content = f"""
-    <html>
-      <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
-        <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
-          <h2 style="color: #6366f1; margin-bottom: 20px;">Team Invitation</h2>
-          <p>Hello,</p>
-          <p>{inviter_name} has invited you to join the team <strong>{team_name}</strong> on Kartavya.</p>
-          <p style="margin: 30px 0;">
-            <a href="{invite_url}" 
-               style="background: #6366f1; color: white; padding: 12px 24px; 
-                      text-decoration: none; border-radius: 6px; display: inline-block;
-                      font-weight: 500;">
-              Accept Invitation
-            </a>
-          </p>
-          <p style="color: #6b7280; margin-top: 20px; font-size: 14px;">
-            This invitation will expire in 7 days.
-          </p>
-          <hr style="margin: 30px 0; border: none; border-top: 1px solid #e5e7eb;">
-          <p style="color: #6b7280; font-size: 12px;">
-            This is an automated email from Kartavya Task Management System by Aekam Inc.
-          </p>
+    subject    = f"You've been invited to join {team_name} on Kartavya"
+    role_label = "Client" if role == "client" else ("Administrator" if role == "admin" else "Team Member")
+
+    header = '<h1 style="color:#fff;margin:0;font-size:22px">&#x1F389; You\'re Invited!</h1>'
+    body   = f"""
+        <p>Hi <strong>{to_name}</strong>,</p>
+        <p><strong>{inviter_name}</strong> has invited you to join <strong>{team_name}</strong>
+           as a <strong>{role_label}</strong>.</p>
+        <div style="text-align:center;margin:32px 0">
+          <a href="{invite_url}" style="background:#0082c6;color:#fff;padding:16px 36px;text-decoration:none;border-radius:8px;font-weight:700;font-size:16px">Accept Invitation</a>
         </div>
-      </body>
-    </html>
+        <p style="color:#64748b;font-size:13px">This link expires in 7 days.</p>
     """
-    
-    return send_email(to_email, subject, html_content)
+    return send_email(to_email, subject, _base(header, body))
 
 
-def send_task_reminder_email(user_email: str, user_name: str, task_title: str, task_id: str, due_date: str):
-    """
-    Send task reminder email
-    """
-    subject = f"Task Reminder: {task_title}"
-    
-    html_content = f"""
-    <html>
-      <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
-        <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
-          <h2 style="color: #f59e0b; margin-bottom: 20px;">⏰ Task Reminder</h2>
-          <p>Hi {user_name},</p>
-          <p>This is a reminder for your upcoming task:</p>
-          <div style="background: #fef3c7; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #f59e0b;">
-            <h3 style="margin-top: 0; color: #92400e;">{task_title}</h3>
-            <p style="color: #78350f; font-size: 14px; margin: 5px 0;">Due: {due_date}</p>
-          </div>
-          <p>
-            <a href="{FRONTEND_URL}/tasks" 
-               style="background: #f59e0b; color: white; padding: 12px 24px; 
-                      text-decoration: none; border-radius: 6px; display: inline-block;
-                      font-weight: 500;">
-              View Task
-            </a>
-          </p>
-          <hr style="margin: 30px 0; border: none; border-top: 1px solid #e5e7eb;">
-          <p style="color: #6b7280; font-size: 12px;">
-            This is an automated email from Kartavya Task Management System by Aekam Inc.
-          </p>
+def send_approval_notification_email(
+    user_email: str,
+    user_name: str,
+    task_title: str,
+    notification_type: str,
+    notes: str = None,
+):
+    """Legacy wrapper kept for compatibility."""
+    if notification_type == 'request':
+        return send_approval_request_email(
+            to_email=user_email, to_name=user_name,
+            task_id="", task_title=task_title,
+            requester_name=user_name, project_name="", notes=notes,
+        )
+    approved = notification_type == 'approved'
+    return send_approval_decision_email(
+        to_email=user_email, to_name=user_name,
+        task_title=task_title, approved=approved,
+        approver_name="", project_name="", notes=notes,
+    )
+
+
+def send_task_assignment_email(
+    user_email: str, user_name: str,
+    task_title: str, task_id: str, team_name: str = None,
+):
+    subject   = f"New Task Assigned: {task_title}"
+    team_info = f" in <strong>{team_name}</strong>" if team_name else ""
+    header    = '<h1 style="color:#fff;margin:0;font-size:22px">&#x1F4CB; New Task Assigned</h1>'
+    body      = f"""
+        <p>Hi <strong>{user_name}</strong>,</p>
+        <p>You have been assigned a new task{team_info}:</p>
+        <div style="background:#f0f4ff;border-left:4px solid #0082c6;padding:16px 20px;border-radius:8px;margin:20px 0">
+          <h3 style="margin:0;color:#0082c6">{task_title}</h3>
         </div>
-      </body>
-    </html>
+        <div style="text-align:center;margin:28px 0">
+          <a href="{FRONTEND_URL}/tasks" style="background:#0082c6;color:#fff;padding:13px 28px;text-decoration:none;border-radius:8px;font-weight:600">View Task</a>
+        </div>
     """
-    
-    return send_email(user_email, subject, html_content)
+    return send_email(user_email, subject, _base(header, body))
 
 
 def send_welcome_email(user_email: str, user_name: str):
-    """
-    Send welcome email to new users
-    """
     subject = "Welcome to Kartavya!"
-    
-    html_content = f"""
-    <html>
-      <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
-        <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
-          <h2 style="color: #6366f1; margin-bottom: 20px;">Welcome to Kartavya! 🎉</h2>
-          <p>Hi {user_name},</p>
-          <p>Welcome to Kartavya - your new task management platform by Aekam Inc!</p>
-          <p>Here's what you can do:</p>
-          <ul style="color: #4b5563; line-height: 1.8;">
-            <li>Create and manage tasks with custom workflows</li>
-            <li>Collaborate with team members</li>
-            <li>Track progress with visual boards</li>
-            <li>Get reminders for upcoming deadlines</li>
-          </ul>
-          <p style="margin: 30px 0;">
-            <a href="{FRONTEND_URL}/dashboard" 
-               style="background: #6366f1; color: white; padding: 12px 24px; 
-                      text-decoration: none; border-radius: 6px; display: inline-block;
-                      font-weight: 500;">
-              Get Started
-            </a>
-          </p>
-          <hr style="margin: 30px 0; border: none; border-top: 1px solid #e5e7eb;">
-          <p style="color: #6b7280; font-size: 12px;">
-            This is an automated email from Kartavya Task Management System by Aekam Inc.
-          </p>
+    header  = '<h1 style="color:#fff;margin:0;font-size:22px">&#x1F389; Welcome to Kartavya!</h1>'
+    body    = f"""
+        <p>Hi <strong>{user_name}</strong>,</p>
+        <p>Welcome to Kartavya &mdash; your task management platform by Aekam Inc.</p>
+        <div style="text-align:center;margin:32px 0">
+          <a href="{FRONTEND_URL}" style="background:#0082c6;color:#fff;padding:16px 36px;text-decoration:none;border-radius:8px;font-weight:700">Get Started</a>
         </div>
-      </body>
-    </html>
     """
-    
-    return send_email(user_email, subject, html_content)
+    return send_email(user_email, subject, _base(header, body))
+
+
+def send_task_reminder_email(
+    user_email: str, user_name: str,
+    task_title: str, task_id: str, due_date: str,
+):
+    subject = f"Reminder: {task_title}"
+    header  = '<h1 style="color:#fff;margin:0;font-size:22px">&#x23F0; Task Reminder</h1>'
+    body    = f"""
+        <p>Hi <strong>{user_name}</strong>,</p>
+        <p>This is a reminder for an upcoming task:</p>
+        <div style="background:#fef3c7;border-left:4px solid #f59e0b;padding:16px 20px;border-radius:8px;margin:20px 0">
+          <h3 style="margin:0;color:#78350f">{task_title}</h3>
+          <p style="margin:8px 0 0;color:#92400e">Due: {due_date}</p>
+        </div>
+        <div style="text-align:center;margin:28px 0">
+          <a href="{FRONTEND_URL}/tasks" style="background:#f59e0b;color:#fff;padding:13px 28px;text-decoration:none;border-radius:8px;font-weight:600">View Task</a>
+        </div>
+    """
+    return send_email(user_email, subject, _base(header, body))
