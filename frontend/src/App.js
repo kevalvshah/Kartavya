@@ -2129,8 +2129,8 @@ function ClientProjectBoardPage() {
   useEffect(() => {
     Promise.all([
       api.get(`/teams/${projectId}`).then(r => setProject(r.data)),
-      api.get(`/teams/${projectId}/tasks`).then(r => setTasks(r.data)),
-      api.get(`/teams/${projectId}/columns`).then(r => setColumns(r.data)),
+      api.get(`/tasks`, { params: { team_id: projectId } }).then(r => setTasks(r.data)),
+      api.get(`/projects/${projectId}/columns`).then(r => setColumns(r.data)),
       api.get("/categories").then(r => setCategories(r.data))
     ]).catch(() => {
       pushToast({ type: "error", title: "Failed to load project" });
@@ -2283,7 +2283,7 @@ function ClientProjectBoardPage() {
         onSaved={(task) => {
           setEditorOpen(false);
           setEditing(null);
-          api.get(`/teams/${projectId}/tasks`).then(r => setTasks(r.data));
+          api.get(`/tasks`, { params: { team_id: projectId } }).then(r => setTasks(r.data));
         }}
       />
     </div>
