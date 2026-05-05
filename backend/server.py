@@ -465,8 +465,9 @@ async def reorder_columns(team_id: str, body: dict, pool=Depends(get_db), user=D
 
 @api_router.get("/client/tasks", response_model=List[TaskOut])
 async def client_tasks(pool=Depends(get_db), user=Depends(require_user)):
+    # Get all tasks from projects the client is assigned to
     rows = await pool.fetch(
-        "SELECT t.* FROM tasks t JOIN task_clients tc ON tc.task_id=t.task_id WHERE tc.user_id=$1 ORDER BY t.updated_at DESC",
+        "SELECT t.* FROM tasks t JOIN project_assignments pa ON pa.team_id = t.team_id WHERE pa.user_id=$1 ORDER BY t.updated_at DESC",
         user["user_id"],
     )
     return [row_to_task(r) for r in rows]
@@ -483,6 +484,89 @@ async def add_client_to_task(task_id: str, target_user_id: str, pool=Depends(get
 async def remove_client_from_task(task_id: str, target_user_id: str, pool=Depends(get_db), user=Depends(require_admin)):
     await pool.execute("DELETE FROM task_clients WHERE task_id=$1 AND user_id=$2", task_id, target_user_id)
     return {"ok": True}
+
+
+# ── Client Approval Workflow ──────────────────────────────────────────────────
+
+@api_router.post("/client/tasks/request")
+async def client_request_task(payload: TaskCreate, pool=Depends(get_db), user=Depends(require_user)):
+    """Client creates task - requires owner/admin approval"""
+    if not payload.team_id:
+        raise HTTPException(status_code=400, detail="team_id required")
+    
+    assignment = await pool.fetchrow(
+        "SELECT role FROM project_assignments WHERE team_id=$1 AND user_id=$2",
+        payload.team_id, user["user_id"]
+    )
+    if not assignment or assignment["role"] != "client":
+        raise HTTPException(status_code=403, detail="Clients only")
+    
+    approval_id = f"approval_{uuid.uuid4().hex[:12]}"
+    await pool.execute(
+        "INSERT INTO approvals (approval_id, team_id, requested_by, status, request_type, request_data) VALUES ($1, $2, $3, 'pending', 'create', $4)",
+        approval_id, payload.team_id, user["user_id"], json.dumps(payload.model_dump())
+    )
+    return {"approval_id": approval_id, "status": "pending", "message": "Task submitted for approval"}
+
+
+@api_router.get("/approvals/pending")
+async def list_pending_approvals(pool=Depends(get_db), user=Depends(require_user)):
+    """List pending approvals for owner/admin"""
+    rows = await pool.fetch(
+        """SELECT a.*, u.email as requested_by_email, u.name as requested_by_name
+           FROM approvals a 
+           JOIN users u ON u.user_id = a.requested_by
+           WHERE a.status = 'pending'
+           AND EXISTS (
+             SELECT 1 FROM project_assignments 
+             WHERE team_id = a.team_id AND user_id = $1 AND role IN ('owner', 'admin')
+           )
+           ORDER BY a.created_at DESC""",
+        user["user_id"]
+    )
+    return [dict(r) for r in rows]
+
+
+@api_router.post("/approvals/{approval_id}/review")
+async def review_approval(approval_id: str, body: dict, pool=Depends(get_db), user=Depends(require_user)):
+    """Approve/reject client task"""
+    status = body.get("status")
+    notes = body.get("notes", "")
+    
+    if status not in ("approved", "rejected"):
+        raise HTTPException(status_code=400, detail="status must be 'approved' or 'rejected'")
+    
+    approval = await pool.fetchrow("SELECT * FROM approvals WHERE approval_id=$1", approval_id)
+    if not approval:
+        raise HTTPException(status_code=404)
+    
+    mem = await pool.fetchrow(
+        "SELECT role FROM project_assignments WHERE team_id=$1 AND user_id=$2",
+        approval["team_id"], user["user_id"]
+    )
+    if not mem or mem["role"] not in ("owner", "admin"):
+        raise HTTPException(status_code=403)
+    
+    await pool.execute(
+        "UPDATE approvals SET status=$1, reviewed_by=$2, reviewed_at=NOW(), review_notes=$3 WHERE approval_id=$4",
+        status, user["user_id"], notes, approval_id
+    )
+    
+    if status == "approved" and approval["request_type"] == "create":
+        data = json.loads(approval["request_data"])
+        task_id = f"task_{uuid.uuid4().hex[:12]}"
+        col = await pool.fetchval(
+            "SELECT column_id FROM project_columns WHERE team_id=$1 ORDER BY sort_order LIMIT 1",
+            approval["team_id"]
+        )
+        await pool.execute(
+            """INSERT INTO tasks (task_id, team_id, column_id, created_by_user_id, title, description, status, priority, approval_id)
+               VALUES ($1, $2, $3, $4, $5, $6, 'todo', $7, $8)""",
+            task_id, approval["team_id"], col, approval["requested_by"],
+            data["title"], data.get("description"), data.get("priority", "medium"), approval_id
+        )
+    
+    return {"ok": True, "status": status}
 
 
 # ── Comments ──────────────────────────────────────────────────────────────────
