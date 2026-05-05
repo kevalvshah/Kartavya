@@ -28,7 +28,7 @@
   transform: translateY(-2px);
 }
 
-/* Stat cards with gradients */
+/* Stat cards */
 .stat-card {
   position: relative;
   overflow: hidden;
@@ -39,7 +39,7 @@
 }
 
 .stat-card::before {
-  content: '';
+  display: block;
   position: absolute;
   top: 0;
   left: 0;
@@ -68,15 +68,6 @@
   line-height: 1;
 }
 
-.stat-card__trend {
-  margin-top: 12px;
-  font-size: 13px;
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
 /* Modern buttons */
 .btn-modern {
   position: relative;
@@ -89,24 +80,6 @@
   transition: all 0.2s ease;
   border: none;
   cursor: pointer;
-}
-
-.btn-modern::before {
-  content: '';
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 0;
-  height: 0;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.3);
-  transform: translate(-50%, -50%);
-  transition: width 0.6s, height 0.6s;
-}
-
-.btn-modern:hover::before {
-  width: 300px;
-  height: 300px;
 }
 
 /* Input fields */
@@ -139,40 +112,6 @@
   letter-spacing: 1px;
 }
 
-/* Timeline component */
-.timeline {
-  position: relative;
-  padding-left: 32px;
-}
-
-.timeline::before {
-  content: '';
-  position: absolute;
-  left: 8px;
-  top: 8px;
-  bottom: 8px;
-  width: 2px;
-  background: linear-gradient(180deg, #0082c6, #05b7aa);
-}
-
-.timeline-item {
-  position: relative;
-  padding-bottom: 24px;
-}
-
-.timeline-item::before {
-  content: '';
-  position: absolute;
-  left: -28px;
-  top: 4px;
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: #0082c6;
-  border: 3px solid var(--card-bg);
-  box-shadow: 0 0 0 2px #0082c6;
-}
-
 /* Progress bars */
 .progress-bar {
   width: 100%;
@@ -192,27 +131,6 @@
   overflow: hidden;
 }
 
-.progress-bar__fill::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    rgba(255, 255, 255, 0.3),
-    transparent
-  );
-  animation: shimmer 2s infinite;
-}
-
-@keyframes shimmer {
-  0% { transform: translateX(-100%); }
-  100% { transform: translateX(100%); }
-}
-
 /* Avatar component */
 .avatar {
   width: 40px;
@@ -226,18 +144,6 @@
   background: linear-gradient(135deg, #0082c6, #05b7aa);
   color: white;
   position: relative;
-}
-
-.avatar--online::after {
-  content: '';
-  position: absolute;
-  bottom: 0;
-  right: 0;
-  width: 12px;
-  height: 12px;
-  background: #10b981;
-  border: 2px solid var(--card-bg);
-  border-radius: 50%;
 }
 
 /* Empty states */
