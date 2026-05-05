@@ -15,6 +15,7 @@ import "./styles/dark-theme.css";
 import "./styles/animations.css";
 import "./styles/mobile-responsive.css";
 import { cn } from "./lib/utils";
+import { api } from "./lib/api";
 import { Button } from "./components/ui/button";
 import { Input } from "./components/ui/input";
 import { Select } from "./components/ui/select";
