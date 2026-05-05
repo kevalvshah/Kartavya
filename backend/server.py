@@ -279,6 +279,13 @@ class TaskOut(BaseModel):
     created_at: datetime
     updated_at: datetime
     completed_at: Optional[datetime] = None
+    # Approval workflow fields
+    approval_status: Optional[str] = None  # 'pending', 'approved', 'rejected', 'pending_client'
+    approval_notes: Optional[str] = None
+    approved_by: Optional[str] = None
+    approval_requested_at: Optional[datetime] = None
+    approval_decided_at: Optional[datetime] = None
+    requires_approval: bool = False
 
 class TaskMoveIn(BaseModel):
     column_id: str
@@ -328,6 +335,14 @@ def row_to_task(r) -> TaskOut:
     def parse_json(v, default):
         if isinstance(v, str): return json.loads(v)
         return v if v is not None else default
+    def col(key, default=None):
+        # Works for asyncpg Record (supports `key in record`) and dict
+        try:
+            if key in r:
+                return r[key]
+        except (KeyError, TypeError):
+            pass
+        return default
     return TaskOut(
         task_id=r["task_id"], user_id=r["user_id"], team_id=r["team_id"],
         column_id=r.get("column_id"),
@@ -344,6 +359,12 @@ def row_to_task(r) -> TaskOut:
         subtasks=[Subtask(**s) for s in parse_json(r["subtasks"], [])],
         order=r["sort_order"] or 0, created_at=r["created_at"], updated_at=r["updated_at"],
         completed_at=r["completed_at"],
+        approval_status=col("approval_status"),
+        approval_notes=col("approval_notes"),
+        approved_by=col("approved_by"),
+        approval_requested_at=col("approval_requested_at"),
+        approval_decided_at=col("approval_decided_at"),
+        requires_approval=bool(col("requires_approval", False)),
     )
 
 
@@ -593,6 +614,27 @@ async def add_comment(task_id: str, body: CommentCreate, pool=Depends(get_db), u
         "INSERT INTO task_comments (comment_id,task_id,user_id,body) VALUES ($1,$2,$3,$4) RETURNING *",
         comment_id, task_id, user["user_id"], body.body,
     )
+    # Notify everyone involved in the task except the commenter
+    try:
+        task = await pool.fetchrow("SELECT title, team_id, created_by_user_id, assignee_user_ids FROM tasks WHERE task_id=$1", task_id)
+        if task:
+            recipients = set()
+            if task["created_by_user_id"] and task["created_by_user_id"] != user["user_id"]:
+                recipients.add(task["created_by_user_id"])
+            for uid in (task["assignee_user_ids"] or []):
+                if uid != user["user_id"]:
+                    recipients.add(uid)
+            # also notify project clients
+            client_rows = await pool.fetch("SELECT user_id FROM task_clients WHERE task_id=$1", task_id)
+            for cr in client_rows:
+                if cr["user_id"] != user["user_id"]:
+                    recipients.add(cr["user_id"])
+            preview = body.body[:140] + ("…" if len(body.body) > 140 else "")
+            for rid in recipients:
+                await create_notification(pool, rid, "comment", f"New comment on {task['title']}",
+                                          f"{user['name']}: {preview}", task_id, task["team_id"], "/tasks")
+    except Exception as e:
+        logger.warning(f"Failed to fan-out comment notifications: {e}")
     return CommentOut(comment_id=row["comment_id"], task_id=row["task_id"], user_id=row["user_id"],
                       user_name=user["name"], body=row["body"], created_at=row["created_at"])
 
@@ -795,9 +837,24 @@ async def create_task(payload: TaskCreate, pool=Depends(get_db), user=Depends(re
         json.dumps([s.model_dump() for s in payload.subtasks or []]),
         next_order
     )
+    # Notify assignees (in-app + email)
+    team_name = None
+    if payload.team_id:
+        team_row = await pool.fetchrow("SELECT name FROM teams WHERE team_id=$1", payload.team_id)
+        team_name = team_row["name"] if team_row else None
     for uid in set(payload.assignee_user_ids or []):
+        if uid == user["user_id"]:
+            continue  # don't notify the creator about their own assignment
         await create_notification(pool, uid, "assigned", "Task assigned",
                                   f"You were assigned: {payload.title}", task_id, payload.team_id, "/tasks")
+        try:
+            from email_service import send_task_assignment_email
+            assignee = await pool.fetchrow("SELECT email, name FROM users WHERE user_id=$1", uid)
+            if assignee:
+                send_task_assignment_email(assignee["email"], assignee["name"] or assignee["email"],
+                                            payload.title, task_id, team_name)
+        except Exception as e:
+            logger.warning(f"Failed to send assignment email to {uid}: {e}")
     return row_to_task(row)
 
 

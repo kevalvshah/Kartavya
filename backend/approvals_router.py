@@ -246,18 +246,28 @@ async def get_pending_approvals(pool=Depends(get_pool), user=Depends(require_use
     return [dict(task) for task in tasks]
 
 
+class ClientApprovalRequest(BaseModel):
+    client_email: str
+    notes: Optional[str] = None
+
 @router.post("/tasks/{task_id}/request-client-approval")
-async def request_client_approval(task_id: str, client_email: str, payload: ApprovalRequest,
+async def request_client_approval(task_id: str, payload: ClientApprovalRequest,
                                   pool=Depends(get_pool), user=Depends(require_user)):
     """Request approval from client (owner/member only)"""
     
     task = await get_task_with_permission(pool, task_id, user['user_id'])
     
     # Get client user_id from email
-    client = await pool.fetchrow("SELECT user_id, name FROM users WHERE email = $1", client_email.lower())
+    client = await pool.fetchrow("SELECT user_id, name, email FROM users WHERE email = $1", payload.client_email.lower())
     
     if not client:
         raise HTTPException(status_code=404, detail="Client not found")
+    
+    # Ensure the client is linked to this task so they can view/comment
+    await pool.execute(
+        "INSERT INTO task_clients (id, task_id, user_id, invited_by) VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING",
+        f"tc_{uuid.uuid4().hex[:12]}", task_id, client['user_id'], user['user_id']
+    )
     
     # Update task
     await pool.execute("""
@@ -273,3 +283,93 @@ async def request_client_approval(task_id: str, client_email: str, payload: Appr
     await send_approval_notification(pool, task_id, task['title'], client['user_id'], 'request', payload.notes)
     
     return {"message": "Client approval requested", "approval_status": "pending_client"}
+
+
+@router.post("/tasks/{task_id}/client-approve")
+async def client_approve_task(task_id: str, payload: ApprovalRequest,
+                              pool=Depends(get_pool), user=Depends(require_user)):
+    """Client approves completed work — moves task to done."""
+    task = await get_task_with_permission(pool, task_id, user['user_id'])
+    
+    # Verify the user is a client linked to this task
+    access = await pool.fetchrow(
+        "SELECT 1 FROM task_clients WHERE task_id=$1 AND user_id=$2", task_id, user['user_id']
+    )
+    if not access and user.get('role') != 'admin':
+        raise HTTPException(status_code=403, detail="Only the assigned client can approve this task")
+    
+    if task.get('approval_status') != 'pending_client':
+        raise HTTPException(status_code=400, detail="Task is not awaiting client approval")
+    
+    # Move to "done" column if one exists
+    done_col = await pool.fetchrow(
+        "SELECT column_id FROM project_columns WHERE team_id=$1 AND is_done=TRUE ORDER BY sort_order DESC LIMIT 1",
+        task['team_id']
+    )
+    new_column_id = done_col['column_id'] if done_col else task['column_id']
+    
+    await pool.execute("""
+        UPDATE tasks
+        SET approval_status='approved',
+            approved_by=$1,
+            approval_notes=$2,
+            approval_decided_at=NOW(),
+            column_id=$3,
+            status='done',
+            completed_at=NOW(),
+            completed_by_user_id=$1,
+            updated_at=NOW()
+        WHERE task_id=$4
+    """, user['user_id'], payload.notes, new_column_id, task_id)
+    
+    # Notify task creator and assignees
+    if task.get('created_by_user_id'):
+        await send_approval_notification(pool, task_id, task['title'], task['created_by_user_id'], 'approved', payload.notes)
+    for uid in (task.get('assignee_user_ids') or []):
+        if uid != task.get('created_by_user_id'):
+            await send_approval_notification(pool, task_id, task['title'], uid, 'approved', payload.notes)
+    
+    return {"message": "Task approved by client", "approval_status": "approved", "new_column_id": new_column_id}
+
+
+@router.post("/tasks/{task_id}/client-reject")
+async def client_reject_task(task_id: str, payload: ApprovalRequest,
+                             pool=Depends(get_pool), user=Depends(require_user)):
+    """Client rejects completed work — sends task back to team for revision."""
+    task = await get_task_with_permission(pool, task_id, user['user_id'])
+    
+    access = await pool.fetchrow(
+        "SELECT 1 FROM task_clients WHERE task_id=$1 AND user_id=$2", task_id, user['user_id']
+    )
+    if not access and user.get('role') != 'admin':
+        raise HTTPException(status_code=403, detail="Only the assigned client can reject this task")
+    
+    if not payload.notes:
+        raise HTTPException(status_code=400, detail="Rejection reason is required")
+    
+    # Move task back to first non-done column
+    revision_col = await pool.fetchrow(
+        "SELECT column_id FROM project_columns WHERE team_id=$1 AND is_done=FALSE ORDER BY sort_order ASC LIMIT 1",
+        task['team_id']
+    )
+    new_column_id = revision_col['column_id'] if revision_col else task['column_id']
+    
+    await pool.execute("""
+        UPDATE tasks
+        SET approval_status='rejected',
+            approved_by=$1,
+            approval_notes=$2,
+            approval_decided_at=NOW(),
+            column_id=$3,
+            status='in_progress',
+            updated_at=NOW()
+        WHERE task_id=$4
+    """, user['user_id'], payload.notes, new_column_id, task_id)
+    
+    if task.get('created_by_user_id'):
+        await send_approval_notification(pool, task_id, task['title'], task['created_by_user_id'], 'rejected', payload.notes)
+    for uid in (task.get('assignee_user_ids') or []):
+        if uid != task.get('created_by_user_id'):
+            await send_approval_notification(pool, task_id, task['title'], uid, 'rejected', payload.notes)
+    
+    return {"message": "Task rejected by client", "approval_status": "rejected", "new_column_id": new_column_id}
