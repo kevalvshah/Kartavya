@@ -1392,6 +1392,19 @@ function TasksListPage() {
 }
 
 // ── Task editor modal ─────────────────────────────────────────────────────────
+
+// Hoisted out of TaskEditor on purpose. Defining F inside the render function
+// gives it a different identity on every keystroke, which React reads as "new
+// component type" and remounts every field — destroying focus mid-typing.
+function F({ label, children }) {
+  return (
+    <div>
+      <div className="mb-1 text-xs font-bold text-muted-foreground uppercase tracking-wide">{label}</div>
+      {children}
+    </div>
+  );
+}
+
 function TaskEditor({ open, onOpenChange, editing, categories, teams, defaultTeamId, defaultColumnId, columns, onSaved, isClientMode = false }) {
   const { pushToast } = useToast();
   const [teamMembers, setTeamMembers] = useState([]);
@@ -1616,13 +1629,6 @@ function TaskEditor({ open, onOpenChange, editing, categories, teams, defaultTea
     }
   };
 
-  const F = ({ label, children }) => (
-    <div>
-      <div className="mb-1 text-xs font-bold text-muted-foreground uppercase tracking-wide">{label}</div>
-      {children}
-    </div>
-  );
-
   const colOptions = columns ? [{ value: "", label: "— No column —" }, ...columns.map((c) => ({ value: c.column_id, label: c.name }))] : [];
 
   return (
@@ -1634,7 +1640,12 @@ function TaskEditor({ open, onOpenChange, editing, categories, teams, defaultTea
         <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
           <F label="Project">
             <Select value={form.team_id} onChange={(v) => setForm((p) => ({ ...p, team_id: v, column_id: "", assign_scope: "none", assignee_user_ids: [] }))}
-              options={[{ value: "", label: "Personal" }, ...teams.map((t) => ({ value: t.team_id, label: t.name }))]} />
+              options={[
+                { value: "", label: "Personal" },
+                ...(teams || [])
+                  .filter((t) => t && t.team_id && (t.name || "").trim())
+                  .map((t) => ({ value: t.team_id, label: t.name })),
+              ]} />
           </F>
           {columns && columns.length > 0 && (
             <F label="Column">
