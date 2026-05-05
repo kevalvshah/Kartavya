@@ -1,5 +1,6 @@
 """
 activity.py — Activity feed read endpoints
+BUG FIX: removed spaces inside f-string braces for LIMIT/OFFSET params
 """
 from fastapi import APIRouter, Depends, Query
 from typing import Optional
@@ -21,9 +22,11 @@ async def team_activity(
     user=Depends(require_user),
 ):
     filters, vals = ["team_id=$1"], [team_id]
-    if actor_id:    filters.append(f"actor_id=${len(vals)+1}");    vals.append(actor_id)
-    if event_type:  filters.append(f"type=${len(vals)+1}");        vals.append(event_type)
+    if actor_id:   filters.append(f"actor_id=${len(vals)+1}"); vals.append(actor_id)
+    if event_type: filters.append(f"type=${len(vals)+1}");     vals.append(event_type)
     where = " AND ".join(filters)
+    limit_idx  = len(vals) + 1
+    offset_idx = len(vals) + 2
     rows = await pool.fetch(f"""
         SELECT ae.*,
                COALESCE(u.full_name, u.name, u.email) AS actor_name,
@@ -33,7 +36,7 @@ async def team_activity(
         LEFT JOIN tasks t ON t.task_id = ae.task_id
         WHERE {where}
         ORDER BY ae.created_at DESC
-        LIMIT ${ len(vals)+1 } OFFSET ${ len(vals)+2 }
+        LIMIT ${limit_idx} OFFSET ${offset_idx}
     """, *vals, limit, offset)
     return [dict(r) for r in rows]
 
