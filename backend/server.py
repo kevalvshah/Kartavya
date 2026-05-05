@@ -702,6 +702,67 @@ async def create_team(payload: TeamCreate, pool=Depends(get_db), user=Depends(re
     await ensure_default_columns(pool, team_id)
     return TeamOut(**dict(row))
 
+
+@api_router.delete("/teams/{team_id}")
+async def delete_team(team_id: str, pool=Depends(get_db), user=Depends(require_user)):
+    """Delete a project. Allowed for the project's owner/admin or a system admin.
+    Cascades through every related table explicitly so we don't depend on the
+    schema's FK rules being uniformly ON DELETE CASCADE."""
+    # Permission check: system admin can delete anything; otherwise must be project owner/admin
+    if user.get("role") != "admin":
+        mem = await pool.fetchrow(
+            "SELECT role FROM project_assignments WHERE team_id=$1 AND user_id=$2",
+            team_id, user["user_id"],
+        )
+        if not mem or mem["role"] not in ("owner", "admin"):
+            raise HTTPException(status_code=403, detail="Only the project owner can delete it")
+
+    team = await pool.fetchrow("SELECT team_id, name FROM teams WHERE team_id=$1", team_id)
+    if not team:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    # Wipe in dependency order. Use a transaction so partial failure doesn't leave orphans.
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            # Children of tasks first
+            await conn.execute(
+                "DELETE FROM task_comments WHERE task_id IN (SELECT task_id FROM tasks WHERE team_id=$1)",
+                team_id,
+            )
+            await conn.execute(
+                "DELETE FROM task_clients WHERE task_id IN (SELECT task_id FROM tasks WHERE team_id=$1)",
+                team_id,
+            )
+            # Approval records (defensive — table may or may not exist depending on migrations)
+            try:
+                await conn.execute(
+                    "DELETE FROM approvals WHERE task_id IN (SELECT task_id FROM tasks WHERE team_id=$1) OR team_id=$1",
+                    team_id,
+                )
+            except Exception:
+                pass
+            # Notifications attached to tasks in this team or to the team itself
+            try:
+                await conn.execute(
+                    "DELETE FROM notifications WHERE team_id=$1 OR task_id IN (SELECT task_id FROM tasks WHERE team_id=$1)",
+                    team_id,
+                )
+            except Exception:
+                pass
+            # Tasks themselves
+            await conn.execute("DELETE FROM tasks WHERE team_id=$1", team_id)
+            # Project structure
+            await conn.execute("DELETE FROM project_columns WHERE team_id=$1", team_id)
+            # Membership / assignments
+            await conn.execute("DELETE FROM team_members WHERE team_id=$1", team_id)
+            await conn.execute("DELETE FROM project_assignments WHERE team_id=$1", team_id)
+            # Finally the team row
+            await conn.execute("DELETE FROM teams WHERE team_id=$1", team_id)
+
+    logger.info(f"Project deleted: {team['name']} ({team_id}) by {user['user_id']}")
+    return {"ok": True, "deleted_team_id": team_id}
+
+
 @api_router.get("/teams/{team_id}")
 async def get_team(team_id: str, pool=Depends(get_db), user=Depends(require_user)):
     mem = await pool.fetchrow(

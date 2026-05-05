@@ -21,7 +21,7 @@ FRONTEND_URL = os.environ.get("FRONTEND_URL", "https://kartavya-aekam.vercel.app
 
 class InviteCreate(BaseModel):
     email: EmailStr
-    role: str = "member"  # "member" or "client"
+    role: str = "member"  # "admin", "member", or "client"
     name: Optional[str] = None  # optional display hint
 
 
@@ -51,8 +51,8 @@ async def list_users(pool=Depends(get_pool), admin=Depends(require_admin)):
 
 @router.post("/invites", response_model=InviteOut)
 async def create_invite(body: InviteCreate, pool=Depends(get_pool), admin=Depends(require_admin)):
-    if body.role not in ("member", "client"):
-        raise HTTPException(status_code=400, detail="Role must be 'member' or 'client'")
+    if body.role not in ("admin", "member", "client"):
+        raise HTTPException(status_code=400, detail="Role must be 'admin', 'member', or 'client'")
 
     # Check not already a user
     existing = await pool.fetchrow("SELECT 1 FROM users WHERE email=$1", body.email.lower())

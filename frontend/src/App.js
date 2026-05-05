@@ -704,8 +704,17 @@ function ProjectsPage() {
 
   const remove = async (p) => {
     if (!window.confirm(`Delete project "${p.name}"? All tasks in it will be deleted.`)) return;
-    try { await api.delete(`/teams/${p.team_id}`); pushToast({ type: "success", title: "Project deleted" }); load(); }
-    catch (_) { pushToast({ type: "error", title: "Could not delete" }); }
+    try {
+      await api.delete(`/teams/${p.team_id}`);
+      pushToast({ type: "success", title: "Project deleted" });
+      load();
+    } catch (e) {
+      pushToast({
+        type: "error",
+        title: "Could not delete",
+        message: e?.response?.data?.detail || e?.message || "Try again",
+      });
+    }
   };
 
   return (
@@ -1990,10 +1999,14 @@ function AdminPage() {
             onKeyDown={(e) => e.key === "Enter" && sendInvite()}
             placeholder="client@company.com" type="email" />
           <Select value={inviteRole} onChange={setInviteRole}
-            options={[{ value: "member", label: "Member" }, { value: "client", label: "Client" }]} />
+            options={[
+              { value: "admin", label: "Admin" },
+              { value: "member", label: "Member" },
+              { value: "client", label: "Client" },
+            ]} />
           <Button onClick={sendInvite} disabled={sending}>{sending ? "Sending…" : "Send Invite"}</Button>
         </div>
-        <p className="mt-2 text-xs text-muted-foreground">Members get full workspace access. Clients see only tasks you share with them.</p>
+        <p className="mt-2 text-xs text-muted-foreground">Admins manage users and settings. Members get full workspace access. Clients see only tasks shared with them.</p>
       </div>
 
       {invites.filter((i) => !i.accepted_at).length > 0 && (
