@@ -36,7 +36,7 @@
     "scheme": "kartavya",
     "extra": {
       "eas": {
-        "projectId": "your-project-id-will-be-set-by-eas-init"
+        "projectId": "196c2be9-caab-49a6-a359-a2adbfc6d821"
       },
       "apiUrl": "https://kartavya-production.up.railway.app"
     },
