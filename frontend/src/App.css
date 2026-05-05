@@ -4,6 +4,9 @@
    Dark:  glowing blue borders + deep navy backgrounds
 */
 
+/* Import Google Fonts */
+@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800&display=swap');
+
 :root {
   --bg:     248 250 255;   /* cool white with blue tint */
   --fg:     12  18  32;
