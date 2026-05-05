@@ -35,7 +35,11 @@
     },
     "scheme": "kartavya",
     "extra": {
+      "eas": {
+        "projectId": "your-project-id-will-be-set-by-eas-init"
+      },
       "apiUrl": "https://kartavya-production.up.railway.app"
-    }
+    },
+    "owner": "aekaminc"
   }
 }
