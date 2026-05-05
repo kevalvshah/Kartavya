@@ -48,3 +48,18 @@ code {
         border-bottom-color: inherit;
     }
 }
+
+/* ── Typography refinement ────────────────────────────────────────────────────
+   The original styling leaned on font-weight 800/900 everywhere, which made the
+   UI feel shouty and dated. Default to 400 for body text, 500 for emphasis. */
+body, .font-bold, .font-semibold {
+  font-weight: 400;
+}
+h1, h2, h3, h4, h5, h6,
+.text-foreground, .page-title {
+  font-weight: 500;
+}
+/* Tailwind utility overrides — keep weights moderate */
+.font-bold     { font-weight: 500 !important; }
+.font-semibold { font-weight: 500 !important; }
+.font-extrabold, .font-black { font-weight: 600 !important; }

@@ -30,7 +30,7 @@ import {
   Plus, Settings, Sun, Moon, Users, ShieldCheck, Trash2,
   Copy, Check, Mail, ChevronRight, GripVertical,
   Pencil, Calendar, BarChart3, AlignLeft, Kanban,
-  X, CheckCircle2,
+  X, CheckCircle2, Menu,
 } from "lucide-react";
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 
@@ -104,6 +104,17 @@ function toLocal(v) {
   return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 function fromLocal(v) { return v ? new Date(v).toISOString() : null; }
+
+// Visual style for approval status badge on task cards
+function approvalBadgeStyle(status) {
+  switch (status) {
+    case "pending":         return { label: "Pending owner", bg: "rgba(245,158,11,0.15)", color: "#f59e0b" };
+    case "pending_client":  return { label: "Pending client", bg: "rgba(139,92,246,0.15)", color: "#8b5cf6" };
+    case "approved":        return { label: "Approved", bg: "rgba(16,185,129,0.15)", color: "#10b981" };
+    case "rejected":        return { label: "Rejected", bg: "rgba(239,68,68,0.15)", color: "#ef4444" };
+    default: return null;
+  }
+}
 
 // ── Auth helpers ──────────────────────────────────────────────────────────────
 async function apiLogin(email, password) {
@@ -339,6 +350,8 @@ function Protected({ children, requiredRole }) {
 function AppShell() {
   const [notifOpen, setNotifOpen] = useState(false);
   const [unread, setUnread] = useState(0);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const location = useLocation();
 
   useEffect(() => {
     let live = true;
@@ -354,14 +367,52 @@ function AppShell() {
     return () => { live = false; clearInterval(id); };
   }, []);
 
+  // Close mobile sidebar on route change
+  useEffect(() => { setSidebarOpen(false); }, [location.pathname]);
+
   return (
     <div data-testid="app-shell" className="min-h-screen bg-app text-foreground" style={{ fontFamily: "'Nunito',sans-serif" }}>
-      <div className="mx-auto max-w-7xl px-6 py-6">
+      <div className="mx-auto max-w-7xl px-4 lg:px-6 py-4 lg:py-6">
         <div className="grid gap-6 lg:grid-cols-[260px_1fr]">
-          <Sidebar />
+          {/* Desktop sidebar */}
+          <div className="hidden lg:block"><Sidebar /></div>
+
+          {/* Mobile sidebar overlay */}
+          {sidebarOpen && (
+            <div className="fixed inset-0 z-50 lg:hidden" onClick={() => setSidebarOpen(false)}>
+              <div className="absolute inset-0 bg-black/50" />
+              <div className="absolute left-0 top-0 bottom-0 w-72 max-w-[85vw] bg-card shadow-xl"
+                onClick={(e) => e.stopPropagation()}>
+                <Sidebar />
+              </div>
+            </div>
+          )}
+
           <main className="min-w-0">
-            <Topbar unread={unread} onOpenNotifications={() => setNotifOpen(true)} />
-            <div className="mt-6"><Outlet /></div>
+            {/* Mobile-only hamburger row */}
+            <div className="lg:hidden flex items-center justify-between mb-3">
+              <button onClick={() => setSidebarOpen(true)}
+                className="p-2 rounded-xl border border-border/60 bg-card/50"
+                aria-label="Open menu">
+                <Menu size={18} />
+              </button>
+              <KWordmark size="sm" />
+              <button onClick={() => setNotifOpen(true)}
+                className="p-2 rounded-xl border border-border/60 bg-card/50 relative"
+                aria-label="Notifications">
+                <Bell size={18} />
+                {unread > 0 && (
+                  <span className="absolute -top-1 -right-1 h-4 min-w-[16px] px-1 rounded-full text-[10px] flex items-center justify-center"
+                    style={{ background: "#ef4444", color: "#fff", fontWeight: 500 }}>
+                    {unread > 9 ? "9+" : unread}
+                  </span>
+                )}
+              </button>
+            </div>
+            <div className="hidden lg:block">
+              <Topbar unread={unread} onOpenNotifications={() => setNotifOpen(true)} />
+            </div>
+            <div className="mt-4 lg:mt-6"><Outlet /></div>
           </main>
         </div>
       </div>
@@ -377,16 +428,25 @@ function Sidebar() {
   const { theme, setTheme } = useTheme();
   const user = currentUser();
   const isAdmin = user?.role === "admin";
+  const isClient = user?.role === "client";
 
-  const nav = [
-    { to: "/dashboard",              label: "Dashboard",     Icon: LayoutGrid },
-    { to: "/projects",               label: "Projects",      Icon: FolderKanban },
-    { to: "/tasks",                  label: "All Tasks",     Icon: ListTodo },
-    { to: "/teams",                  label: "Teams",         Icon: Users },
-    { to: "/settings/categories",    label: "Categories",    Icon: Settings },
-    { to: "/settings/notifications", label: "Notifications", Icon: Bell },
-    ...(isAdmin ? [{ to: "/admin",   label: "Admin",         Icon: ShieldCheck }] : []),
-  ];
+  // Clients get a stripped-down sidebar focused on their projects.
+  // Owners/members get the full app + an Approvals entry for triage.
+  const nav = isClient
+    ? [
+        { to: "/client/projects",        label: "My Projects",   Icon: FolderKanban },
+        { to: "/settings/notifications", label: "Notifications", Icon: Bell },
+      ]
+    : [
+        { to: "/dashboard",              label: "Dashboard",     Icon: LayoutGrid },
+        { to: "/projects",               label: "Projects",      Icon: FolderKanban },
+        { to: "/tasks",                  label: "All Tasks",     Icon: ListTodo },
+        { to: "/approvals",              label: "Approvals",     Icon: CheckCircle2 },
+        { to: "/teams",                  label: "Teams",         Icon: Users },
+        { to: "/settings/categories",    label: "Categories",    Icon: Settings },
+        { to: "/settings/notifications", label: "Notifications", Icon: Bell },
+        ...(isAdmin ? [{ to: "/admin",   label: "Admin",         Icon: ShieldCheck }] : []),
+      ];
 
   return (
     <aside className="rounded-3xl border border-border/70 bg-card/50 shadow-sm lg:sticky lg:top-6 lg:h-[calc(100vh-48px)] flex flex-col">
@@ -490,8 +550,12 @@ function AppRouter() {
         <Route path="settings/categories" element={<CategoriesPage />} />
         <Route path="settings/notifications" element={<NotificationsSettingsPage />} />
         <Route path="admin" element={<AdminPage />} />
+        <Route path="approvals" element={<PendingApprovalsPage />} />
+        <Route path="client" element={<ClientProjectsPage />} />
+        <Route path="client/projects" element={<ClientProjectsPage />} />
+        <Route path="client/project/:projectId" element={<ClientProjectBoardPage />} />
       </Route>
-      <Route path="/client" element={<Protected><ClientPortal /></Protected>} />
+      <Route path="/client/legacy" element={<Protected><ClientPortal /></Protected>} />
       <Route path="*" element={<Navigate to="/dashboard" replace />} />
     </Routes>
   );
@@ -937,6 +1001,22 @@ function ProjectBoardPage() {
                             </div>
                             <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md shrink-0" style={priorityStyle(t.priority)}>{t.priority}</span>
                           </div>
+                          {/* Approval status + attachment count */}
+                          {(t.approval_status || (t.attachments || []).length > 0) && (
+                            <div className="mt-2 flex items-center gap-1.5 flex-wrap">
+                              {t.approval_status && approvalBadgeStyle(t.approval_status) && (
+                                <span className="text-[10px] px-1.5 py-0.5 rounded-md"
+                                  style={{ background: approvalBadgeStyle(t.approval_status).bg, color: approvalBadgeStyle(t.approval_status).color, fontWeight: 500 }}>
+                                  {approvalBadgeStyle(t.approval_status).label}
+                                </span>
+                              )}
+                              {(t.attachments || []).length > 0 && (
+                                <span className="text-[10px] text-muted-foreground" style={{ fontWeight: 400 }}>
+                                  📎 {t.attachments.length}
+                                </span>
+                              )}
+                            </div>
+                          )}
                           {t.category_id && <div className="mt-2 text-xs text-muted-foreground">{catName(t.category_id)}</div>}
                           {t.due_at && (
                             <div className="mt-2 flex items-center gap-1 text-xs font-medium"
@@ -1275,11 +1355,35 @@ function TasksListPage() {
 }
 
 // ── Task editor modal ─────────────────────────────────────────────────────────
-function TaskEditor({ open, onOpenChange, editing, categories, teams, defaultTeamId, defaultColumnId, columns, onSaved }) {
+function TaskEditor({ open, onOpenChange, editing, categories, teams, defaultTeamId, defaultColumnId, columns, onSaved, isClientMode = false }) {
   const { pushToast } = useToast();
   const [teamMembers, setTeamMembers] = useState([]);
   const [yourRole, setYourRole] = useState("member");
   const [loadingMembers, setLoadingMembers] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef(null);
+  // Comments
+  const [comments, setComments] = useState([]);
+  const [newComment, setNewComment] = useState("");
+  const [postingComment, setPostingComment] = useState(false);
+  // Approval action UI
+  const [approvalAction, setApprovalAction] = useState(null); // 'owner' | 'client' | 'approve' | 'reject' | 'client-approve' | 'client-reject'
+  const [approvalNotes, setApprovalNotes] = useState("");
+  const [clientEmail, setClientEmail] = useState("");
+  const [submittingApproval, setSubmittingApproval] = useState(false);
+  const currentUserMe = currentUser();
+  const isClientUser = currentUserMe?.role === "client";
+
+  // Reload editing task fresh (for current approval_status) when opened
+  const [taskState, setTaskState] = useState(editing);
+  useEffect(() => { setTaskState(editing); }, [editing]);
+  const refreshTask = async () => {
+    if (!taskState?.task_id) return;
+    try {
+      const r = await api.get(`/tasks/${taskState.task_id}`).catch(() => null);
+      if (r?.data) setTaskState(r.data);
+    } catch (_) {}
+  };
 
   const blank = useMemo(() => ({
     title: "", description: "", priority: "medium", category_id: "", tags: "",
@@ -1328,6 +1432,117 @@ function TaskEditor({ open, onOpenChange, editing, categories, teams, defaultTea
   const canAssign = !form.team_id || yourRole === "owner" || yourRole === "admin";
   const upd = (k, v) => setForm((p) => ({ ...p, [k]: v }));
 
+  // Load comments when editing an existing task
+  useEffect(() => {
+    if (!open || !taskState?.task_id) { setComments([]); return; }
+    let live = true;
+    api.get(`/tasks/${taskState.task_id}/comments`)
+      .then((r) => { if (live) setComments(r.data || []); })
+      .catch(() => { if (live) setComments([]); });
+    return () => { live = false; };
+  }, [open, taskState?.task_id]);
+
+  const postComment = async () => {
+    if (!newComment.trim() || !taskState?.task_id) return;
+    setPostingComment(true);
+    try {
+      const r = await api.post(`/tasks/${taskState.task_id}/comments`, { body: newComment.trim() });
+      setComments((p) => [...p, r.data]);
+      setNewComment("");
+    } catch (e) {
+      pushToast({ type: "error", title: "Could not post comment" });
+    } finally {
+      setPostingComment(false);
+    }
+  };
+
+  // Approval actions
+  const submitApprovalAction = async () => {
+    if (!taskState?.task_id) return;
+    setSubmittingApproval(true);
+    try {
+      if (approvalAction === "owner") {
+        await api.post(`/tasks/${taskState.task_id}/request-approval`, { notes: approvalNotes });
+        pushToast({ type: "success", title: "Sent for owner approval" });
+      } else if (approvalAction === "client") {
+        if (!clientEmail.trim()) {
+          pushToast({ type: "error", title: "Client email required" });
+          setSubmittingApproval(false); return;
+        }
+        await api.post(`/tasks/${taskState.task_id}/request-client-approval`,
+          { client_email: clientEmail.trim(), notes: approvalNotes });
+        pushToast({ type: "success", title: "Sent to client for approval" });
+      } else if (approvalAction === "approve") {
+        await api.post(`/tasks/${taskState.task_id}/approve`, { notes: approvalNotes });
+        pushToast({ type: "success", title: "Approved" });
+      } else if (approvalAction === "reject") {
+        if (!approvalNotes.trim()) {
+          pushToast({ type: "error", title: "Reason required" });
+          setSubmittingApproval(false); return;
+        }
+        await api.post(`/tasks/${taskState.task_id}/reject`, { notes: approvalNotes });
+        pushToast({ type: "success", title: "Rejected" });
+      } else if (approvalAction === "client-approve") {
+        await api.post(`/tasks/${taskState.task_id}/client-approve`, { notes: approvalNotes });
+        pushToast({ type: "success", title: "Approved — task complete" });
+      } else if (approvalAction === "client-reject") {
+        if (!approvalNotes.trim()) {
+          pushToast({ type: "error", title: "Reason required" });
+          setSubmittingApproval(false); return;
+        }
+        await api.post(`/tasks/${taskState.task_id}/client-reject`, { notes: approvalNotes });
+        pushToast({ type: "success", title: "Sent back for revision" });
+      }
+      setApprovalAction(null); setApprovalNotes(""); setClientEmail("");
+      await refreshTask();
+      onSaved?.(taskState);
+    } catch (e) {
+      pushToast({ type: "error", title: "Action failed", message: e?.response?.data?.detail || "Try again" });
+    } finally {
+      setSubmittingApproval(false);
+    }
+  };
+
+  const handleFileSelect = async (e) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+
+    const MAX_SIZE = 5 * 1024 * 1024; // 5MB
+    for (const file of files) {
+      if (file.size > MAX_SIZE) {
+        pushToast({ type: "error", title: `File "${file.name}" exceeds 5MB limit` });
+        return;
+      }
+    }
+
+    setUploading(true);
+    try {
+      const uploaded = [];
+      for (const file of files) {
+        const formData = new FormData();
+        formData.append('file', file);
+
+        const r = await api.post('/upload', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        });
+
+        uploaded.push({ name: file.name, url: r.data.url });
+      }
+
+      upd("attachments", [...(form.attachments || []), ...uploaded]);
+      pushToast({ type: "success", title: "Files uploaded" });
+    } catch (err) {
+      pushToast({ type: "error", title: "Upload failed", message: err?.response?.data?.detail || "Try again" });
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const removeAttachment = (index) => {
+    upd("attachments", (form.attachments || []).filter((_, i) => i !== index));
+  };
+
   const save = async () => {
     if (!form.title.trim()) { pushToast({ type: "error", title: "Missing title" }); return; }
     let customFields = {};
@@ -1349,9 +1564,19 @@ function TaskEditor({ open, onOpenChange, editing, categories, teams, defaultTea
       subtasks: (form.subtasks || []).filter((s) => s.title?.trim()).map((s, i) => ({ title: s.title.trim(), is_done: !!s.is_done, order: i })),
     };
     try {
-      const r = editing ? await api.put(`/tasks/${editing.task_id}`, payload) : await api.post("/tasks", payload);
-      pushToast({ type: "success", title: "Saved" }); onSaved(r.data);
-    } catch (e) { pushToast({ type: "error", title: "Could not save", message: e?.response?.data?.detail || "Try again." }); }
+      if (isClientMode && !editing) {
+        // Client creating new task - submit for approval
+        await api.post("/client/tasks/request", payload);
+        pushToast({ type: "success", title: "Task submitted for approval", message: "Project owner will review your request" });
+        onSaved?.();
+      } else {
+        const r = editing ? await api.put(`/tasks/${editing.task_id}`, payload) : await api.post("/tasks", payload);
+        pushToast({ type: "success", title: "Saved" }); 
+        onSaved(r.data);
+      }
+    } catch (e) { 
+      pushToast({ type: "error", title: "Could not save", message: e?.response?.data?.detail || "Try again." }); 
+    }
   };
 
   const F = ({ label, children }) => (
@@ -1412,6 +1637,55 @@ function TaskEditor({ open, onOpenChange, editing, categories, teams, defaultTea
             )}
           </F>
         )}
+        <F label="Attachments">
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            onChange={handleFileSelect}
+            style={{ display: 'none' }}
+            accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.jpg,.jpeg,.png,.gif,.zip"
+          />
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploading || (isClientMode && editing)}
+          >
+            {uploading ? "Uploading..." : "Add Files"}
+          </Button>
+          <p className="text-xs text-muted-foreground mt-1">
+            Max 5MB per file. PDF, docs, images, zip
+          </p>
+          {(form.attachments || []).length > 0 && (
+            <div className="mt-3 space-y-2">
+              {form.attachments.map((att, i) => (
+                <div key={i} className="flex items-center justify-between p-2 rounded-lg bg-muted/30">
+                  <div className="flex items-center gap-2 flex-1 min-w-0">
+                    <span className="text-sm">📎</span>
+                    <a href={att.url} target="_blank" rel="noopener noreferrer"
+                      className="text-sm truncate hover:underline">
+                      {att.name}
+                    </a>
+                  </div>
+                  {!isClientMode && (
+                    <button type="button" onClick={() => removeAttachment(i)}
+                      className="text-red-500 hover:text-red-700 p-1">
+                      <X size={14} />
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </F>
+        {isClientMode && !editing && (
+          <div className="rounded-lg p-3" style={{ background: "#fef3c7", border: "1px solid #fbbf24" }}>
+            <p className="text-sm" style={{ color: "#92400e" }}>
+              ℹ️ This task will be submitted for approval by the project owner
+            </p>
+          </div>
+        )}
         <F label="Subtasks">
           <div className="space-y-2">
             {(form.subtasks || []).map((s, i) => (
@@ -1424,6 +1698,147 @@ function TaskEditor({ open, onOpenChange, editing, categories, teams, defaultTea
             <Button variant="ghost" onClick={() => setForm((p) => ({ ...p, subtasks: [...(p.subtasks || []), { title: "", is_done: false }] }))}>+ Add subtask</Button>
           </div>
         </F>
+
+        {/* ── Approval state banner (existing tasks only) ──────────────────── */}
+        {taskState?.task_id && taskState?.approval_status && (
+          <div style={{
+            padding: 12, borderRadius: 10, fontSize: 13, fontWeight: 400,
+            background:
+              taskState.approval_status === "approved" ? "rgba(16,185,129,0.10)" :
+              taskState.approval_status === "rejected" ? "rgba(239,68,68,0.10)" :
+              "rgba(245,158,11,0.10)",
+            color:
+              taskState.approval_status === "approved" ? "#10b981" :
+              taskState.approval_status === "rejected" ? "#ef4444" :
+              "#f59e0b",
+            border: "1px solid",
+            borderColor:
+              taskState.approval_status === "approved" ? "rgba(16,185,129,0.3)" :
+              taskState.approval_status === "rejected" ? "rgba(239,68,68,0.3)" :
+              "rgba(245,158,11,0.3)",
+          }}>
+            <div style={{ fontWeight: 500 }}>
+              {taskState.approval_status === "pending" && "Awaiting owner approval"}
+              {taskState.approval_status === "pending_client" && "Awaiting client approval"}
+              {taskState.approval_status === "approved" && "Approved"}
+              {taskState.approval_status === "rejected" && "Rejected — needs revision"}
+            </div>
+            {taskState.approval_notes && (
+              <div style={{ marginTop: 4, opacity: 0.85 }}>{taskState.approval_notes}</div>
+            )}
+          </div>
+        )}
+
+        {/* ── Approval action buttons (existing tasks only, not in client-create mode) ─── */}
+        {taskState?.task_id && !isClientMode && (
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", paddingTop: 4 }}>
+            {/* Team member: send to owner for approval */}
+            {!taskState.approval_status || taskState.approval_status === "rejected" ? (
+              <>
+                <Button variant="ghost" onClick={() => { setApprovalAction("owner"); setApprovalNotes(""); }}>
+                  Send for owner approval
+                </Button>
+                <Button variant="ghost" onClick={() => { setApprovalAction("client"); setApprovalNotes(""); setClientEmail(""); }}>
+                  Send for client approval
+                </Button>
+              </>
+            ) : null}
+            {/* Owner/admin: approve or reject pending request */}
+            {taskState.approval_status === "pending" && (yourRole === "owner" || yourRole === "admin" || currentUserMe?.role === "admin") && (
+              <>
+                <Button onClick={() => { setApprovalAction("approve"); setApprovalNotes(""); }}>
+                  Approve
+                </Button>
+                <Button variant="ghost" onClick={() => { setApprovalAction("reject"); setApprovalNotes(""); }} style={{ color: "#ef4444" }}>
+                  Reject
+                </Button>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* ── Client approval actions (client viewing pending_client task) ─── */}
+        {taskState?.task_id && isClientUser && taskState.approval_status === "pending_client" && (
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", paddingTop: 4 }}>
+            <Button onClick={() => { setApprovalAction("client-approve"); setApprovalNotes(""); }}>
+              Approve work
+            </Button>
+            <Button variant="ghost" onClick={() => { setApprovalAction("client-reject"); setApprovalNotes(""); }} style={{ color: "#ef4444" }}>
+              Request changes
+            </Button>
+          </div>
+        )}
+
+        {/* ── Approval action prompt (notes / client email) ─────────────── */}
+        {approvalAction && (
+          <div style={{ padding: 12, borderRadius: 10, background: "var(--color-muted)", display: "flex", flexDirection: "column", gap: 8 }}>
+            <div style={{ fontSize: 12, fontWeight: 500, textTransform: "uppercase", letterSpacing: 1, color: "var(--color-muted-foreground)" }}>
+              {approvalAction === "owner" && "Send for owner approval"}
+              {approvalAction === "client" && "Send for client approval"}
+              {approvalAction === "approve" && "Approve task"}
+              {approvalAction === "reject" && "Reject — reason required"}
+              {approvalAction === "client-approve" && "Approve completed work"}
+              {approvalAction === "client-reject" && "Request changes — reason required"}
+            </div>
+            {approvalAction === "client" && (
+              <Input value={clientEmail} onChange={(e) => setClientEmail(e.target.value)} placeholder="client@company.com" type="email" />
+            )}
+            <textarea value={approvalNotes} onChange={(e) => setApprovalNotes(e.target.value)} rows={2}
+              placeholder={
+                approvalAction === "reject" || approvalAction === "client-reject"
+                  ? "Reason for rejection (required)…"
+                  : "Optional note…"
+              }
+              style={{ width: "100%", padding: "8px 10px", borderRadius: 8, border: "1px solid var(--color-border)", background: "var(--color-input)", fontSize: 13, fontWeight: 400, fontFamily: "inherit", resize: "vertical" }} />
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <Button variant="ghost" onClick={() => { setApprovalAction(null); setApprovalNotes(""); setClientEmail(""); }}>
+                Cancel
+              </Button>
+              <Button onClick={submitApprovalAction} disabled={submittingApproval}>
+                {submittingApproval ? "Sending…" : "Confirm"}
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* ── Comments thread (existing tasks only) ─────────────────────── */}
+        {taskState?.task_id && (
+          <div style={{ paddingTop: 8 }}>
+            <div style={{ fontSize: 11, fontWeight: 500, textTransform: "uppercase", letterSpacing: 1.2, color: "var(--color-muted-foreground)", marginBottom: 8 }}>
+              Comments ({comments.length})
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 240, overflowY: "auto", marginBottom: 8 }}>
+              {comments.length === 0 && (
+                <div style={{ fontSize: 13, color: "var(--color-muted-foreground)", fontWeight: 400, padding: "8px 0" }}>
+                  No comments yet.
+                </div>
+              )}
+              {comments.map((c) => (
+                <div key={c.comment_id} style={{ padding: 10, borderRadius: 8, background: "var(--color-muted)", fontWeight: 400 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                    <span style={{ fontSize: 12, fontWeight: 500 }}>{c.user_name}</span>
+                    <span style={{ fontSize: 11, color: "var(--color-muted-foreground)" }}>
+                      {new Date(c.created_at).toLocaleString()}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: 13, whiteSpace: "pre-wrap" }}>{c.body}</div>
+                </div>
+              ))}
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <input
+                value={newComment}
+                onChange={(e) => setNewComment(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); postComment(); } }}
+                placeholder="Add a comment…"
+                style={{ flex: 1, padding: "9px 12px", borderRadius: 8, border: "1px solid var(--color-border)", background: "var(--color-input)", fontSize: 13, fontWeight: 400 }}
+              />
+              <Button onClick={postComment} disabled={postingComment || !newComment.trim()}>
+                {postingComment ? "Posting…" : "Post"}
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
     </Modal>
   );
@@ -1606,6 +2021,233 @@ function AdminPage() {
 }
 
 // ── Client portal ─────────────────────────────────────────────────────────────
+// ── Client Projects View ──────────────────────────────────────────────────────
+function ClientProjectsPage() {
+  const [projects, setProjects] = useState([]);
+  const navigate = useNavigate();
+  const { pushToast } = useToast();
+
+  useEffect(() => {
+    api.get("/client/projects").then(r => setProjects(r.data)).catch(() => {
+      pushToast({ type: "error", title: "Failed to load projects" });
+    });
+  }, [pushToast]);
+
+  return (
+    <div className="content-wrapper">
+      <div className="page-header">
+        <h1 className="page-title">My Projects</h1>
+        <p className="text-sm text-muted-foreground">Projects you're assigned to</p>
+      </div>
+
+      {projects.length === 0 && (
+        <div className="empty-state">
+          <FolderKanban size={48} style={{ color: K.mid, opacity: 0.3 }} />
+          <p style={{ marginTop: 16, fontSize: 15, color: "var(--color-muted-foreground)" }}>
+            No projects assigned yet
+          </p>
+        </div>
+      )}
+
+      <div className="grid-2">
+        {projects.map(p => (
+          <div
+            key={p.team_id}
+            className="elevated-card hover-lift"
+            onClick={() => navigate(`/client/project/${p.team_id}`)}
+            style={{ cursor: 'pointer', padding: 20 }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
+              <FolderKanban size={18} style={{ color: K.teal }} />
+              <h3 style={{ fontSize: 16, fontWeight: 600, margin: 0 }}>{p.name}</h3>
+            </div>
+            {p.description && (
+              <p style={{ fontSize: 13, color: 'var(--color-muted-foreground)', margin: 0 }}>
+                {p.description}
+              </p>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ClientProjectBoardPage() {
+  const { projectId } = useParams();
+  const [project, setProject] = useState(null);
+  const [tasks, setTasks] = useState([]);
+  const [columns, setColumns] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const navigate = useNavigate();
+  const { pushToast } = useToast();
+
+  useEffect(() => {
+    Promise.all([
+      api.get(`/teams/${projectId}`).then(r => setProject(r.data)),
+      api.get(`/teams/${projectId}/tasks`).then(r => setTasks(r.data)),
+      api.get(`/teams/${projectId}/columns`).then(r => setColumns(r.data)),
+      api.get("/categories").then(r => setCategories(r.data))
+    ]).catch(() => {
+      pushToast({ type: "error", title: "Failed to load project" });
+      navigate("/client/projects");
+    });
+  }, [projectId, navigate, pushToast]);
+
+  const grouped = useMemo(() => {
+    const g = {};
+    columns.forEach(c => g[c.column_id] = []);
+    tasks.forEach(t => {
+      if (g[t.column_id]) g[t.column_id].push(t);
+    });
+    return g;
+  }, [tasks, columns]);
+
+  const catName = (cid) => categories.find(c => c.category_id === cid)?.name || "";
+  const priorityStyle = (p) => ({
+    low: { background: "#10b98122", color: "#10b981" },
+    medium: { background: "#f59e0b22", color: "#f59e0b" },
+    high: { background: "#ef444422", color: "#ef4444" },
+    urgent: { background: "#9333ea22", color: "#9333ea" },
+  }[p] || { background: "#88888822", color: "#888" });
+
+  return (
+    <div className="content-wrapper content-wrapper--kanban">
+      <div className="page-header">
+        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 12 }}>
+          <button
+            onClick={() => navigate("/client/projects")}
+            className="text-sm text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1"
+          >
+            <ChevronRight size={14} className="rotate-180" />
+            Projects
+          </button>
+          <h1 className="page-title mb-0">{project?.name || "..."}</h1>
+
+          <div style={{ marginLeft: 'auto' }}>
+            <Button onClick={() => { setEditing(null); setEditorOpen(true); }}>
+              <Plus size={15} /><span className="ml-1.5">Request Task</span>
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      {/* Kanban Board - Read-only for clients */}
+      <div className="kanban-container">
+        {columns.map(col => (
+          <div key={col.column_id} className="kanban-column">
+            <div className="elevated-card" style={{ height: '100%' }}>
+              <div className="flex items-center justify-between px-4 py-3 border-b border-border/60">
+                <div className="flex items-center gap-2">
+                  <div style={{ width: 8, height: 8, borderRadius: "50%", background: col.color }} />
+                  <span className="text-sm font-semibold">{col.name}</span>
+                  {col.is_done && <CheckCircle2 size={12} style={{ color: col.color }} />}
+                </div>
+                <span className="text-xs font-bold px-2 py-0.5 rounded-full"
+                  style={{ background: col.color + "18", color: col.color }}>
+                  {(grouped[col.column_id] || []).length}
+                </span>
+              </div>
+
+              <div className="p-2 space-y-2 overflow-y-auto" style={{ maxHeight: 600 }}>
+                {(grouped[col.column_id] || []).map(t => (
+                  <div
+                    key={t.task_id}
+                    onClick={() => { setEditing(t); setEditorOpen(true); }}
+                    className="glass-card cursor-pointer hover-lift"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-semibold leading-snug">{t.title}</div>
+                        {t.description && (
+                          <div className="mt-1 text-xs text-muted-foreground line-clamp-2">
+                            {t.description}
+                          </div>
+                        )}
+                      </div>
+                      <span className="badge-modern" style={{
+                        background: priorityStyle(t.priority).background,
+                        color: priorityStyle(t.priority).color
+                      }}>
+                        {t.priority}
+                      </span>
+                    </div>
+
+                    {t.category_id && (
+                      <div className="mt-2 text-xs text-muted-foreground">
+                        {catName(t.category_id)}
+                      </div>
+                    )}
+
+                    {/* Approval status badge for clients */}
+                    {t.approval_status && approvalBadgeStyle(t.approval_status) && (
+                      <div className="mt-2">
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-md"
+                          style={{ background: approvalBadgeStyle(t.approval_status).bg, color: approvalBadgeStyle(t.approval_status).color, fontWeight: 500 }}>
+                          {approvalBadgeStyle(t.approval_status).label}
+                        </span>
+                      </div>
+                    )}
+
+                    {t.due_at && (
+                      <div className="mt-2 flex items-center gap-1 text-xs font-medium"
+                        style={{ color: new Date(t.due_at) < new Date() ? "#ef4444" : K.mid }}>
+                        <Calendar size={10} />{formatDue(t.due_at)}
+                      </div>
+                    )}
+
+                    {/* Show attachments count */}
+                    {t.attachments && t.attachments.length > 0 && (
+                      <div className="mt-2 flex items-center gap-1 text-xs text-muted-foreground">
+                        <span>📎</span>
+                        <span>{t.attachments.length} file(s)</span>
+                      </div>
+                    )}
+
+                    {/* Subtasks progress */}
+                    {(t.subtasks || []).length > 0 && (
+                      <div className="mt-2">
+                        <div className="flex justify-between text-[10px] text-muted-foreground mb-1">
+                          <span>Subtasks</span>
+                          <span>{t.subtasks.filter((s) => s.is_done).length}/{t.subtasks.length}</span>
+                        </div>
+                        <div className="progress-bar">
+                          <div className="progress-bar__fill" style={{
+                            width: `${(t.subtasks.filter((s) => s.is_done).length / t.subtasks.length) * 100}%`,
+                            background: col.color
+                          }} />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Task editor - clients can view and create approval requests */}
+      <TaskEditor
+        key={editing ? editing.task_id : "new"}
+        open={editorOpen}
+        onOpenChange={setEditorOpen}
+        editing={editing}
+        categories={categories}
+        teams={[{ team_id: projectId, name: project?.name }]}
+        isClientMode={true}
+        onSaved={(task) => {
+          setEditorOpen(false);
+          setEditing(null);
+          api.get(`/teams/${projectId}/tasks`).then(r => setTasks(r.data));
+        }}
+      />
+    </div>
+  );
+}
+
 function ClientPortal() {
   const { pushToast } = useToast();
   const navigate = useNavigate();
@@ -1707,6 +2349,185 @@ function ClientPortal() {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+// ── Pending approvals (owner/admin) ───────────────────────────────────────────
+function PendingApprovalsPage() {
+  const { pushToast } = useToast();
+  const navigate = useNavigate();
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [requests, setRequests] = useState([]); // client → owner task requests
+  const [reviewing, setReviewing] = useState(null);
+  const [notes, setNotes] = useState("");
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const [tasksRes, reqRes] = await Promise.all([
+        api.get("/tasks/pending-approval").catch(() => ({ data: [] })),
+        api.get("/approvals/pending").catch(() => ({ data: [] })),
+      ]);
+      setItems(tasksRes.data || []);
+      setRequests(reqRes.data || []);
+    } catch (e) {
+      pushToast({ type: "error", title: "Could not load approvals" });
+    } finally {
+      setLoading(false);
+    }
+  };
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, []);
+
+  const decide = async (taskId, action) => {
+    try {
+      await api.post(`/tasks/${taskId}/${action}`, { notes });
+      pushToast({ type: "success", title: action === "approve" ? "Approved" : "Rejected" });
+      setReviewing(null); setNotes("");
+      load();
+    } catch (e) {
+      pushToast({ type: "error", title: "Action failed", message: e?.response?.data?.detail || "Try again" });
+    }
+  };
+
+  const decideRequest = async (approvalId, status) => {
+    try {
+      await api.post(`/approvals/${approvalId}/review`, { status, notes });
+      pushToast({ type: "success", title: status === "approved" ? "Request approved" : "Request rejected" });
+      setReviewing(null); setNotes("");
+      load();
+    } catch (e) {
+      pushToast({ type: "error", title: "Action failed", message: e?.response?.data?.detail || "Try again" });
+    }
+  };
+
+  return (
+    <div className="content-wrapper">
+      <div className="page-header">
+        <h1 className="page-title">Approvals</h1>
+        <p className="text-sm text-muted-foreground" style={{ fontWeight: 400 }}>
+          Review client requests and tasks waiting for sign-off.
+        </p>
+      </div>
+
+      {loading && <div style={{ padding: 24, textAlign: "center", color: "var(--color-muted-foreground)" }}>Loading…</div>}
+
+      {!loading && requests.length === 0 && items.length === 0 && (
+        <div className="empty-state" style={{ padding: 40, textAlign: "center" }}>
+          <CheckCircle2 size={48} style={{ color: K.teal, opacity: 0.4, margin: "0 auto" }} />
+          <p style={{ marginTop: 16, fontSize: 15, color: "var(--color-muted-foreground)", fontWeight: 400 }}>
+            All caught up — nothing pending.
+          </p>
+        </div>
+      )}
+
+      {/* Client task requests waiting for owner approval */}
+      {requests.length > 0 && (
+        <div style={{ marginBottom: 32 }}>
+          <h2 style={{ fontSize: 13, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1.2, color: "var(--color-muted-foreground)", marginBottom: 12 }}>
+            New requests from clients ({requests.length})
+          </h2>
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            {requests.map((r) => {
+              const data = typeof r.request_data === "string" ? JSON.parse(r.request_data) : r.request_data;
+              return (
+                <div key={r.approval_id} className="elevated-card" style={{ padding: 18 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start" }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 15, fontWeight: 500 }}>{data?.title}</div>
+                      {data?.description && (
+                        <div style={{ fontSize: 13, color: "var(--color-muted-foreground)", marginTop: 4, fontWeight: 400 }}>
+                          {data.description}
+                        </div>
+                      )}
+                      <div style={{ fontSize: 11, color: "var(--color-muted-foreground)", marginTop: 8, fontWeight: 400 }}>
+                        From {r.requested_by_name || r.requested_by_email}
+                        {r.created_at && ` · ${new Date(r.created_at).toLocaleString()}`}
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+                      <Button variant="ghost" onClick={() => { setReviewing({ kind: "request", id: r.approval_id, title: data?.title }); setNotes(""); }}>
+                        Review
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Tasks the team has marked ready for review */}
+      {items.length > 0 && (
+        <div>
+          <h2 style={{ fontSize: 13, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1.2, color: "var(--color-muted-foreground)", marginBottom: 12 }}>
+            Tasks pending sign-off ({items.length})
+          </h2>
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            {items.map((t) => (
+              <div key={t.task_id} className="elevated-card" style={{ padding: 18 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start" }}>
+                  <div style={{ flex: 1, minWidth: 0, cursor: "pointer" }}
+                       onClick={() => navigate(`/projects/${t.team_id}`)}>
+                    <div style={{ fontSize: 15, fontWeight: 500 }}>{t.title}</div>
+                    {t.description && (
+                      <div style={{ fontSize: 13, color: "var(--color-muted-foreground)", marginTop: 4, fontWeight: 400 }}>
+                        {t.description}
+                      </div>
+                    )}
+                    <div style={{ fontSize: 11, color: "var(--color-muted-foreground)", marginTop: 8, fontWeight: 400 }}>
+                      {t.team_name && `${t.team_name} · `}
+                      Submitted by {t.created_by_name}
+                      {t.approval_requested_at && ` · ${new Date(t.approval_requested_at).toLocaleString()}`}
+                    </div>
+                    {t.approval_notes && (
+                      <div style={{ fontSize: 12, marginTop: 8, padding: "6px 10px", background: "var(--color-muted)", borderRadius: 6, fontWeight: 400 }}>
+                        Note: {t.approval_notes}
+                      </div>
+                    )}
+                  </div>
+                  <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+                    <Button variant="ghost" onClick={() => { setReviewing({ kind: "task", id: t.task_id, title: t.title }); setNotes(""); }}>
+                      Review
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <Modal open={!!reviewing} onOpenChange={(o) => !o && setReviewing(null)}
+             title={reviewing?.title ? `Review: ${reviewing.title}` : "Review"}
+             footer={
+               <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                 <Button variant="ghost" onClick={() => setReviewing(null)}>Cancel</Button>
+                 <Button variant="ghost"
+                   onClick={() => reviewing.kind === "task"
+                     ? decide(reviewing.id, "reject")
+                     : decideRequest(reviewing.id, "rejected")}
+                   style={{ color: "#ef4444" }}>
+                   Reject
+                 </Button>
+                 <Button onClick={() => reviewing.kind === "task"
+                     ? decide(reviewing.id, "approve")
+                     : decideRequest(reviewing.id, "approved")}>
+                   Approve
+                 </Button>
+               </div>
+             }>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <label style={{ fontSize: 12, fontWeight: 500, color: "var(--color-muted-foreground)" }}>
+            Notes (required if rejecting)
+          </label>
+          <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3}
+            placeholder="Optional context for approval, required reason for rejection…"
+            style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: "1px solid var(--color-border)", background: "var(--color-input)", fontSize: 14, fontWeight: 400, fontFamily: "inherit", resize: "vertical" }} />
+        </div>
+      </Modal>
     </div>
   );
 }

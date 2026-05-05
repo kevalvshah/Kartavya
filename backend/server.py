@@ -17,7 +17,7 @@ from typing import Any, Dict, List, Optional
 
 import asyncpg
 from dotenv import load_dotenv
-from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request
+from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request, UploadFile, File
 from pydantic import BaseModel, ConfigDict, Field
 from starlette.middleware.cors import CORSMiddleware
 
@@ -493,6 +493,18 @@ async def client_tasks(pool=Depends(get_db), user=Depends(require_user)):
     )
     return [row_to_task(r) for r in rows]
 
+@api_router.get("/client/projects")
+async def client_projects(pool=Depends(get_db), user=Depends(require_user)):
+    """Get projects assigned to client - shows same projects as team members see"""
+    rows = await pool.fetch(
+        """SELECT t.* FROM teams t 
+           JOIN project_assignments pa ON pa.team_id = t.team_id 
+           WHERE pa.user_id=$1 
+           ORDER BY t.created_at DESC""",
+        user["user_id"]
+    )
+    return [dict(r) for r in rows]
+
 @api_router.post("/tasks/{task_id}/clients/{target_user_id}")
 async def add_client_to_task(task_id: str, target_user_id: str, pool=Depends(get_db), user=Depends(require_admin)):
     await pool.execute(
@@ -858,6 +870,33 @@ async def create_task(payload: TaskCreate, pool=Depends(get_db), user=Depends(re
     return row_to_task(row)
 
 
+@api_router.get("/tasks/{task_id}", response_model=TaskOut)
+async def get_task(task_id: str, pool=Depends(get_db), user=Depends(require_user)):
+    """Fetch a single task. Visible to: project members, task creator, assignees, linked clients, system admin."""
+    row = await pool.fetchrow("SELECT * FROM tasks WHERE task_id=$1", task_id)
+    if not row:
+        raise HTTPException(status_code=404)
+    # Authorization
+    if user.get("role") == "admin":
+        return row_to_task(row)
+    if row["created_by_user_id"] == user["user_id"]:
+        return row_to_task(row)
+    if user["user_id"] in (row["assignee_user_ids"] or []):
+        return row_to_task(row)
+    # Project member?
+    if row["team_id"]:
+        team_ids = await get_visible_team_ids(pool, user["user_id"])
+        if row["team_id"] in team_ids:
+            return row_to_task(row)
+    # Linked client?
+    client_link = await pool.fetchrow(
+        "SELECT 1 FROM task_clients WHERE task_id=$1 AND user_id=$2", task_id, user["user_id"]
+    )
+    if client_link:
+        return row_to_task(row)
+    raise HTTPException(status_code=403, detail="Not authorized to view this task")
+
+
 @api_router.put("/tasks/{task_id}", response_model=TaskOut)
 async def update_task(task_id: str, payload: TaskUpdate, pool=Depends(get_db), user=Depends(require_user)):
     team_ids = await get_visible_team_ids(pool, user["user_id"])
@@ -906,6 +945,36 @@ async def delete_task(task_id: str, pool=Depends(get_db), user=Depends(require_u
     if not doc: raise HTTPException(status_code=404)
     await pool.execute("DELETE FROM tasks WHERE task_id=$1", task_id)
     return {"ok": True}
+
+
+@api_router.post("/upload")
+async def upload_file(file: UploadFile = File(...), user=Depends(require_user)):
+    """Upload file attachment (max 5MB) - returns URL for storage in task"""
+    MAX_SIZE = 5 * 1024 * 1024  # 5MB
+    
+    # Read file contents
+    contents = await file.read()
+    if len(contents) > MAX_SIZE:
+        raise HTTPException(status_code=400, detail=f"File exceeds 5MB limit ({len(contents)} bytes)")
+    
+    # Generate unique filename
+    file_ext = Path(file.filename).suffix if file.filename else ""
+    unique_name = f"{uuid.uuid4().hex[:12]}{file_ext}"
+    
+    # For now, encode as base64 data URL (simple solution without S3)
+    # In production, upload to S3/Cloudflare R2/etc.
+    import mimetypes
+    mime_type = mimetypes.guess_type(file.filename)[0] or 'application/octet-stream'
+    base64_data = base64.b64encode(contents).decode('utf-8')
+    data_url = f"data:{mime_type};base64,{base64_data}"
+    
+    logger.info(f"File uploaded: {file.filename} ({len(contents)} bytes) by {user['user_id']}")
+    
+    return {
+        "url": data_url,
+        "name": file.filename,
+        "size": len(contents)
+    }
 
 
 @api_router.patch("/tasks/{task_id}/toggle", response_model=TaskOut)
