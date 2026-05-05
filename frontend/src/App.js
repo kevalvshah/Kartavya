@@ -62,10 +62,10 @@ function KWordmark({ dark = false, size = "md" }) {
   const sub = size === "sm" ? 7 : 8;
   return (
     <div>
-      <div style={{ fontSize: fs, fontWeight: 800, letterSpacing: 2.5, textTransform: "uppercase",
+      <div style={{ fontSize: fs, fontWeight: 600, letterSpacing: 2.5, textTransform: "uppercase",
         color: dark ? "#fff" : K.dark }}>Kartavya</div>
       <div style={{ fontSize: sub, letterSpacing: 2.5, textTransform: "uppercase",
-        color: K.teal, fontWeight: 700, marginTop: 1 }}>by Aekam Inc</div>
+        color: K.teal, fontWeight: 500, marginTop: 1 }}>by Aekam Inc</div>
     </div>
   );
 }
@@ -77,7 +77,7 @@ function RoleBadge({ role }) {
     client: { bg: "#8b5cf622", color: "#8b5cf6", label: "Client" },
   }[role] || { bg: "#88888822", color: "#888", label: role };
   return (
-    <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: 1.2, textTransform: "uppercase",
+    <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: 1.2, textTransform: "uppercase",
       background: cfg.bg, color: cfg.color, padding: "3px 8px", borderRadius: 6, whiteSpace: "nowrap" }}>
       {cfg.label}
     </span>
@@ -145,12 +145,12 @@ const authInput = {
   color: "#0a1628", outline: "none", boxSizing: "border-box",
 };
 const authLabel = {
-  display: "block", fontSize: 10, fontWeight: 800, letterSpacing: 2,
+  display: "block", fontSize: 10, fontWeight: 600, letterSpacing: 2,
   textTransform: "uppercase", color: "#5a7087", marginBottom: 6,
 };
 const authBtn = {
   width: "100%", padding: 13, background: K.grad, border: "none",
-  borderRadius: 8, fontSize: 12, fontWeight: 800, color: "#fff",
+  borderRadius: 8, fontSize: 12, fontWeight: 600, color: "#fff",
   cursor: "pointer", letterSpacing: 2, textTransform: "uppercase", marginTop: 4,
 };
 
@@ -163,7 +163,7 @@ function AuthShell({ children, title, sub }) {
           <KLogo size={36} /><KWordmark dark />
         </div>
         <div>
-          <h2 style={{ color: "#fff", fontSize: 30, fontWeight: 800, lineHeight: 1.25, marginBottom: 12, letterSpacing: -0.5 }}>{title}</h2>
+          <h2 style={{ color: "#fff", fontSize: 30, fontWeight: 600, lineHeight: 1.25, marginBottom: 12, letterSpacing: -0.5 }}>{title}</h2>
           <p style={{ color: "#8aa5be", fontSize: 13, lineHeight: 1.7 }}>{sub}</p>
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -182,9 +182,9 @@ function AuthShell({ children, title, sub }) {
         <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
           paddingTop: 18, marginTop: 18, borderTop: "1px solid #d0e8f5",
           fontSize: 9, letterSpacing: 2.5, textTransform: "uppercase" }}>
-          <span style={{ color: "#b8cedd", fontWeight: 700 }}>Powered by</span>
+          <span style={{ color: "#b8cedd", fontWeight: 500 }}>Powered by</span>
           <div style={{ width: 4, height: 4, borderRadius: "50%", background: K.teal }} />
-          <span style={{ color: K.mid, fontWeight: 800 }}>Aekam Inc</span>
+          <span style={{ color: K.mid, fontWeight: 600 }}>Aekam Inc</span>
         </div>
       </div>
     </div>
@@ -215,8 +215,8 @@ function LoginPage() {
       sub="Team task management built for agencies and founders. Invite-only access."
     >
       <div style={{ marginBottom: 28 }}>
-        <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: 3.5, textTransform: "uppercase", color: K.mid, marginBottom: 8 }}>Welcome back</div>
-        <h1 style={{ fontSize: 28, fontWeight: 800, color: "#0a1628", letterSpacing: -0.5, lineHeight: 1.2 }}>
+        <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: 3.5, textTransform: "uppercase", color: K.mid, marginBottom: 8 }}>Welcome back</div>
+        <h1 style={{ fontSize: 28, fontWeight: 600, color: "#0a1628", letterSpacing: -0.5, lineHeight: 1.2 }}>
           Sign in to<br /><span style={{ color: K.blue }}>Kartavya</span>
         </h1>
       </div>
@@ -276,8 +276,8 @@ function AcceptInvitePage() {
       sub="Set your name and password to activate your account."
     >
       <div style={{ marginBottom: 28 }}>
-        <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: 3.5, textTransform: "uppercase", color: K.mid, marginBottom: 8 }}>Create your account</div>
-        <h1 style={{ fontSize: 28, fontWeight: 800, color: "#0a1628", letterSpacing: -0.5, lineHeight: 1.2 }}>
+        <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: 3.5, textTransform: "uppercase", color: K.mid, marginBottom: 8 }}>Create your account</div>
+        <h1 style={{ fontSize: 28, fontWeight: 600, color: "#0a1628", letterSpacing: -0.5, lineHeight: 1.2 }}>
           Join<br /><span style={{ color: K.blue }}>Kartavya</span>
         </h1>
       </div>
@@ -297,7 +297,7 @@ function AcceptInvitePage() {
         </button>
       </form>
       <p style={{ textAlign: "center", fontSize: 13, color: "#5a7087", marginTop: 14 }}>
-        Already have an account? <span onClick={() => navigate("/login")} style={{ color: K.blue, fontWeight: 800, cursor: "pointer" }}>Sign in</span>
+        Already have an account? <span onClick={() => navigate("/login")} style={{ color: K.blue, fontWeight: 600, cursor: "pointer" }}>Sign in</span>
       </p>
     </AuthShell>
   );
@@ -477,7 +477,7 @@ function Sidebar() {
 
       <div className="p-3 border-t border-border/60">
         <div className="flex items-center gap-2.5 px-2 py-1.5">
-          <div style={{ width: 30, height: 30, borderRadius: "50%", background: K.gradD, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 800, color: "#fff", flexShrink: 0 }}>
+          <div style={{ width: 30, height: 30, borderRadius: "50%", background: K.gradD, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 600, color: "#fff", flexShrink: 0 }}>
             {(user?.name || "?")[0].toUpperCase()}
           </div>
           <div className="flex-1 min-w-0">
@@ -604,6 +604,34 @@ function DashboardPage() {
         <StatCard label="Done"        value={summary?.done        ?? "—"} />
         <StatCard label="Overdue"     value={summary?.overdue     ?? "—"} danger />
       </div>
+
+      {/* ── Needs my attention ──────────────────────────────────────────── */}
+      {summary && (() => {
+        const items = [
+          { count: summary.new_client_requests,     label: "New client requests",   to: "/approvals", color: "#8b5cf6" },
+          { count: summary.pending_owner_approval,  label: "Pending your approval", to: "/approvals", color: "#f59e0b" },
+          { count: summary.awaiting_my_review,      label: "Awaiting your review",  to: "/client/projects", color: "#8b5cf6" },
+          { count: summary.pending_client_approval, label: "With client",           to: "/tasks",     color: "#8b5cf6" },
+          { count: summary.rejected_to_revise,      label: "Needs revision",        to: "/tasks",     color: "#ef4444" },
+        ].filter((i) => (i.count || 0) > 0);
+        if (items.length === 0) return null;
+        return (
+          <div className="rounded-3xl border border-border/70 bg-card/50 p-5">
+            <div className="text-sm mb-3" style={{ fontWeight: 500 }}>Needs your attention</div>
+            <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))" }}>
+              {items.map((it) => (
+                <button key={it.label} onClick={() => navigate(it.to)}
+                  className="text-left rounded-2xl border border-border/60 hover:border-border transition-colors p-4"
+                  style={{ background: "var(--color-card)" }}>
+                  <div className="text-2xl" style={{ color: it.color, fontWeight: 600, lineHeight: 1.1 }}>{it.count}</div>
+                  <div className="text-xs mt-1 text-muted-foreground" style={{ fontWeight: 400 }}>{it.label}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
+
       <div className="grid gap-6 lg:grid-cols-12">
         <div className="lg:col-span-7 space-y-4">
           <div className="rounded-3xl border border-border/70 bg-card/50 p-5">
@@ -1732,17 +1760,18 @@ function TaskEditor({ open, onOpenChange, editing, categories, teams, defaultTea
         {/* ── Approval action buttons (existing tasks only, not in client-create mode) ─── */}
         {taskState?.task_id && !isClientMode && (
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", paddingTop: 4 }}>
-            {/* Team member: send to owner for approval */}
-            {!taskState.approval_status || taskState.approval_status === "rejected" ? (
-              <>
-                <Button variant="ghost" onClick={() => { setApprovalAction("owner"); setApprovalNotes(""); }}>
-                  Send for owner approval
-                </Button>
-                <Button variant="ghost" onClick={() => { setApprovalAction("client"); setApprovalNotes(""); setClientEmail(""); }}>
-                  Send for client approval
-                </Button>
-              </>
-            ) : null}
+            {/* Team member: send for owner approval — only when no approval cycle is active */}
+            {(!taskState.approval_status || taskState.approval_status === "rejected") && (
+              <Button variant="ghost" onClick={() => { setApprovalAction("owner"); setApprovalNotes(""); }}>
+                Send for owner approval
+              </Button>
+            )}
+            {/* Send for client approval — available unless already pending an approval */}
+            {taskState.approval_status !== "pending" && taskState.approval_status !== "pending_client" && (
+              <Button variant="ghost" onClick={() => { setApprovalAction("client"); setApprovalNotes(""); setClientEmail(""); }}>
+                Send for client approval
+              </Button>
+            )}
             {/* Owner/admin: approve or reject pending request */}
             {taskState.approval_status === "pending" && (yourRole === "owner" || yourRole === "admin" || currentUserMe?.role === "admin") && (
               <>
@@ -1998,7 +2027,7 @@ function AdminPage() {
         </div>
         {users.map((u) => (
           <div key={u.user_id} className="flex items-center gap-3 border-b border-border/40 px-5 py-4">
-            <div style={{ width: 36, height: 36, borderRadius: "50%", background: K.gradD, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 800, color: "#fff", flexShrink: 0 }}>
+            <div style={{ width: 36, height: 36, borderRadius: "50%", background: K.gradD, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 600, color: "#fff", flexShrink: 0 }}>
               {(u.name || "?")[0].toUpperCase()}
             </div>
             <div className="flex-1 min-w-0">
@@ -2292,18 +2321,18 @@ function ClientPortal() {
       </div>
       <div style={{ display: "grid", gridTemplateColumns: selected ? "1fr 400px" : "1fr", gap: 20, maxWidth: 1200, margin: "0 auto" }}>
         <div>
-          <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: 2.5, textTransform: "uppercase", color: K.teal, marginBottom: 16 }}>Your Updates</div>
+          <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: 2.5, textTransform: "uppercase", color: K.teal, marginBottom: 16 }}>Your Updates</div>
           {tasks.length === 0 && <div style={{ color: "#8aa5be", fontSize: 14 }}>No tasks shared with you yet.</div>}
           {tasks.map((t) => (
             <div key={t.task_id} onClick={() => setSelected(selected?.task_id === t.task_id ? null : t)}
               style={{ background: selected?.task_id === t.task_id ? K.card : "rgba(255,255,255,.04)", border: `1px solid ${selected?.task_id === t.task_id ? K.blue : "rgba(255,255,255,.08)"}`, borderRadius: 16, padding: "16px 20px", marginBottom: 10, cursor: "pointer", transition: "all .15s" }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: "#fff", marginBottom: 4 }}>{t.title}</div>
+                  <div style={{ fontSize: 14, fontWeight: 500, color: "#fff", marginBottom: 4 }}>{t.title}</div>
                   {t.description && <div style={{ fontSize: 12, color: "#8aa5be", lineHeight: 1.5 }}>{t.description}</div>}
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6, flexShrink: 0 }}>
-                  <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: 1.5, textTransform: "uppercase", color: statusColor[t.status] || K.teal, background: (statusColor[t.status] || K.teal) + "22", padding: "3px 8px", borderRadius: 6 }}>
+                  <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: 1.5, textTransform: "uppercase", color: statusColor[t.status] || K.teal, background: (statusColor[t.status] || K.teal) + "22", padding: "3px 8px", borderRadius: 6 }}>
                     {t.status === "in_progress" ? "In Progress" : t.status}
                   </span>
                   {t.due_at && <span style={{ fontSize: 11, color: "#8aa5be" }}>Due {formatDue(t.due_at)}</span>}
@@ -2322,15 +2351,15 @@ function ClientPortal() {
         </div>
         {selected && (
           <div style={{ background: K.card, border: "1px solid rgba(255,255,255,.08)", borderRadius: 20, padding: 20, display: "flex", flexDirection: "column", maxHeight: "80vh" }}>
-            <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: 2, textTransform: "uppercase", color: K.teal, marginBottom: 4 }}>Comments</div>
-            <div style={{ fontSize: 14, fontWeight: 700, color: "#fff", marginBottom: 16, borderBottom: "1px solid rgba(255,255,255,.08)", paddingBottom: 12 }}>{selected.title}</div>
+            <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: 2, textTransform: "uppercase", color: K.teal, marginBottom: 4 }}>Comments</div>
+            <div style={{ fontSize: 14, fontWeight: 500, color: "#fff", marginBottom: 16, borderBottom: "1px solid rgba(255,255,255,.08)", paddingBottom: 12 }}>{selected.title}</div>
             <div style={{ flex: 1, overflowY: "auto", marginBottom: 16 }}>
               {comments.length === 0 && <div style={{ color: "#8aa5be", fontSize: 13 }}>No comments yet.</div>}
               {comments.map((c) => (
                 <div key={c.comment_id} style={{ marginBottom: 12 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-                    <div style={{ width: 22, height: 22, borderRadius: "50%", background: K.gradD, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 800, color: "#fff" }}>{(c.user_name || "?")[0].toUpperCase()}</div>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: "#fff" }}>{c.user_name}</span>
+                    <div style={{ width: 22, height: 22, borderRadius: "50%", background: K.gradD, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 600, color: "#fff" }}>{(c.user_name || "?")[0].toUpperCase()}</div>
+                    <span style={{ fontSize: 11, fontWeight: 500, color: "#fff" }}>{c.user_name}</span>
                     <span style={{ fontSize: 10, color: "#8aa5be" }}>{new Date(c.created_at).toLocaleString()}</span>
                   </div>
                   <div style={{ fontSize: 13, color: "#c8dcea", lineHeight: 1.6, paddingLeft: 30 }}>{c.body}</div>
@@ -2342,7 +2371,7 @@ function ClientPortal() {
                 onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && postComment()}
                 placeholder="Add a comment…" style={{ flex: 1, background: "rgba(255,255,255,.06)", border: "1px solid rgba(255,255,255,.1)", borderRadius: 10, padding: "9px 12px", fontSize: 13, color: "#fff", outline: "none" }} />
               <button onClick={postComment} disabled={posting}
-                style={{ padding: "9px 16px", background: K.gradD, border: "none", borderRadius: 10, fontSize: 12, fontWeight: 800, color: "#fff", cursor: "pointer", opacity: posting ? 0.6 : 1 }}>
+                style={{ padding: "9px 16px", background: K.gradD, border: "none", borderRadius: 10, fontSize: 12, fontWeight: 600, color: "#fff", cursor: "pointer", opacity: posting ? 0.6 : 1 }}>
                 Post
               </button>
             </div>

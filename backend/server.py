@@ -308,6 +308,12 @@ class DashboardSummaryOut(BaseModel):
     done: int
     overdue: int
     due_24h: int
+    # "What needs my attention" — surfaced on the dashboard so the workflow is visible
+    pending_owner_approval: int = 0   # tasks waiting for me (owner/admin) to approve
+    pending_client_approval: int = 0  # tasks I (or my team) sent that the client hasn't reviewed
+    awaiting_my_review: int = 0       # tasks where I'm the linked client and approval_status='pending_client'
+    rejected_to_revise: int = 0       # tasks rejected, assigned to me, needing rework
+    new_client_requests: int = 0      # client task-creation requests waiting for owner triage
 
 class PushSubscriptionIn(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -604,11 +610,26 @@ async def review_approval(approval_id: str, body: dict, pool=Depends(get_db), us
 
 # ── Comments ──────────────────────────────────────────────────────────────────
 
+async def _client_can_access_task(pool, user_id: str, task_id: str) -> bool:
+    """A client can access a task if they're either explicitly linked (task_clients)
+    or assigned to the project that owns the task (project_assignments)."""
+    direct = await pool.fetchrow(
+        "SELECT 1 FROM task_clients WHERE task_id=$1 AND user_id=$2", task_id, user_id
+    )
+    if direct:
+        return True
+    via_project = await pool.fetchrow(
+        "SELECT 1 FROM tasks t JOIN project_assignments pa ON pa.team_id = t.team_id "
+        "WHERE t.task_id=$1 AND pa.user_id=$2", task_id, user_id,
+    )
+    return bool(via_project)
+
+
 @api_router.get("/tasks/{task_id}/comments", response_model=List[CommentOut])
 async def list_comments(task_id: str, pool=Depends(get_db), user=Depends(require_user)):
     if user.get("role") == "client":
-        access = await pool.fetchrow("SELECT 1 FROM task_clients WHERE task_id=$1 AND user_id=$2", task_id, user["user_id"])
-        if not access: raise HTTPException(status_code=403)
+        if not await _client_can_access_task(pool, user["user_id"], task_id):
+            raise HTTPException(status_code=403)
     rows = await pool.fetch(
         "SELECT c.comment_id,c.task_id,c.user_id,u.name AS user_name,c.body,c.created_at "
         "FROM task_comments c JOIN users u ON u.user_id=c.user_id WHERE c.task_id=$1 ORDER BY c.created_at ASC",
@@ -619,8 +640,8 @@ async def list_comments(task_id: str, pool=Depends(get_db), user=Depends(require
 @api_router.post("/tasks/{task_id}/comments", response_model=CommentOut)
 async def add_comment(task_id: str, body: CommentCreate, pool=Depends(get_db), user=Depends(require_user)):
     if user.get("role") == "client":
-        access = await pool.fetchrow("SELECT 1 FROM task_clients WHERE task_id=$1 AND user_id=$2", task_id, user["user_id"])
-        if not access: raise HTTPException(status_code=403)
+        if not await _client_can_access_task(pool, user["user_id"], task_id):
+            raise HTTPException(status_code=403)
     comment_id = f"cmt_{uuid.uuid4().hex[:12]}"
     row = await pool.fetchrow(
         "INSERT INTO task_comments (comment_id,task_id,user_id,body) VALUES ($1,$2,$3,$4) RETURNING *",
@@ -713,6 +734,33 @@ async def add_team_member(team_id: str, payload: TeamMemberAdd, pool=Depends(get
             "INSERT INTO project_assignments (assignment_id,team_id,user_id,role,assigned_by) VALUES ($1,$2,$3,$4,$5) ON CONFLICT (team_id, user_id) DO UPDATE SET role=EXCLUDED.role",
             f"assign_{uuid.uuid4().hex[:12]}", team_id, uid, payload.role, user["user_id"]
         )
+    else:
+        # New user — issue an invite and email it. Map team-member role to invite role.
+        invite_role = "client" if payload.role == "client" else "member"
+        try:
+            import secrets as _secrets
+            from datetime import timedelta as _td
+            # Invalidate previous pending invites for the same email
+            await pool.execute(
+                "UPDATE invites SET expires_at=NOW() WHERE email=$1 AND accepted_at IS NULL", email
+            )
+            token = _secrets.token_urlsafe(32)
+            invite_id = f"inv_{uuid.uuid4().hex[:12]}"
+            expires_at = now_utc() + _td(days=7)
+            await pool.execute(
+                "INSERT INTO invites (invite_id,email,role,token,invited_by,expires_at) VALUES ($1,$2,$3,$4,$5,$6)",
+                invite_id, email, invite_role, token, user["user_id"], expires_at,
+            )
+            from email_service import send_team_invite_email
+            team_row = await pool.fetchrow("SELECT name FROM teams WHERE team_id=$1", team_id)
+            send_team_invite_email(
+                to_email=email,
+                team_name=(team_row["name"] if team_row else "Kartavya"),
+                inviter_name=user.get("name") or user.get("email") or "your teammate",
+                invite_token=token,
+            )
+        except Exception as e:
+            logger.warning(f"Could not send team invite email to {email}: {e}")
     return TeamMemberOut(**dict(row))
 
 @api_router.put("/teams/{team_id}/members/{member_id}", response_model=TeamMemberOut)
@@ -949,32 +997,27 @@ async def delete_task(task_id: str, pool=Depends(get_db), user=Depends(require_u
 
 @api_router.post("/upload")
 async def upload_file(file: UploadFile = File(...), user=Depends(require_user)):
-    """Upload file attachment (max 5MB) - returns URL for storage in task"""
-    MAX_SIZE = 5 * 1024 * 1024  # 5MB
-    
-    # Read file contents
+    """Upload an attachment (max 5MB). Backend is pluggable: inline base64 by
+    default, S3/R2/B2 if STORAGE_BACKEND=s3 is configured."""
     contents = await file.read()
-    if len(contents) > MAX_SIZE:
-        raise HTTPException(status_code=400, detail=f"File exceeds 5MB limit ({len(contents)} bytes)")
-    
-    # Generate unique filename
-    file_ext = Path(file.filename).suffix if file.filename else ""
-    unique_name = f"{uuid.uuid4().hex[:12]}{file_ext}"
-    
-    # For now, encode as base64 data URL (simple solution without S3)
-    # In production, upload to S3/Cloudflare R2/etc.
-    import mimetypes
-    mime_type = mimetypes.guess_type(file.filename)[0] or 'application/octet-stream'
-    base64_data = base64.b64encode(contents).decode('utf-8')
-    data_url = f"data:{mime_type};base64,{base64_data}"
-    
-    logger.info(f"File uploaded: {file.filename} ({len(contents)} bytes) by {user['user_id']}")
-    
-    return {
-        "url": data_url,
-        "name": file.filename,
-        "size": len(contents)
-    }
+    try:
+        from storage import store_upload
+        result = await store_upload(contents, file.filename or "upload")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    logger.info(f"Upload: {result['name']} ({result['size']} bytes) by {user['user_id']} key={result.get('key')}")
+    return result
+
+
+@api_router.get("/attachments/sign")
+async def sign_attachment(key: str, user=Depends(require_user)):
+    """Reissue a fresh signed download URL for an object-storage attachment.
+    Inline attachments don't need this — their data URL is self-contained."""
+    from storage import get_download_url
+    url = get_download_url(key)
+    if not url:
+        raise HTTPException(status_code=404, detail="Object storage not configured or invalid key")
+    return {"url": url, "key": key}
 
 
 @api_router.patch("/tasks/{task_id}/toggle", response_model=TaskOut)
@@ -1045,6 +1088,18 @@ async def process_notifications(pool=Depends(get_db), user=Depends(require_user)
         for uid in recipients:
             await create_notification(pool, uid, "reminder", "Task reminder",
                                       f"Due soon: {t['title']}", t["task_id"], t["team_id"], "/tasks")
+            # Email reminder — best-effort
+            try:
+                from email_service import send_task_reminder_email
+                u = await pool.fetchrow("SELECT email, name FROM users WHERE user_id=$1", uid)
+                if u:
+                    due_label = t["due_at"].strftime("%b %d, %Y at %I:%M %p UTC") if t["due_at"] else "soon"
+                    send_task_reminder_email(
+                        u["email"], u["name"] or u["email"],
+                        t["title"], t["task_id"], due_label,
+                    )
+            except Exception as e:
+                logger.warning(f"Reminder email failed for user {uid} task {t['task_id']}: {e}")
         await pool.execute("UPDATE tasks SET reminder_sent_at=NOW(),updated_at=NOW() WHERE task_id=$1", t["task_id"])
     return {"ok": True, "created": len(rows)}
 
@@ -1061,7 +1116,70 @@ async def dashboard_summary(pool=Depends(get_db), user=Depends(require_user)):
     done        = await pool.fetchval(f"SELECT COUNT(*) FROM tasks WHERE {base} AND status='done'",        user["user_id"], team_ids)
     overdue     = await pool.fetchval(f"SELECT COUNT(*) FROM tasks WHERE {base} AND status!='done' AND due_at<$3",                       user["user_id"], team_ids, now)
     due_24h     = await pool.fetchval(f"SELECT COUNT(*) FROM tasks WHERE {base} AND status!='done' AND due_at>=$3 AND due_at<$4",        user["user_id"], team_ids, now, now+timedelta(hours=24))
-    return DashboardSummaryOut(todo=todo, in_progress=in_progress, done=done, overdue=overdue, due_24h=due_24h)
+
+    # "What needs my attention" rollups
+    role = user.get("role")
+    is_admin = role == "admin"
+
+    # Tasks waiting for owner approval — visible to project owners/admins on those projects
+    if is_admin:
+        pending_owner = await pool.fetchval(
+            "SELECT COUNT(*) FROM tasks WHERE approval_status='pending'"
+        )
+        new_client_reqs = await pool.fetchval(
+            "SELECT COUNT(*) FROM approvals WHERE status='pending'"
+        ) or 0
+    else:
+        # only on projects where the user is owner
+        owner_team_ids = await pool.fetch(
+            "SELECT team_id FROM project_assignments WHERE user_id=$1 AND role IN ('owner','admin')",
+            user["user_id"],
+        )
+        otids = [r["team_id"] for r in owner_team_ids]
+        if otids:
+            pending_owner = await pool.fetchval(
+                "SELECT COUNT(*) FROM tasks WHERE approval_status='pending' AND team_id=ANY($1::text[])",
+                otids,
+            )
+            new_client_reqs = await pool.fetchval(
+                "SELECT COUNT(*) FROM approvals WHERE status='pending' AND team_id=ANY($1::text[])",
+                otids,
+            ) or 0
+        else:
+            pending_owner = 0
+            new_client_reqs = 0
+
+    # Tasks I sent for client approval that are still waiting
+    pending_client = await pool.fetchval(
+        f"SELECT COUNT(*) FROM tasks WHERE {base} AND approval_status='pending_client'",
+        user["user_id"], team_ids,
+    )
+
+    # Tasks where I'm the linked client and need to review
+    awaiting_my_review = 0
+    if role == "client":
+        awaiting_my_review = await pool.fetchval(
+            "SELECT COUNT(DISTINCT t.task_id) FROM tasks t "
+            "LEFT JOIN task_clients tc ON tc.task_id = t.task_id AND tc.user_id = $1 "
+            "LEFT JOIN project_assignments pa ON pa.team_id = t.team_id AND pa.user_id = $1 "
+            "WHERE t.approval_status='pending_client' AND (tc.user_id IS NOT NULL OR pa.user_id IS NOT NULL)",
+            user["user_id"],
+        ) or 0
+
+    # Rejected tasks I'm assigned to (need rework)
+    rejected_to_revise = await pool.fetchval(
+        f"SELECT COUNT(*) FROM tasks WHERE approval_status='rejected' AND $1 = ANY(assignee_user_ids)",
+        user["user_id"],
+    ) or 0
+
+    return DashboardSummaryOut(
+        todo=todo, in_progress=in_progress, done=done, overdue=overdue, due_24h=due_24h,
+        pending_owner_approval=pending_owner or 0,
+        pending_client_approval=pending_client or 0,
+        awaiting_my_review=awaiting_my_review,
+        rejected_to_revise=rejected_to_revise,
+        new_client_requests=new_client_reqs,
+    )
 
 
 @api_router.get("/push/vapid-public-key")

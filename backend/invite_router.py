@@ -75,6 +75,21 @@ async def create_invite(body: InviteCreate, pool=Depends(get_pool), admin=Depend
     )
 
     invite_link = f"{FRONTEND_URL}/accept-invite?token={token}"
+
+    # Fire invite email — best-effort, don't block the API on SES hiccups
+    try:
+        from email_service import send_team_invite_email
+        team_label = "Kartavya" if body.role == "member" else "Kartavya (Client portal)"
+        send_team_invite_email(
+            to_email=body.email.lower(),
+            team_name=team_label,
+            inviter_name=admin.get("name") or admin.get("email") or "your administrator",
+            invite_token=token,
+        )
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(f"invite email failed for {body.email}: {e}")
+
     return InviteOut(
         invite_id=invite_id,
         email=body.email.lower(),
