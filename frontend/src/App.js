@@ -1,1 +1,1 @@
-$(cat /tmp/final_app.js)
+$(cat /tmp/app_with_css.js)
