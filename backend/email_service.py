@@ -1,26 +1,23 @@
 """
-email_service.py - Email service using SendGrid or AWS SES
+email_service.py - Email service using AWS SES ONLY
 """
 
 import logging
 import os
-from sendgrid import SendGridAPIClient
-from sendgrid.helpers.mail import Mail
 
 logger = logging.getLogger(__name__)
 
-SENDGRID_API_KEY = os.environ.get("SENDGRID_API_KEY")
 FROM_EMAIL = os.environ.get("FROM_EMAIL", "noreply@kartavya.app")
 FRONTEND_URL = os.environ.get("FRONTEND_URL", "https://kartavya-aekam.vercel.app")
 
-# AWS SES Configuration (optional, preferred over SendGrid)
+# AWS SES Configuration (REQUIRED)
 AWS_ACCESS_KEY_ID = os.environ.get("AWS_ACCESS_KEY_ID")
 AWS_SECRET_ACCESS_KEY = os.environ.get("AWS_SECRET_ACCESS_KEY")
 AWS_REGION = os.environ.get("AWS_REGION", "us-east-1")
 
-USE_AWS_SES = bool(AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY)
-
-if USE_AWS_SES:
+# Initialize AWS SES client
+ses_client = None
+if AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY:
     try:
         import boto3
         ses_client = boto3.client(
@@ -29,55 +26,36 @@ if USE_AWS_SES:
             aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
             region_name=AWS_REGION
         )
-        logger.info("AWS SES configured successfully")
+        logger.info(f"✅ AWS SES configured successfully (Region: {AWS_REGION})")
     except ImportError:
-        logger.warning("boto3 not installed, falling back to SendGrid")
-        USE_AWS_SES = False
+        logger.error("❌ boto3 not installed! Run: pip install boto3")
+    except Exception as e:
+        logger.error(f"❌ AWS SES initialization failed: {str(e)}")
+else:
+    logger.warning("⚠️  AWS SES not configured - emails will not be sent")
 
 
 def send_email(to_email: str, subject: str, html_content: str) -> bool:
     """
-    Send email using AWS SES (preferred) or SendGrid (fallback)
+    Send email using AWS SES
     """
-    
-    # Try AWS SES first
-    if USE_AWS_SES:
-        try:
-            response = ses_client.send_email(
-                Source=FROM_EMAIL,
-                Destination={'ToAddresses': [to_email]},
-                Message={
-                    'Subject': {'Data': subject, 'Charset': 'UTF-8'},
-                    'Body': {'Html': {'Data': html_content, 'Charset': 'UTF-8'}}
-                }
-            )
-            logger.info(f"Email sent via AWS SES to {to_email}: {response['MessageId']}")
-            return True
-        except Exception as e:
-            logger.error(f"AWS SES failed for {to_email}: {str(e)}")
-            # Fall through to SendGrid
-    
-    # Fallback to SendGrid
-    if not SENDGRID_API_KEY:
-        logger.warning(f"No email service configured. Would send email to {to_email}: {subject}")
+    if not ses_client:
+        logger.warning(f"AWS SES not configured. Would send to {to_email}: {subject}")
         return False
     
     try:
-        message = Mail(
-            from_email=FROM_EMAIL,
-            to_emails=to_email,
-            subject=subject,
-            html_content=html_content
+        response = ses_client.send_email(
+            Source=FROM_EMAIL,
+            Destination={'ToAddresses': [to_email]},
+            Message={
+                'Subject': {'Data': subject, 'Charset': 'UTF-8'},
+                'Body': {'Html': {'Data': html_content, 'Charset': 'UTF-8'}}
+            }
         )
-        
-        sg = SendGridAPIClient(SENDGRID_API_KEY)
-        response = sg.send(message)
-        
-        logger.info(f"Email sent via SendGrid to {to_email}: Status {response.status_code}")
+        logger.info(f"✅ Email sent to {to_email}: {response['MessageId']}")
         return True
-        
     except Exception as e:
-        logger.error(f"Failed to send email to {to_email}: {str(e)}")
+        logger.error(f"❌ Failed to send email to {to_email}: {str(e)}")
         return False
 
 
