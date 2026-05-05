@@ -1599,11 +1599,14 @@ function TaskEditor({ open, onOpenChange, editing, categories, teams, defaultTea
     try { customFields = form.custom_fields_text?.trim() ? JSON.parse(form.custom_fields_text) : {}; }
     catch (_) { pushToast({ type: "error", title: "Custom fields must be valid JSON" }); return; }
     const assignees = form.assign_scope === "whole_team" && form.team_id ? teamMembers.map((m) => m.user_id) : (form.assignee_user_ids || []);
+    // In client mode, the task is always scoped to the project the client opened.
+    // Don't trust form.team_id (the dropdown is hidden anyway) — use defaultTeamId.
+    const effectiveTeamId = isClientMode ? (defaultTeamId || form.team_id || null) : (form.team_id || null);
     const payload = {
       title: form.title.trim(), description: form.description?.trim() || null,
       priority: form.priority, category_id: form.category_id || null,
       tags: form.tags ? form.tags.split(",").map((t) => t.trim()).filter(Boolean) : [],
-      team_id: form.team_id || null,
+      team_id: effectiveTeamId,
       column_id: form.column_id || null,
       assignee_user_ids: assignees,
       due_at: fromLocal(form.due_at), reminder_at: form.reminder_at ? fromLocal(form.reminder_at) : null,
@@ -1638,16 +1641,18 @@ function TaskEditor({ open, onOpenChange, editing, categories, teams, defaultTea
         <F label="Title"><Input value={form.title} onChange={(e) => upd("title", e.target.value)} placeholder="Task title…" autoFocus /></F>
         <F label="Notes"><textarea value={form.description} onChange={(e) => upd("description", e.target.value)} placeholder="Context, links, notes…" className="w-full rounded-2xl border border-border/60 bg-background/40 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500/40" rows={3} /></F>
         <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
-          <F label="Project">
-            <Select value={form.team_id} onChange={(v) => setForm((p) => ({ ...p, team_id: v, column_id: "", assign_scope: "none", assignee_user_ids: [] }))}
-              options={[
-                { value: "", label: "Personal" },
-                ...(teams || [])
-                  .filter((t) => t && t.team_id && (t.name || "").trim())
-                  .map((t) => ({ value: t.team_id, label: t.name })),
-              ]} />
-          </F>
-          {columns && columns.length > 0 && (
+          {!isClientMode && (
+            <F label="Project">
+              <Select value={form.team_id} onChange={(v) => setForm((p) => ({ ...p, team_id: v, column_id: "", assign_scope: "none", assignee_user_ids: [] }))}
+                options={[
+                  { value: "", label: "Personal" },
+                  ...(teams || [])
+                    .filter((t) => t && t.team_id && (t.name || "").trim())
+                    .map((t) => ({ value: t.team_id, label: t.name })),
+                ]} />
+            </F>
+          )}
+          {!isClientMode && columns && columns.length > 0 && (
             <F label="Column">
               <Select value={form.column_id} onChange={(v) => upd("column_id", v)} options={colOptions} />
             </F>
@@ -2290,6 +2295,8 @@ function ClientProjectBoardPage() {
         editing={editing}
         categories={categories}
         teams={[{ team_id: projectId, name: project?.name }]}
+        defaultTeamId={projectId}
+        columns={columns}
         isClientMode={true}
         onSaved={(task) => {
           setEditorOpen(false);
