@@ -1,92 +1,111 @@
-import React, { useState, useEffect } from 'react';
+/**
+ * ActivityFeedPage.jsx — Project-level activity feed.
+ * Week 2: actor filter, date range, load-more pagination, uses ActivityList.
+ */
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { api } from '../lib/api';
+import ActivityList from '../components/ActivityList';
 
-const TYPE_ICONS = {
-  created:         '✨',
-  status_changed:  '🔄',
-  assigned:        '👤',
-  commented:       '💬',
-  field_changed:   '✏️',
-  approved:        '✅',
-  rejected:        '❌',
-  mention:         '📣',
-  time_logged:     '⏱',
-  default:         '📋',
-};
+const EVENT_TYPES = [
+  { value: '',                    label: 'All events' },
+  { value: 'status_changed',      label: 'Status changes' },
+  { value: 'commented',           label: 'Comments' },
+  { value: 'assigned',            label: 'Assignments' },
+  { value: 'approved',            label: 'Approvals' },
+  { value: 'field_changed',       label: 'Field changes' },
+  { value: 'created',             label: 'Created' },
+  { value: 'time_logged',         label: 'Time logged' },
+];
+
+const LIMIT = 50;
 
 export default function ActivityFeedPage({ teamId }) {
-  const [events, setEvents]         = useState([]);
-  const [loading, setLoading]       = useState(true);
+  const [events,     setEvents]     = useState([]);
+  const [loading,    setLoading]    = useState(true);
+  const [loadingMore,setLoadingMore]= useState(false);
+  const [hasMore,    setHasMore]    = useState(false);
+  const [offset,     setOffset]     = useState(0);
   const [filterType, setFilterType] = useState('');
+  const [filterActor,setFilterActor]= useState('');
+  const [members,    setMembers]    = useState([]);
+  const abortRef = useRef(null);
 
-  const load = async () => {
-    setLoading(true);
+  // Load team members for actor filter
+  useEffect(() => {
+    if (!teamId) return;
+    api.get(`/api/teams/${teamId}`)
+       .then(r => setMembers(r.data.members || []))
+       .catch(() => {});
+  }, [teamId]);
+
+  const load = useCallback(async (reset = true) => {
+    if (!teamId) return;
+    abortRef.current?.abort();
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
+    const off = reset ? 0 : offset;
+    reset ? setLoading(true) : setLoadingMore(true);
     try {
-      const r = await api.get(`/api/activity/team/${teamId}`, { params: { limit: 100, event_type: filterType || undefined } });
-      setEvents(r.data);
+      const params = { limit: LIMIT, offset: off };
+      if (filterType)  params.event_type = filterType;
+      if (filterActor) params.actor_id   = filterActor;
+      const r = await api.get(`/api/activity/team/${teamId}`, { params, signal: ctrl.signal });
+      const data = r.data;
+      setEvents(prev => reset ? data : [...prev, ...data]);
+      setHasMore(data.length === LIMIT);
+      setOffset(off + data.length);
+    } catch (e) {
+      if (e.name !== 'CanceledError' && e.name !== 'AbortError') console.error(e);
     } finally {
-      setLoading(false);
+      reset ? setLoading(false) : setLoadingMore(false);
     }
-  };
+  }, [teamId, filterType, filterActor, offset]);
 
-  useEffect(() => { if (teamId) load(); }, [teamId, filterType]);
+  useEffect(() => { load(true); }, [teamId, filterType, filterActor]);
 
-  const formatTime = (iso) => {
-    const d = new Date(iso);
-    const now = Date.now();
-    const diff = now - d.getTime();
-    if (diff < 60000)  return 'just now';
-    if (diff < 3600000) return `${Math.floor(diff/60000)}m ago`;
-    if (diff < 86400000) return `${Math.floor(diff/3600000)}h ago`;
-    return d.toLocaleDateString();
+  const sel = {
+    border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)',
+    padding: '6px 10px', fontFamily: 'inherit', fontSize: 'var(--text-sm)',
+    background: 'var(--bg-default)', color: 'var(--text-default)', cursor: 'pointer',
   };
 
   return (
-    <div style={{ padding: 'var(--space-6)', maxWidth: 720 }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-6)' }}>
-        <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--weight-semibold)' }}>📋 Activity Feed</h1>
-        <select value={filterType} onChange={e => setFilterType(e.target.value)}
-          style={{ border: '1px solid var(--border-default)', borderRadius: 'var(--radius-md)', padding: '6px 12px', fontFamily: 'inherit', background: 'var(--bg-default)', color: 'var(--text-default)' }}>
-          <option value=''>All events</option>
-          <option value='status_changed'>Status changes</option>
-          <option value='commented'>Comments</option>
-          <option value='assigned'>Assignments</option>
-          <option value='approved'>Approvals</option>
-          <option value='field_changed'>Field changes</option>
+    <div style={{ padding: 'var(--space-6)', maxWidth: 760 }}>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 'var(--space-5)' }}>
+        <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--weight-semibold)', margin: 0 }}>📋 Activity Feed</h1>
+        <button onClick={() => load(true)} style={{ ...sel, fontWeight: 600 }}>↻ Refresh</button>
+      </div>
+
+      {/* Filters */}
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 'var(--space-5)' }}>
+        <select value={filterType} onChange={e => setFilterType(e.target.value)} style={sel}>
+          {EVENT_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+        </select>
+
+        <select value={filterActor} onChange={e => setFilterActor(e.target.value)} style={sel}>
+          <option value=''>All members</option>
+          {members.map(m => (
+            <option key={m.user_id || m.email} value={m.user_id || ''}>
+              {m.display_name || m.full_name || m.email}
+            </option>
+          ))}
         </select>
       </div>
 
-      {loading ? (
-        <div style={{ color: 'var(--text-muted)' }}>Loading…</div>
-      ) : events.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: 'var(--space-12)', color: 'var(--text-muted)' }}>
-          No activity yet.
-        </div>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-          {events.map(evt => (
-            <div key={evt.event_id} style={{ display: 'flex', gap: 'var(--space-4)', alignItems: 'flex-start', padding: '12px 0', borderBottom: '1px solid var(--border-subtle)' }}>
-              <span style={{ fontSize: 18, minWidth: 24, textAlign: 'center', marginTop: 1 }}>
-                {TYPE_ICONS[evt.type] || TYPE_ICONS.default}
-              </span>
-              <div style={{ flex: 1 }}>
-                <span style={{ fontWeight: 'var(--weight-medium)' }}>{evt.actor_name || 'System'}</span>
-                {' '}
-                <span style={{ color: 'var(--text-muted)' }}>{evt.type.replace(/_/g, ' ')}</span>
-                {evt.task_title && (
-                  <span> on <strong style={{ color: 'var(--accent-default)' }}>{evt.task_title}</strong></span>
-                )}
-                {evt.data?.from && (
-                  <span style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)' }}>
-                    {' '}({evt.data.from} → {evt.data.to})
-                  </span>
-                )}
-              </div>
-              <span style={{ color: 'var(--text-subtle)', fontSize: 'var(--text-xs)', whiteSpace: 'nowrap', marginTop: 2 }}>
-                {formatTime(evt.created_at)}
-              </span>
-            </div>
-          ))}
+      {/* List */}
+      <ActivityList events={events} loading={loading} showTask />
+
+      {/* Load more */}
+      {hasMore && !loading && (
+        <div style={{ textAlign: 'center', marginTop: 'var(--space-5)' }}>
+          <button
+            onClick={() => load(false)}
+            disabled={loadingMore}
+            style={{ ...sel, fontWeight: 600, minWidth: 120 }}
+          >
+            {loadingMore ? 'Loading…' : 'Load more'}
+          </button>
         </div>
       )}
     </div>

@@ -1,9 +1,13 @@
 """
 activity_logger.py — Write activity events on every mutation.
 Call log_event() from any router after a successful DB write.
+Week 2: added assign_changed + field_changed helpers.
 """
 import uuid
 from typing import Optional
+import logging
+
+log = logging.getLogger(__name__)
 
 
 async def log_event(
@@ -16,7 +20,8 @@ async def log_event(
     data: dict = None,
 ):
     """
-    Persist an activity event. team_id is resolved from the task if not provided.
+    Persist an activity event.
+    team_id is resolved from the task when not supplied.
     Silently swallows errors — logging must never crash the main request.
     """
     try:
@@ -30,15 +35,38 @@ async def log_event(
         await pool.execute(
             """
             INSERT INTO activity_events (event_id, task_id, team_id, actor_id, type, data)
-            VALUES ($1, $2, $3, $4, $5, $6)
+            VALUES ($1, $2, $3, $4, $5, $6::jsonb)
             """,
             event_id,
             task_id,
             resolved_team_id,
             actor_id,
             event_type,
-            data or {},
+            __import__('json').dumps(data or {}),
         )
     except Exception as exc:
-        import logging
-        logging.getLogger(__name__).warning(f"activity_logger swallowed error: {exc}")
+        log.warning(f"activity_logger swallowed error: {exc}")
+
+
+async def log_assigned(pool, *, task_id: str, actor_id: str, added: list, removed: list):
+    """Log an 'assigned' event whenever assignee_user_ids change."""
+    if not added and not removed:
+        return
+    await log_event(
+        pool,
+        task_id=task_id,
+        actor_id=actor_id,
+        event_type="assigned",
+        data={"added": added, "removed": removed},
+    )
+
+
+async def log_field_changed(pool, *, task_id: str, actor_id: str, field_name: str, from_val, to_val):
+    """Log a 'field_changed' event."""
+    await log_event(
+        pool,
+        task_id=task_id,
+        actor_id=actor_id,
+        event_type="field_changed",
+        data={"field": field_name, "from": from_val, "to": to_val},
+    )
