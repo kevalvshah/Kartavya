@@ -23,6 +23,7 @@ import { Modal } from "./components/ui/modal";
 import { Badge } from "./components/ui/badge";
 import { ToastProvider, useToast } from "./components/ui/toast";
 import TeamsPage from "./pages/TeamsPage";
+import AdminPage from "./pages/AdminPage";
 import NotificationsSettingsPage from "./pages/NotificationsSettingsPage";
 import { NotificationsModal } from "./components/NotificationsModal";
 import {
@@ -430,8 +431,6 @@ function Sidebar() {
   const isAdmin = user?.role === "admin";
   const isClient = user?.role === "client";
 
-  // Clients get a stripped-down sidebar focused on their projects.
-  // Owners/members get the full app + an Approvals entry for triage.
   const nav = isClient
     ? [
         { to: "/client/projects",        label: "My Projects",   Icon: FolderKanban },
@@ -478,10 +477,10 @@ function Sidebar() {
       <div className="p-3 border-t border-border/60">
         <div className="flex items-center gap-2.5 px-2 py-1.5">
           <div style={{ width: 30, height: 30, borderRadius: "50%", background: K.gradD, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 600, color: "#fff", flexShrink: 0 }}>
-            {(user?.name || "?")[0].toUpperCase()}
+            {(user?.full_name || user?.name || "?")[0].toUpperCase()}
           </div>
           <div className="flex-1 min-w-0">
-            <div className="text-xs font-bold truncate">{user?.name || "User"}</div>
+            <div className="text-xs font-bold truncate">{user?.full_name || user?.name || "User"}</div>
             <div className="text-[10px] text-muted-foreground capitalize">{user?.role || "member"}</div>
           </div>
         </div>
@@ -605,7 +604,6 @@ function DashboardPage() {
         <StatCard label="Overdue"     value={summary?.overdue     ?? "—"} danger />
       </div>
 
-      {/* ── Needs my attention ──────────────────────────────────────────── */}
       {summary && (() => {
         const items = [
           { count: summary.new_client_requests,     label: "New client requests",   to: "/approvals", color: "#8b5cf6" },
@@ -818,7 +816,6 @@ function ColumnManager({ open, onClose, projectId, columns, onColumnsChange }) {
     <Modal open={open} onOpenChange={onClose} title="Manage Board Columns"
       footer={<Button variant="ghost" onClick={onClose}>Done</Button>}>
       <div className="space-y-5">
-        {/* Existing columns */}
         <div className="space-y-2">
           {cols.map((col) => (
             <div key={col.column_id} className="rounded-2xl border border-border/60 bg-background/40 p-3">
@@ -854,7 +851,6 @@ function ColumnManager({ open, onClose, projectId, columns, onColumnsChange }) {
           ))}
         </div>
 
-        {/* Add new column */}
         <div className="rounded-2xl border border-border/60 bg-background/40 p-4 space-y-3">
           <div className="text-xs font-bold text-muted-foreground uppercase tracking-wide">Add Column</div>
           <Input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="e.g., In Review, Approval, Live…"
@@ -890,14 +886,14 @@ function ProjectBoardPage() {
   const isOwner = user?.role === "admin" || user?.role === "owner";
 
   const [project, setProject]       = useState(null);
-  const [columns, setColumns]       = useState([]);      // custom columns
+  const [columns, setColumns]       = useState([]);
   const [tasks, setTasks]           = useState([]);
   const [categories, setCats]       = useState([]);
-  const [view, setView]             = useState("board"); // board | list | schedule | tracker
+  const [view, setView]             = useState("board");
   const [editorOpen, setEditorOpen] = useState(false);
   const [editing, setEditing]       = useState(null);
   const [colMgrOpen, setColMgrOpen] = useState(false);
-  const [filterCol, setFilterCol]   = useState("");      // filter by column in list view
+  const [filterCol, setFilterCol]   = useState("");
 
   const load = useCallback(async () => {
     const [proj, cols, t, c] = await Promise.all([
@@ -914,7 +910,6 @@ function ProjectBoardPage() {
 
   useEffect(() => { load().catch(() => pushToast({ type: "error", title: "Could not load board" })); }, [load, pushToast]);
 
-  // Group tasks by column_id
   const grouped = useMemo(() => {
     const m = {};
     columns.forEach((c) => { m[c.column_id] = []; });
@@ -960,13 +955,11 @@ function ProjectBoardPage() {
 
   return (
     <div className="space-y-4">
-      {/* ── Header ── */}
       <div className="flex flex-wrap items-center gap-3">
         <button onClick={() => navigate("/projects")} className="text-sm text-muted-foreground hover:text-foreground transition-colors">Projects</button>
         <ChevronRight size={14} className="text-muted-foreground" />
         <div className="text-sm font-bold">{project?.team?.name || "…"}</div>
 
-        {/* View toggle */}
         <div className="ml-auto flex items-center gap-1 rounded-2xl border border-border/60 bg-card/50 p-1">
           {VIEWS.map(({ id, label, Icon }) => (
             <button key={id} onClick={() => setView(id)}
@@ -976,7 +969,6 @@ function ProjectBoardPage() {
           ))}
         </div>
 
-        {/* Actions */}
         <div className="flex items-center gap-2">
           {isOwner && (
             <Button variant="ghost" onClick={() => setColMgrOpen(true)} className="text-xs h-9">
@@ -989,7 +981,6 @@ function ProjectBoardPage() {
         </div>
       </div>
 
-      {/* ── Column pills (mini legend) ── */}
       <div className="flex items-center gap-2 flex-wrap">
         {columns.map((col) => (
           <div key={col.column_id} className="flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full"
@@ -1002,7 +993,6 @@ function ProjectBoardPage() {
         ))}
       </div>
 
-      {/* ── BOARD VIEW ── */}
       {view === "board" && (
         <DragDropContext onDragEnd={onDragEnd}>
           <div className="flex gap-4 overflow-x-auto pb-4" style={{ minHeight: 500 }}>
@@ -1028,7 +1018,6 @@ function ProjectBoardPage() {
                           onClick={() => { setEditing(t); setEditorOpen(true); }}
                           className="rounded-2xl border border-border/60 bg-background/50 p-3.5 shadow-sm cursor-pointer hover:border-border transition-colors group">
                           <div className="flex items-start justify-between gap-2">
-                            {/* drag handle */}
                             <div {...drag.dragHandleProps} className="mt-0.5 opacity-0 group-hover:opacity-40 transition-opacity cursor-grab" onClick={(e) => e.stopPropagation()}>
                               <GripVertical size={12} />
                             </div>
@@ -1038,7 +1027,6 @@ function ProjectBoardPage() {
                             </div>
                             <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md shrink-0" style={priorityStyle(t.priority)}>{t.priority}</span>
                           </div>
-                          {/* Approval status + attachment count */}
                           {(t.approval_status || (t.attachments || []).length > 0) && (
                             <div className="mt-2 flex items-center gap-1.5 flex-wrap">
                               {t.approval_status && approvalBadgeStyle(t.approval_status) && (
@@ -1083,7 +1071,6 @@ function ProjectBoardPage() {
                       )}</Draggable>
                     ))}
                     {prov.placeholder}
-                    {/* Quick add in column */}
                     <button onClick={() => { setEditing({ _defaultColumn: col.column_id }); setEditorOpen(true); }}
                       className="w-full rounded-2xl border border-dashed border-border/40 py-2 text-xs text-muted-foreground hover:border-border hover:text-foreground transition-colors flex items-center justify-center gap-1">
                       <Plus size={11} /> Add task
@@ -1093,7 +1080,6 @@ function ProjectBoardPage() {
               </div>
             ))}
 
-            {/* Add column shortcut for admins */}
             {isOwner && (
               <button onClick={() => setColMgrOpen(true)}
                 className="rounded-3xl border border-dashed border-border/60 flex-shrink-0 flex items-center justify-center gap-2 text-sm text-muted-foreground hover:text-foreground hover:border-border transition-colors"
@@ -1105,10 +1091,8 @@ function ProjectBoardPage() {
         </DragDropContext>
       )}
 
-      {/* ── LIST VIEW ── */}
       {view === "list" && (
         <div className="space-y-3">
-          {/* Column filter */}
           <div className="flex items-center gap-2 flex-wrap">
             <button onClick={() => setFilterCol("")}
               className={cn("view-pill", !filterCol && "active")}>All</button>
@@ -1155,7 +1139,6 @@ function ProjectBoardPage() {
         </div>
       )}
 
-      {/* ── SCHEDULE VIEW ── */}
       {view === "schedule" && (
         <div className="rounded-3xl border border-border/70 bg-card/50 overflow-hidden">
           <div className="px-5 py-4 border-b border-border/60">
@@ -1201,10 +1184,8 @@ function ProjectBoardPage() {
         </div>
       )}
 
-      {/* ── TRACKER VIEW ── */}
       {view === "tracker" && (
         <div className="space-y-4">
-          {/* Per-column progress bars */}
           <div className="rounded-3xl border border-border/70 bg-card/50 p-6">
             <div className="text-sm font-bold mb-5">Column Distribution</div>
             {columns.map((col) => {
@@ -1232,7 +1213,6 @@ function ProjectBoardPage() {
             </div>
           </div>
 
-          {/* Priority breakdown */}
           <div className="rounded-3xl border border-border/70 bg-card/50 p-6">
             <div className="text-sm font-bold mb-5">Priority Breakdown</div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -1249,7 +1229,6 @@ function ProjectBoardPage() {
             </div>
           </div>
 
-          {/* Overdue counter */}
           <div className="grid grid-cols-3 gap-4">
             {[
               { label: "With due dates",   value: tasks.filter((t) => t.due_at).length,                               color: K.blue },
@@ -1265,7 +1244,6 @@ function ProjectBoardPage() {
         </div>
       )}
 
-      {/* ── Task editor ── */}
       <TaskEditor
         key={editing ? (editing.task_id || "new-from-col") : "new"}
         open={editorOpen} onOpenChange={setEditorOpen}
@@ -1284,7 +1262,6 @@ function ProjectBoardPage() {
         }}
       />
 
-      {/* ── Column manager ── */}
       <ColumnManager
         open={colMgrOpen}
         onClose={() => setColMgrOpen(false)}
@@ -1392,10 +1369,6 @@ function TasksListPage() {
 }
 
 // ── Task editor modal ─────────────────────────────────────────────────────────
-
-// Hoisted out of TaskEditor on purpose. Defining F inside the render function
-// gives it a different identity on every keystroke, which React reads as "new
-// component type" and remounts every field — destroying focus mid-typing.
 function F({ label, children }) {
   return (
     <div>
@@ -1412,19 +1385,16 @@ function TaskEditor({ open, onOpenChange, editing, categories, teams, defaultTea
   const [loadingMembers, setLoadingMembers] = useState(false);
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef(null);
-  // Comments
   const [comments, setComments] = useState([]);
   const [newComment, setNewComment] = useState("");
   const [postingComment, setPostingComment] = useState(false);
-  // Approval action UI
-  const [approvalAction, setApprovalAction] = useState(null); // 'owner' | 'client' | 'approve' | 'reject' | 'client-approve' | 'client-reject'
+  const [approvalAction, setApprovalAction] = useState(null);
   const [approvalNotes, setApprovalNotes] = useState("");
   const [clientEmail, setClientEmail] = useState("");
   const [submittingApproval, setSubmittingApproval] = useState(false);
   const currentUserMe = currentUser();
   const isClientUser = currentUserMe?.role === "client";
 
-  // Reload editing task fresh (for current approval_status) when opened
   const [taskState, setTaskState] = useState(editing);
   useEffect(() => { setTaskState(editing); }, [editing]);
   const refreshTask = async () => {
@@ -1482,7 +1452,6 @@ function TaskEditor({ open, onOpenChange, editing, categories, teams, defaultTea
   const canAssign = !form.team_id || yourRole === "owner" || yourRole === "admin";
   const upd = (k, v) => setForm((p) => ({ ...p, [k]: v }));
 
-  // Load comments when editing an existing task
   useEffect(() => {
     if (!open || !taskState?.task_id) { setComments([]); return; }
     let live = true;
@@ -1506,7 +1475,6 @@ function TaskEditor({ open, onOpenChange, editing, categories, teams, defaultTea
     }
   };
 
-  // Approval actions
   const submitApprovalAction = async () => {
     if (!taskState?.task_id) return;
     setSubmittingApproval(true);
@@ -1556,29 +1524,22 @@ function TaskEditor({ open, onOpenChange, editing, categories, teams, defaultTea
   const handleFileSelect = async (e) => {
     const files = Array.from(e.target.files || []);
     if (files.length === 0) return;
-
-    const MAX_SIZE = 5 * 1024 * 1024; // 5MB
+    const MAX_SIZE = 5 * 1024 * 1024;
     for (const file of files) {
       if (file.size > MAX_SIZE) {
         pushToast({ type: "error", title: `File "${file.name}" exceeds 5MB limit` });
         return;
       }
     }
-
     setUploading(true);
     try {
       const uploaded = [];
       for (const file of files) {
         const formData = new FormData();
         formData.append('file', file);
-
-        const r = await api.post('/upload', formData, {
-          headers: { 'Content-Type': 'multipart/form-data' }
-        });
-
+        const r = await api.post('/upload', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
         uploaded.push({ name: file.name, url: r.data.url });
       }
-
       upd("attachments", [...(form.attachments || []), ...uploaded]);
       pushToast({ type: "success", title: "Files uploaded" });
     } catch (err) {
@@ -1599,8 +1560,6 @@ function TaskEditor({ open, onOpenChange, editing, categories, teams, defaultTea
     try { customFields = form.custom_fields_text?.trim() ? JSON.parse(form.custom_fields_text) : {}; }
     catch (_) { pushToast({ type: "error", title: "Custom fields must be valid JSON" }); return; }
     const assignees = form.assign_scope === "whole_team" && form.team_id ? teamMembers.map((m) => m.user_id) : (form.assignee_user_ids || []);
-    // In client mode, the task is always scoped to the project the client opened.
-    // Don't trust form.team_id (the dropdown is hidden anyway) — use defaultTeamId.
     const effectiveTeamId = isClientMode ? (defaultTeamId || form.team_id || null) : (form.team_id || null);
     const payload = {
       title: form.title.trim(), description: form.description?.trim() || null,
@@ -1618,7 +1577,6 @@ function TaskEditor({ open, onOpenChange, editing, categories, teams, defaultTea
     };
     try {
       if (isClientMode && !editing) {
-        // Client creating new task - submit for approval
         await api.post("/client/tasks/request", payload);
         pushToast({ type: "success", title: "Task submitted for approval", message: "Project owner will review your request" });
         onSaved?.();
@@ -1679,10 +1637,15 @@ function TaskEditor({ open, onOpenChange, editing, categories, teams, defaultTea
               <div className="mt-2 grid gap-2 md:grid-cols-2">
                 {teamMembers.map((m) => {
                   const checked = (form.assignee_user_ids || []).includes(m.user_id);
+                  const displayName = m.display_name || m.full_name || m.name || m.email;
+                  const roleLabel = m.member_role || (m.role && m.role !== "member" && m.role !== "client" ? m.role : null);
                   return (
                     <label key={m.user_id} className="flex items-center gap-2 rounded-2xl border border-border/60 bg-background/40 px-3 py-2 text-sm cursor-pointer hover:bg-muted/40">
                       <input type="checkbox" checked={checked} onChange={(e) => setForm((p) => { const s = new Set(p.assignee_user_ids || []); e.target.checked ? s.add(m.user_id) : s.delete(m.user_id); return { ...p, assignee_user_ids: Array.from(s) }; })} />
-                      <span className="truncate text-xs">{m.email}</span>
+                      <div style={{ display: "flex", flexDirection: "column", lineHeight: 1.3 }}>
+                        <span className="truncate text-xs font-semibold">{displayName}</span>
+                        {roleLabel && <span style={{ fontSize: 10, color: "#8aa5be" }}>{roleLabel}</span>}
+                      </div>
                     </label>
                   );
                 })}
@@ -1752,7 +1715,6 @@ function TaskEditor({ open, onOpenChange, editing, categories, teams, defaultTea
           </div>
         </F>
 
-        {/* ── Approval state banner (existing tasks only) ──────────────────── */}
         {taskState?.task_id && taskState?.approval_status && (
           <div style={{
             padding: 12, borderRadius: 10, fontSize: 13, fontWeight: 400,
@@ -1782,22 +1744,18 @@ function TaskEditor({ open, onOpenChange, editing, categories, teams, defaultTea
           </div>
         )}
 
-        {/* ── Approval action buttons (existing tasks only, not in client-create mode) ─── */}
         {taskState?.task_id && !isClientMode && (
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", paddingTop: 4 }}>
-            {/* Team member: send for owner approval — only when no approval cycle is active */}
             {(!taskState.approval_status || taskState.approval_status === "rejected") && (
               <Button variant="ghost" onClick={() => { setApprovalAction("owner"); setApprovalNotes(""); }}>
                 Send for owner approval
               </Button>
             )}
-            {/* Send for client approval — available unless already pending an approval */}
             {taskState.approval_status !== "pending" && taskState.approval_status !== "pending_client" && (
               <Button variant="ghost" onClick={() => { setApprovalAction("client"); setApprovalNotes(""); setClientEmail(""); }}>
                 Send for client approval
               </Button>
             )}
-            {/* Owner/admin: approve or reject pending request */}
             {taskState.approval_status === "pending" && (yourRole === "owner" || yourRole === "admin" || currentUserMe?.role === "admin") && (
               <>
                 <Button onClick={() => { setApprovalAction("approve"); setApprovalNotes(""); }}>
@@ -1811,7 +1769,6 @@ function TaskEditor({ open, onOpenChange, editing, categories, teams, defaultTea
           </div>
         )}
 
-        {/* ── Client approval actions (client viewing pending_client task) ─── */}
         {taskState?.task_id && isClientUser && taskState.approval_status === "pending_client" && (
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", paddingTop: 4 }}>
             <Button onClick={() => { setApprovalAction("client-approve"); setApprovalNotes(""); }}>
@@ -1823,7 +1780,6 @@ function TaskEditor({ open, onOpenChange, editing, categories, teams, defaultTea
           </div>
         )}
 
-        {/* ── Approval action prompt (notes / client email) ─────────────── */}
         {approvalAction && (
           <div style={{ padding: 12, borderRadius: 10, background: "var(--color-muted)", display: "flex", flexDirection: "column", gap: 8 }}>
             <div style={{ fontSize: 12, fontWeight: 500, textTransform: "uppercase", letterSpacing: 1, color: "var(--color-muted-foreground)" }}>
@@ -1855,7 +1811,6 @@ function TaskEditor({ open, onOpenChange, editing, categories, teams, defaultTea
           </div>
         )}
 
-        {/* ── Comments thread (existing tasks only) ─────────────────────── */}
         {taskState?.task_id && (
           <div style={{ paddingTop: 8 }}>
             <div style={{ fontSize: 11, fontWeight: 500, textTransform: "uppercase", letterSpacing: 1.2, color: "var(--color-muted-foreground)", marginBottom: 8 }}>
@@ -1948,138 +1903,7 @@ function CategoriesPage() {
   );
 }
 
-// ── Admin panel ───────────────────────────────────────────────────────────────
-function AdminPage() {
-  const { pushToast } = useToast();
-  const [users, setUsers] = useState([]);
-  const [invites, setInvites] = useState([]);
-  const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteRole, setInviteRole] = useState("member");
-  const [sending, setSending] = useState(false);
-  const [copiedId, setCopiedId] = useState(null);
-  const [changingRole, setChangingRole] = useState(null);
-
-  const load = () => Promise.all([
-    api.get("/admin/users").then((r) => setUsers(r.data)).catch(() => {}),
-    api.get("/admin/invites").then((r) => setInvites(r.data)).catch(() => {}),
-  ]);
-  useEffect(() => { load(); }, []);
-
-  const sendInvite = async () => {
-    if (!inviteEmail.trim()) return;
-    setSending(true);
-    try {
-      await api.post("/admin/invites", { email: inviteEmail.trim(), role: inviteRole });
-      pushToast({ type: "success", title: "Invite created — copy link below" });
-      setInviteEmail(""); load();
-    } catch (err) {
-      pushToast({ type: "error", title: "Could not create invite", message: err?.response?.data?.detail });
-    } finally { setSending(false); }
-  };
-
-  const copyLink = (link, id) => {
-    navigator.clipboard.writeText(link);
-    setCopiedId(id);
-    setTimeout(() => setCopiedId(null), 2000);
-  };
-
-  const revokeInvite = async (id) => {
-    await api.delete(`/admin/invites/${id}`).catch(() => {});
-    pushToast({ type: "success", title: "Invite revoked" }); load();
-  };
-
-  const removeUser = async (u) => {
-    if (!window.confirm(`Remove ${u.name} (${u.email})? This cannot be undone.`)) return;
-    await api.delete(`/admin/users/${u.user_id}`).catch(() => {});
-    pushToast({ type: "success", title: "User removed" }); load();
-  };
-
-  const changeRole = async (u, role) => {
-    setChangingRole(u.user_id);
-    try {
-      await api.put(`/admin/users/${u.user_id}/role`, { role });
-      setUsers((prev) => prev.map((x) => x.user_id === u.user_id ? { ...x, role } : x));
-    } catch (_) { pushToast({ type: "error", title: "Could not change role" }); }
-    finally { setChangingRole(null); }
-  };
-
-  return (
-    <div className="space-y-6">
-      <div className="rounded-3xl border border-border/70 bg-card/50 p-5">
-        <div className="flex items-center gap-2 mb-4">
-          <Mail size={16} style={{ color: K.blue }} />
-          <div className="text-sm font-bold">Send Invite</div>
-        </div>
-        <div className="grid gap-3 md:grid-cols-[1fr_160px_120px]">
-          <Input value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && sendInvite()}
-            placeholder="client@company.com" type="email" />
-          <Select value={inviteRole} onChange={setInviteRole}
-            options={[
-              { value: "admin", label: "Admin" },
-              { value: "member", label: "Member" },
-              { value: "client", label: "Client" },
-            ]} />
-          <Button onClick={sendInvite} disabled={sending}>{sending ? "Sending…" : "Send Invite"}</Button>
-        </div>
-        <p className="mt-2 text-xs text-muted-foreground">Admins manage users and settings. Members get full workspace access. Clients see only tasks shared with them.</p>
-      </div>
-
-      {invites.filter((i) => !i.accepted_at).length > 0 && (
-        <div className="rounded-3xl border border-border/70 bg-card/50 overflow-hidden">
-          <div className="px-5 py-3 border-b border-border/60 text-sm font-bold">Pending Invites</div>
-          {invites.filter((i) => !i.accepted_at).map((inv) => (
-            <div key={inv.invite_id} className="flex items-center gap-3 border-b border-border/40 px-5 py-3.5">
-              <div className="flex-1 min-w-0">
-                <div className="text-sm font-semibold">{inv.email}</div>
-                <div className="text-xs text-muted-foreground flex items-center gap-2 mt-0.5">
-                  <RoleBadge role={inv.role} />
-                  <span>Expires {new Date(inv.expires_at).toLocaleDateString()}</span>
-                </div>
-              </div>
-              <button onClick={() => copyLink(inv.invite_link, inv.invite_id)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border border-border/60 hover:bg-muted/40 transition-colors whitespace-nowrap">
-                {copiedId === inv.invite_id ? <><Check size={11} /> Copied!</> : <><Copy size={11} /> Copy link</>}
-              </button>
-              <Button variant="ghost" onClick={() => revokeInvite(inv.invite_id)} className="px-2 h-8 shrink-0">
-                <Trash2 size={13} />
-              </Button>
-            </div>
-          ))}
-        </div>
-      )}
-
-      <div className="rounded-3xl border border-border/70 bg-card/50 overflow-hidden">
-        <div className="px-5 py-3 border-b border-border/60 flex items-center justify-between">
-          <div className="text-sm font-bold">All Users</div>
-          <div className="text-xs text-muted-foreground">{users.length} total</div>
-        </div>
-        {users.map((u) => (
-          <div key={u.user_id} className="flex items-center gap-3 border-b border-border/40 px-5 py-4">
-            <div style={{ width: 36, height: 36, borderRadius: "50%", background: K.gradD, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 600, color: "#fff", flexShrink: 0 }}>
-              {(u.name || "?")[0].toUpperCase()}
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="text-sm font-semibold truncate">{u.name}</div>
-              <div className="text-xs text-muted-foreground truncate">{u.email}</div>
-            </div>
-            <RoleBadge role={u.role} />
-            <div className="w-32 shrink-0">
-              <Select value={u.role} onChange={(role) => changeRole(u, role)}
-                options={[{ value: "admin", label: "Admin" }, { value: "member", label: "Member" }, { value: "client", label: "Client" }]} />
-            </div>
-            <Button variant="ghost" onClick={() => removeUser(u)} className="px-2 h-8 shrink-0">
-              <Trash2 size={13} />
-            </Button>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 // ── Client portal ─────────────────────────────────────────────────────────────
-// ── Client Projects View ──────────────────────────────────────────────────────
 function ClientProjectsPage() {
   const [projects, setProjects] = useState([]);
   const navigate = useNavigate();
@@ -2192,7 +2016,6 @@ function ClientProjectBoardPage() {
         </div>
       </div>
 
-      {/* Kanban Board - Read-only for clients */}
       <div className="kanban-container">
         {columns.map(col => (
           <div key={col.column_id} className="kanban-column">
@@ -2239,7 +2062,6 @@ function ClientProjectBoardPage() {
                       </div>
                     )}
 
-                    {/* Approval status badge for clients */}
                     {t.approval_status && approvalBadgeStyle(t.approval_status) && (
                       <div className="mt-2">
                         <span className="text-[10px] px-1.5 py-0.5 rounded-md"
@@ -2256,7 +2078,6 @@ function ClientProjectBoardPage() {
                       </div>
                     )}
 
-                    {/* Show attachments count */}
                     {t.attachments && t.attachments.length > 0 && (
                       <div className="mt-2 flex items-center gap-1 text-xs text-muted-foreground">
                         <span>📎</span>
@@ -2264,7 +2085,6 @@ function ClientProjectBoardPage() {
                       </div>
                     )}
 
-                    {/* Subtasks progress */}
                     {(t.subtasks || []).length > 0 && (
                       <div className="mt-2">
                         <div className="flex justify-between text-[10px] text-muted-foreground mb-1">
@@ -2287,7 +2107,6 @@ function ClientProjectBoardPage() {
         ))}
       </div>
 
-      {/* Task editor - clients can view and create approval requests */}
       <TaskEditor
         key={editing ? editing.task_id : "new"}
         open={editorOpen}
@@ -2343,7 +2162,7 @@ function ClientPortal() {
           <KLogo size={36} /><KWordmark dark />
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <span style={{ fontSize: 13, color: "#8aa5be" }}>Hi, {user?.name}</span>
+          <span style={{ fontSize: 13, color: "#8aa5be" }}>Hi, {user?.full_name || user?.name}</span>
           <button onClick={async () => { await apiLogout(); navigate("/login"); }}
             style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "#8aa5be", background: "none", border: "none", cursor: "pointer" }}>
             <LogOut size={14} /> Sign out
@@ -2419,7 +2238,7 @@ function PendingApprovalsPage() {
   const navigate = useNavigate();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [requests, setRequests] = useState([]); // client → owner task requests
+  const [requests, setRequests] = useState([]);
   const [reviewing, setReviewing] = useState(null);
   const [notes, setNotes] = useState("");
 
@@ -2483,7 +2302,6 @@ function PendingApprovalsPage() {
         </div>
       )}
 
-      {/* Client task requests waiting for owner approval */}
       {requests.length > 0 && (
         <div style={{ marginBottom: 32 }}>
           <h2 style={{ fontSize: 13, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1.2, color: "var(--color-muted-foreground)", marginBottom: 12 }}>
@@ -2520,7 +2338,6 @@ function PendingApprovalsPage() {
         </div>
       )}
 
-      {/* Tasks the team has marked ready for review */}
       {items.length > 0 && (
         <div>
           <h2 style={{ fontSize: 13, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1.2, color: "var(--color-muted-foreground)", marginBottom: 12 }}>
