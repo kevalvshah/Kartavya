@@ -1,0 +1,21 @@
+# ── requirements additions for R2 ─────────────────────────────────
+# Add these to your existing requirements.txt:
+#   boto3>=1.34
+#   botocore>=1.34
+#
+# The rest of this file is the FULL requirements.txt
+# (copy-paste and replace your existing one)
+fastapi
+uvicorn[standard]
+asyncpg
+pydantic
+python-dotenv
+bcrypt
+pyjwt
+httpx
+python-multipart
+aiosmtplib
+email-validator
+boto3>=1.34
+botocore>=1.34
+asyncpg

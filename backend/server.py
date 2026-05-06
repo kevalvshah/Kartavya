@@ -1,5 +1,7 @@
-"""server.py — Kartavya API v2 by Aekam Inc
+"""
+server.py — Kartavya API v2 by Aekam Inc
 Monolith routes stay; new v2 routers mounted at the bottom.
+R2 upload router replaces the old base64 /api/upload endpoint.
 """
 
 import asyncio
@@ -33,6 +35,7 @@ from routers.activity    import router as activity_router
 from routers.dashboards  import router as dashboards_router
 from routers.templates   import router as templates_router
 from routers.time_entries import router as time_router
+from routers.uploads     import router as uploads_router   # R2-backed upload
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env")
@@ -43,11 +46,12 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 app = FastAPI(title="Kartavya API v2", description="Team task management by Aekam Inc")
 api_router = APIRouter(prefix="/api")
 
-# ── CORS ──────────────────────────────────────────────────────────────────────
+# ── CORS ────────────────────────────────────────────────────────────────────
 DEFAULT_ORIGINS = [
     "https://kartavya-aekam.vercel.app",
     "https://kartavya-kevalvshah03-6145s-projects.vercel.app",
     "https://kartavya-git-main-kevalvshah03-6145s-projects.vercel.app",
+    "https://kartavya-git-v2-plan-kevalvshah03-6145s-projects.vercel.app",
     "http://localhost:3000",
     "http://localhost:8080",
 ]
@@ -116,7 +120,7 @@ async def ensure_default_columns(pool, team_id):
             )
 
 
-# ── Models ────────────────────────────────────────────────────────────────────
+# ── Models ───────────────────────────────────────────────────────────────────
 class ProjectColumnCreate(BaseModel):
     name:str; color:str="#0082c6"; is_done:bool=False
 class ProjectColumnUpdate(BaseModel):
@@ -138,7 +142,7 @@ class TeamMemberUpdate(BaseModel):
 class TeamMemberOut(BaseModel):
     member_id:str; team_id:str; email:str; user_id:Optional[str]=None; role:str; status:str; created_at:datetime; updated_at:datetime
 class Attachment(BaseModel):
-    name:str; url:str
+    name:str; url:str; key:Optional[str]=None
 class Subtask(BaseModel):
     subtask_id:str=Field(default_factory=lambda:f"sub_{uuid.uuid4().hex[:12]}"); title:str; is_done:bool=False; order:int=0
 class Recurrence(BaseModel):
@@ -218,7 +222,7 @@ def row_to_task(r) -> TaskOut:
     )
 
 
-# ── Routes (existing — unchanged) ─────────────────────────────────────────────
+# ── Routes ───────────────────────────────────────────────────────────────────
 
 @api_router.get("/")
 async def root(): return {"message":"Kartavya API v2","by":"Aekam Inc","status":"ok"}
@@ -356,7 +360,6 @@ async def add_comment(task_id:str,body:CommentCreate,pool=Depends(get_db),user=D
         if not access: raise HTTPException(403)
     comment_id=f"cmt_{uuid.uuid4().hex[:12]}"
     row=await pool.fetchrow("INSERT INTO task_comments (comment_id,task_id,user_id,body) VALUES ($1,$2,$3,$4) RETURNING *",comment_id,task_id,user["user_id"],body.body)
-    # Fan-out notifications
     try:
         task=await pool.fetchrow("SELECT title,team_id,created_by_user_id,assignee_user_ids FROM tasks WHERE task_id=$1",task_id)
         if task:
@@ -367,13 +370,15 @@ async def add_comment(task_id:str,body:CommentCreate,pool=Depends(get_db),user=D
             cr=await pool.fetch("SELECT user_id FROM task_clients WHERE task_id=$1",task_id)
             for c in cr:
                 if c["user_id"]!=user["user_id"]: recipients.add(c["user_id"])
-            preview=body.body[:140]+("…" if len(body.body)>140 else "")
+            preview=body.body[:140]+("\u2026" if len(body.body)>140 else "")
             actor_name=user.get("full_name") or user.get("name") or user.get("email","")
             for rid in recipients:
                 await create_notification(pool,rid,"comment",f"New comment on {task['title']}",f"{actor_name}: {preview}",task_id,task["team_id"],"/tasks")
-            # Process @mentions
             from services.mentions import process_mentions
             await process_mentions(pool,comment_id,body.body,task_id,user["user_id"])
+            # Log activity
+            from services.activity_logger import log_event
+            await log_event(pool,task_id=task_id,actor_id=user["user_id"],event_type="commented",data={"preview":preview[:80]})
     except Exception as e:
         logger.warning(f"comment fan-out failed: {e}")
     actor_name=user.get("full_name") or user.get("name") or user.get("email","")
@@ -512,7 +517,6 @@ async def create_task(payload:TaskCreate,pool=Depends(get_db),user=Depends(requi
         due_dt,reminder_dt,payload.recurrence.rule,payload.recurrence.interval,payload.estimated_minutes,
         json.dumps([a.model_dump() for a in payload.attachments or []]),
         json.dumps(payload.custom_fields or {}),json.dumps([s.model_dump() for s in payload.subtasks or []]),next_order)
-    # Notify + log activity
     team_name=None
     if payload.team_id:
         tr=await pool.fetchrow("SELECT name FROM teams WHERE team_id=$1",payload.team_id)
@@ -554,7 +558,7 @@ async def update_task(task_id:str,payload:TaskUpdate,pool=Depends(get_db),user=D
     existing=await pool.fetchrow("SELECT * FROM tasks WHERE task_id=$1 AND (user_id=$2 OR team_id=ANY($3::text[]))",task_id,user["user_id"],team_ids)
     if not existing: raise HTTPException(404)
     data=payload.model_dump(exclude_unset=True); updates,vals=[],[]
-    old_status=existing["status"]; old_col=existing.get("column_id")
+    old_status=existing["status"]; old_assignees=list(existing.get("assignee_user_ids") or [])
     for k in ["title","description","status","priority","category_id","estimated_minutes","column_id"]:
         if k in data: updates.append(f"{k}=${len(vals)+1}"); vals.append(data[k])
     for k in ["tags","assignee_user_ids","assignee_emails"]:
@@ -574,13 +578,17 @@ async def update_task(task_id:str,payload:TaskUpdate,pool=Depends(get_db),user=D
         if col and col["is_done"] and "status" not in data: updates.append(f"status=${len(vals)+1}"); vals.append("done")
     updates.append(f"updated_at=${len(vals)+1}"); vals.append(now_utc()); vals.append(task_id)
     row=await pool.fetchrow(f"UPDATE tasks SET {', '.join(updates)} WHERE task_id=${len(vals)} RETURNING *",*vals)
-    new_status=row["status"]; new_col=row.get("column_id")
-    # Activity logging
+    new_status=row["status"]; new_assignees=list(row.get("assignee_user_ids") or [])
+    from services.activity_logger import log_event, log_assigned
     if old_status!=new_status:
-        from services.activity_logger import log_event
         await log_event(pool,task_id=task_id,actor_id=user["user_id"],event_type="status_changed",data={"from":old_status,"to":new_status})
         from services.automation_engine import fire_automations
         asyncio.create_task(fire_automations(pool,"status_changed",{"task":{"task_id":task_id,"team_id":existing["team_id"]},"team_id":existing["team_id"],"from":old_status,"to":new_status}))
+    if "assignee_user_ids" in data:
+        added=[u for u in new_assignees if u not in old_assignees]
+        removed=[u for u in old_assignees if u not in new_assignees]
+        if added or removed:
+            await log_assigned(pool,task_id=task_id,actor_id=user["user_id"],added=added,removed=removed)
     return row_to_task(row)
 
 
@@ -591,17 +599,6 @@ async def delete_task(task_id:str,pool=Depends(get_db),user=Depends(require_user
     if not doc: raise HTTPException(404)
     await pool.execute("DELETE FROM tasks WHERE task_id=$1",task_id)
     return {"ok":True}
-
-@api_router.post("/upload")
-async def upload_file(file:UploadFile=File(...),user=Depends(require_user)):
-    MAX_SIZE=5*1024*1024
-    contents=await file.read()
-    if len(contents)>MAX_SIZE: raise HTTPException(400,f"File exceeds 5MB")
-    file_ext=Path(file.filename).suffix if file.filename else ""
-    import mimetypes
-    mime_type=mimetypes.guess_type(file.filename)[0] or 'application/octet-stream'
-    b64=base64.b64encode(contents).decode('utf-8')
-    return {"url":f"data:{mime_type};base64,{b64}","name":file.filename,"size":len(contents)}
 
 @api_router.patch("/tasks/{task_id}/toggle",response_model=TaskOut)
 async def toggle_task(task_id:str,pool=Depends(get_db),user=Depends(require_user)):
@@ -671,7 +668,7 @@ async def subscribe_push(payload:PushSubscriptionIn,user=Depends(require_user)):
 async def unsubscribe_push(payload:PushSubscriptionIn,user=Depends(require_user)): return {"ok":True}
 
 
-# ── App assembly ──────────────────────────────────────────────────────────────
+# ── App assembly ──────────────────────────────────────────────────────────────────
 
 app.include_router(auth_router)
 app.include_router(invite_router)
@@ -687,6 +684,7 @@ app.include_router(activity_router)
 app.include_router(dashboards_router)
 app.include_router(templates_router)
 app.include_router(time_router)
+app.include_router(uploads_router)   # R2-backed file upload (replaces old base64 /api/upload)
 
 
 @app.on_event("startup")
@@ -697,8 +695,10 @@ async def startup():
         logger.info(f"DATABASE_URL: postgresql://{user_part}:***@{host_part}")
     else:
         logger.info(f"DATABASE_URL: {dsn}")
+    r2_bucket = os.environ.get("R2_BUCKET_NAME", "NOT SET")
+    logger.info(f"R2_BUCKET: {r2_bucket} | R2_PUBLIC_URL: {os.environ.get('R2_PUBLIC_URL','<presigned>')}")
     logger.info(f"CORS origins: {ALLOWED_ORIGINS}")
-    logger.info("Kartavya API v2 ready — custom fields, automations, activity, time tracking")
+    logger.info("Kartavya API v2 ready — custom fields, automations, activity, time tracking, R2 uploads")
 
 @app.on_event("shutdown")
 async def shutdown(): await close_pool()
