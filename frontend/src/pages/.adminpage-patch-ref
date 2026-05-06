@@ -1,0 +1,3 @@
+// patch-app-imports.js — NOT a real file
+// The changes needed in App.js are targeted str_replace patches below.
+// This file is a placeholder/reference only.
