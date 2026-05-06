@@ -1,27 +1,28 @@
 /**
  * KanbanView.jsx — v2 drag-and-drop kanban board.
- * Uses native HTML5 drag API (no external deps).
- * Integrates KanbanCard + TaskDrawer + field values.
  */
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useMemo } from 'react';
 import { api } from '../../lib/api';
 import KanbanCard from './KanbanCard';
 import TaskDrawer from '../TaskDrawer';
 
 export default function KanbanView({ columns, tasks, fieldDefs, fieldValueMap, teamMembers, onTasksChange, onColumnChange }) {
-  const [dragging, setDragging]     = useState(null);
-  const [over, setOver]             = useState(null);
+  const [dragging, setDragging]         = useState(null);
+  const [over, setOver]                 = useState(null);
   const [drawerTaskId, setDrawerTaskId] = useState(null);
   const dragIdx = useRef(null);
 
-  const byCol = {};
-  (columns || []).forEach(c => { byCol[c.column_id] = []; });
-  (tasks || []).forEach(t => {
-    const cid = t.column_id || '__none__';
-    if (!byCol[cid]) byCol[cid] = [];
-    byCol[cid].push(t);
-  });
-  Object.values(byCol).forEach(arr => arr.sort((a, b) => (a.order ?? a.sort_order ?? 0) - (b.order ?? b.sort_order ?? 0)));
+  const byCol = useMemo(() => {
+    const m = {};
+    (columns || []).forEach(c => { m[c.column_id] = []; });
+    (tasks || []).forEach(t => {
+      const cid = t.column_id || '__none__';
+      if (!m[cid]) m[cid] = [];
+      m[cid].push(t);
+    });
+    Object.values(m).forEach(arr => arr.sort((a, b) => (a.order ?? a.sort_order ?? 0) - (b.order ?? b.sort_order ?? 0)));
+    return m;
+  }, [columns, tasks]);
 
   const handleDragStart = (taskId, colId, idx) => {
     setDragging({ taskId, srcColId: colId });

@@ -30,6 +30,7 @@ export default function TableView({ tasks, columns, fieldDefs, fieldValueMap, te
   const [drawer, setDrawer] = useState(null);
   const [visibleFields, setVisible] = useState(() => (fieldDefs||[]).map(f=>f.field_id));
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   React.useEffect(() => { setVisible((fieldDefs||[]).map(f=>f.field_id)); }, [fieldDefs?.length]);
 
   const colMap = useMemo(() => Object.fromEntries((columns||[]).map(c=>[c.column_id,c])), [columns]);

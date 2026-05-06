@@ -1,12 +1,10 @@
 /**
  * DashboardPage.jsx — v2 widget dashboard.
- * Week 2 Day 10: Count, Chart, MyWork, Deadlines widgets + drag-to-reorder grid.
- * Persists widget layout to /api/dashboards.
+ * Count, Chart, MyWork, Deadlines + drag-to-reorder.
  */
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { api } from '../lib/api';
 
-/* ── Helpers ────────────────────────────────────────────────────────── */
 const PRIORITY_COLORS = { low: '#22c55e', medium: '#f59e0b', high: '#ef4444', urgent: '#dc2626' };
 
 function relDate(iso) {
@@ -21,7 +19,6 @@ function relDate(iso) {
   return `${days}d`;
 }
 
-/* ── Widget renderers ───────────────────────────────────────────────────── */
 function CountWidget({ data, config }) {
   const count = data?.count ?? '…';
   const label = config?.label || 'Tasks';
@@ -102,10 +99,9 @@ function WidgetRenderer({ type, data, config }) {
 
 const WIDGET_TITLES = { count: '📊 Count', chart: '🎞 Status Breakdown', my_work: '📝 My Work', deadlines: '📅 Upcoming Deadlines' };
 
-/* ── Dashboard page ─────────────────────────────────────────────────────────── */
 export default function DashboardPage({ teamId, teams = [] }) {
-  const [dashboard,   setDashboard]   = useState(null);  // {dashboard_id, widgets}
-  const [widgetData,  setWidgetData]  = useState({});   // {widget_id: data}
+  const [dashboard,   setDashboard]   = useState(null);
+  const [widgetData,  setWidgetData]  = useState({});
   const [loading,     setLoading]     = useState(true);
   const [addingType,  setAddingType]  = useState(null);
   const [dragIdx,     setDragIdx]     = useState(null);
@@ -113,10 +109,9 @@ export default function DashboardPage({ teamId, teams = [] }) {
   const [selectedTeam,setSelectedTeam]= useState(teamId || '');
   const saveTimeout = useRef(null);
 
-  // Sync selectedTeam when prop changes
   useEffect(() => { if (teamId) setSelectedTeam(teamId); }, [teamId]);
 
-  // Load or create the user's dashboard
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     api.get('/api/dashboards/')
        .then(async r => {
@@ -134,21 +129,20 @@ export default function DashboardPage({ teamId, teams = [] }) {
        .finally(() => setLoading(false));
   }, []);
 
-  // Fetch widget data when dashboard or selectedTeam changes
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!dashboard) return;
     fetchAllWidgetData(dashboard.widgets);
   }, [dashboard?.dashboard_id, selectedTeam]);
 
   async function fetchAllWidgetData(widgets) {
-    if (!widgets?.length) return;
+    if (!widgets?.length || !dashboard) return;
     const results = {};
     await Promise.all(widgets.map(async w => {
       try {
         const cfg = { ...(w.config || {}), team_id: selectedTeam || w.config?.team_id };
         const r = await api.get(`/api/dashboards/${dashboard.dashboard_id}/data`,
           { params: { widget_id: w.id, type: w.type, team_id: cfg.team_id, status: cfg.status } });
-        // data endpoint returns all at once; use type-based key
         Object.assign(results, r.data);
       } catch {}
     }));
@@ -157,15 +151,14 @@ export default function DashboardPage({ teamId, teams = [] }) {
 
   function defaultWidgets(tid) {
     return [
-      { id: 'count_todo',   type: 'count',     config: { team_id: tid, status: 'todo',        label: 'To Do' } },
-      { id: 'count_done',   type: 'count',     config: { team_id: tid, status: 'done',        label: 'Done' } },
+      { id: 'count_todo',   type: 'count',     config: { team_id: tid, status: 'todo',  label: 'To Do' } },
+      { id: 'count_done',   type: 'count',     config: { team_id: tid, status: 'done',  label: 'Done' } },
       { id: 'chart_main',   type: 'chart',     config: { team_id: tid } },
       { id: 'my_work_main', type: 'my_work',   config: {} },
       { id: 'deadlines_1',  type: 'deadlines', config: { team_id: tid } },
     ];
   }
 
-  // Persist widgets to backend (debounced)
   const persist = useCallback((widgets) => {
     if (!dashboard) return;
     clearTimeout(saveTimeout.current);
@@ -176,17 +169,12 @@ export default function DashboardPage({ teamId, teams = [] }) {
 
   function addWidget() {
     if (!addingType) return;
-    const newW = {
-      id:     `${addingType}_${Date.now()}`,
-      type:   addingType,
-      config: { team_id: selectedTeam, label: WIDGET_TITLES[addingType] },
-    };
+    const newW = { id: `${addingType}_${Date.now()}`, type: addingType, config: { team_id: selectedTeam, label: WIDGET_TITLES[addingType] } };
     const updated = [...(dashboard.widgets || []), newW];
     setDashboard(d => ({ ...d, widgets: updated }));
     persist(updated);
     setAddingType(null);
-    // Fetch data for the new widget
-    setTimeout(() => fetchAllWidgetData(updated), 100);
+    setTimeout(() => fetchAllWidgetData(updated), 100); // eslint-disable-line react-hooks/exhaustive-deps
   }
 
   function removeWidget(id) {
@@ -195,7 +183,6 @@ export default function DashboardPage({ teamId, teams = [] }) {
     persist(updated);
   }
 
-  /* Drag-to-reorder */
   function onDragStart(i)  { setDragIdx(i); }
   function onDragOver(e, i){ e.preventDefault(); setOverIdx(i); }
   function onDrop(i) {
@@ -214,19 +201,16 @@ export default function DashboardPage({ teamId, teams = [] }) {
 
   return (
     <div style={{ padding: 'var(--space-6)' }}>
-      {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 'var(--space-6)' }}>
         <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--weight-semibold)', margin: 0 }}>📊 Dashboard</h1>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-          {/* Project filter */}
           {teams.length > 0 && (
-            <select value={selectedTeam} onChange={e => { setSelectedTeam(e.target.value); if (dashboard) fetchAllWidgetData(dashboard.widgets); }}
+            <select value={selectedTeam} onChange={e => { setSelectedTeam(e.target.value); if (dashboard) fetchAllWidgetData(dashboard.widgets); }} // eslint-disable-line react-hooks/exhaustive-deps
               style={{ border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)', padding: '6px 10px', fontFamily: 'inherit', fontSize: 'var(--text-sm)', background: 'var(--bg-default)', color: 'var(--text-default)' }}>
               <option value=''>All projects</option>
               {teams.map(t => <option key={t.team_id} value={t.team_id}>{t.name}</option>)}
             </select>
           )}
-          {/* Add widget */}
           <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
             <select value={addingType || ''} onChange={e => setAddingType(e.target.value || null)}
               style={{ border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)', padding: '6px 10px', fontFamily: 'inherit', fontSize: 'var(--text-sm)', background: 'var(--bg-default)', color: 'var(--text-default)' }}>
@@ -241,41 +225,23 @@ export default function DashboardPage({ teamId, teams = [] }) {
         </div>
       </div>
 
-      {/* Widget grid */}
       {widgets.length === 0 ? (
         <div style={{ textAlign: 'center', padding: 'var(--space-16)', color: 'var(--text-muted)' }}>
           <div style={{ fontSize: 48, marginBottom: 16 }}>📊</div>
           <p>Your dashboard is empty. Add widgets above to get started.</p>
         </div>
       ) : (
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
-          gap: 'var(--space-5)',
-        }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 'var(--space-5)' }}>
           {widgets.map((w, i) => (
-            <div
-              key={w.id}
-              draggable
+            <div key={w.id} draggable
               onDragStart={() => onDragStart(i)}
               onDragOver={e => onDragOver(e, i)}
               onDrop={() => onDrop(i)}
               onDragEnd={() => { setDragIdx(null); setOverIdx(null); }}
-              style={{
-                background: 'var(--bg-elevated)',
-                border: `1px solid ${overIdx === i && dragIdx !== i ? 'var(--accent-default)' : 'var(--border-default)'}`,
-                borderRadius: 'var(--radius-lg)',
-                padding: 'var(--space-5)',
-                cursor: 'grab',
-                opacity: dragIdx === i ? 0.4 : 1,
-                transition: 'border-color 0.15s, opacity 0.15s',
-              }}
+              style={{ background: 'var(--bg-elevated)', border: `1px solid ${overIdx === i && dragIdx !== i ? 'var(--accent-default)' : 'var(--border-default)'}`, borderRadius: 'var(--radius-lg)', padding: 'var(--space-5)', cursor: 'grab', opacity: dragIdx === i ? 0.4 : 1, transition: 'border-color 0.15s, opacity 0.15s' }}
             >
-              {/* Widget header */}
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-4)' }}>
-                <span style={{ fontWeight: 600, fontSize: 'var(--text-sm)' }}>
-                  {w.config?.label || WIDGET_TITLES[w.type] || w.type}
-                </span>
+                <span style={{ fontWeight: 600, fontSize: 'var(--text-sm)' }}>{w.config?.label || WIDGET_TITLES[w.type] || w.type}</span>
                 <button onClick={() => removeWidget(w.id)}
                   style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-subtle)', fontSize: 15, lineHeight: 1, padding: 2 }}>×</button>
               </div>

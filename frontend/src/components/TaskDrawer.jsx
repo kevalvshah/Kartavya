@@ -1,9 +1,6 @@
 /**
  * TaskDrawer.jsx — v2 right-slide drawer.
- * Week 2 upgrade:
- *   - Comments use MentionTextarea with @mention autocomplete
- *   - Activity tab uses ActivityList (proper icons + diffs)
- *   - Time tab shows real entry list from API
+ * Week 2 upgrade: @mention autocomplete, ActivityList, real time entries.
  */
 import React, { useState, useEffect, useCallback } from 'react';
 import { api } from '../lib/api';
@@ -52,13 +49,12 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
   const [manualMin,setManualMin]= useState('');
   const [manualDesc,setManualDesc]=useState('');
 
-  // Members for @mention autocomplete
   const mentionMembers = teamMembers.map(m => ({
     user_id:      m.user_id,
     display_name: m.display_name || m.full_name || m.email || 'Unknown',
   }));
 
-  // ── Load ──────────────────────────────────────────────────────────────────
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!open || !taskId) return;
     setTab('details');
@@ -89,9 +85,8 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
         });
       }
     }).catch(console.error);
-  }, [open, taskId]);
+  }, [open, taskId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Lazy-load activity when tab switched
   useEffect(() => {
     if (tab !== 'activity' || !taskId) return;
     setActLoad(true);
@@ -101,7 +96,6 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
        .finally(() => setActLoad(false));
   }, [tab, taskId]);
 
-  // Lazy-load time entries
   useEffect(() => {
     if (tab !== 'time' || !taskId) return;
     api.get(`/api/time/task/${taskId}`)
@@ -109,14 +103,12 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
        .catch(console.error);
   }, [tab, taskId]);
 
-  // ── Save field values ─────────────────────────────────────────────────────
   const saveFieldValue = useCallback(async (field_id, value) => {
     setFValues(prev => ({ ...prev, [field_id]: value }));
     try { await api.put(`/api/fields/task/${taskId}/values`, [{ field_id, value }]); }
     catch (e) { console.error('Field save failed', e); }
   }, [taskId]);
 
-  // ── Save task core fields ─────────────────────────────────────────────────
   const saveTask = useCallback(async (patch) => {
     setSaving(true);
     try {
@@ -127,7 +119,6 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
     finally { setSaving(false); }
   }, [taskId, onSaved]);
 
-  // ── Comments ──────────────────────────────────────────────────────────────
   const postComment = async () => {
     if (!comment.trim()) return;
     const res = await api.post(`/api/tasks/${taskId}/comments`, { body: comment });
@@ -135,7 +126,6 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
     setComment('');
   };
 
-  // ── Time tracking ─────────────────────────────────────────────────────────
   const startTimer = async () => {
     const res = await api.post(`/api/time/start?task_id=${taskId}`);
     setTimer(res.data);
@@ -173,13 +163,10 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
   return (
     <div style={s.overlay} onClick={e => e.target === e.currentTarget && onClose()}>
       <div style={s.drawer}>
-
-        {/* Header */}
         <div style={s.header}>
           <div style={{ flex: 1 }}>
             {task ? (
-              <input
-                value={draft.title || ''}
+              <input value={draft.title || ''}
                 onChange={e => setDraft(d => ({ ...d, title: e.target.value }))}
                 onBlur={() => draft.title !== task.title && saveTask({ title: draft.title })}
                 style={{ width: '100%', border: 'none', outline: 'none', fontSize: 'var(--text-xl)', fontWeight: 700, background: 'transparent', color: 'var(--text-default)', fontFamily: 'inherit' }}
@@ -191,17 +178,13 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
           <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 22, color: 'var(--text-muted)', marginLeft: 12 }}>×</button>
         </div>
 
-        {/* Tabs */}
         <div style={{ display: 'flex', borderBottom: '1px solid var(--border-default)', paddingLeft: 24, flexShrink: 0 }}>
           {[['details','Details'],['activity','Activity'],['time','Time']].map(([id,label]) => (
             <button key={id} style={s.tab(tab === id)} onClick={() => setTab(id)}>{label}</button>
           ))}
         </div>
 
-        {/* Body */}
         <div style={s.body}>
-
-          {/* ── Details ── */}
           {tab === 'details' && task && (
             <>
               <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', marginBottom: 24 }}>
@@ -248,7 +231,6 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
                 </div>
               )}
 
-              {/* Comments */}
               <div>
                 <div style={{ ...s.label, marginBottom: 12 }}>Comments</div>
                 {comments.map(c => (
@@ -260,7 +242,6 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
                       <span style={{ fontWeight: 600, fontSize: 'var(--text-sm)' }}>{c.user_name}</span>{' '}
                       <span style={{ color: 'var(--text-subtle)', fontSize: 'var(--text-xs)' }}>{new Date(c.created_at).toLocaleString()}</span>
                       <p style={{ margin: '4px 0 0', fontSize: 'var(--text-sm)', lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>
-                        {/* Highlight @mentions */}
                         {c.body.split(/(@[\w.-]+)/g).map((part, i) =>
                           part.startsWith('@')
                             ? <strong key={i} style={{ color: 'var(--accent-default)' }}>{part}</strong>
@@ -271,43 +252,27 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
                   </div>
                 ))}
                 <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-                  <MentionTextarea
-                    value={comment}
-                    onChange={setComment}
-                    onSubmit={postComment}
-                    members={mentionMembers}
-                    placeholder="Add a comment… type @ to mention someone"
-                    rows={2}
-                  />
+                  <MentionTextarea value={comment} onChange={setComment} onSubmit={postComment}
+                    members={mentionMembers} placeholder="Add a comment… type @ to mention someone" rows={2} />
                   <button onClick={postComment} style={s.btn()}>Send</button>
                 </div>
               </div>
             </>
           )}
 
-          {/* ── Activity ── */}
-          {tab === 'activity' && (
-            <ActivityList events={activity} loading={actLoad} />
-          )}
+          {tab === 'activity' && <ActivityList events={activity} loading={actLoad} />}
 
-          {/* ── Time ── */}
           {tab === 'time' && (
             <div>
-              {/* Timer control */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
                 {timer ? (
-                  <>
-                    <button onClick={stopTimer} style={s.btn('danger')}>⏹ Stop</button>
-                    <span style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)' }}>
-                      <ElapsedTimer startedAt={timer.started_at} />
-                    </span>
+                  <><button onClick={stopTimer} style={s.btn('danger')}>⏹ Stop</button>
+                    <span style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)' }}><ElapsedTimer startedAt={timer.started_at} /></span>
                   </>
                 ) : (
                   <button onClick={startTimer} style={s.btn()}>▶ Start Timer</button>
                 )}
               </div>
-
-              {/* Manual entry */}
               <div style={{ display: 'flex', gap: 8, marginBottom: 20, alignItems: 'center' }}>
                 <input type="number" min="1" value={manualMin} onChange={e => setManualMin(e.target.value)}
                   placeholder="mins" style={{ width: 70, border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)', padding: '6px 8px', fontFamily: 'inherit', fontSize: 'var(--text-sm)', background: 'var(--bg-default)', color: 'var(--text-default)' }} />
@@ -316,8 +281,6 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
                   style={{ flex: 1, border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)', padding: '6px 10px', fontFamily: 'inherit', fontSize: 'var(--text-sm)', background: 'var(--bg-default)', color: 'var(--text-default)' }} />
                 <button onClick={addManual} style={s.btn('ghost')}>+ Log</button>
               </div>
-
-              {/* Entry list */}
               {entries.length === 0 ? (
                 <p style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)' }}>No time logged yet.</p>
               ) : (
@@ -331,8 +294,8 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
                       </div>
                     </div>
                   ))}
-                  <div style={{ textAlign: 'right', fontWeight: 600, fontSize: 'var(--text-sm)', paddingTop: 8, color: 'var(--text-default)' }}>
-                    Total: {fmtMinutes(entries.reduce((s, e) => s + (e.minutes || 0), 0))}
+                  <div style={{ textAlign: 'right', fontWeight: 600, fontSize: 'var(--text-sm)', paddingTop: 8 }}>
+                    Total: {fmtMinutes(entries.reduce((sum, e) => sum + (e.minutes || 0), 0))}
                   </div>
                 </div>
               )}
@@ -348,7 +311,6 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
           )}
         </div>
 
-        {/* Footer */}
         <div style={{ padding: '14px 24px', borderTop: '1px solid var(--border-default)', display: 'flex', justifyContent: 'flex-end', flexShrink: 0 }}>
           {saving && <span style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)', marginRight: 'auto' }}>Saving…</span>}
           <button onClick={onClose} style={s.btn('ghost')}>Close</button>
