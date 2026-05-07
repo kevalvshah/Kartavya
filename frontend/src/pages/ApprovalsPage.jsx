@@ -1,3 +1,6 @@
+/**
+ * ApprovalsPage.jsx — pending approval requests for owners/admins.
+ */
 import React, { useState, useEffect } from 'react';
 import { api } from '../lib/api';
 import { Button } from '../components/ui/button';
@@ -44,7 +47,9 @@ export default function ApprovalsPage() {
           <div key={r.approval_id} className="rounded-3xl border border-border/70 bg-card/50 p-5">
             <div className="text-sm font-bold">{data?.title}</div>
             {data?.description && <div className="text-xs text-muted-foreground mt-1">{data.description}</div>}
-            <div className="text-xs text-muted-foreground mt-2">From {r.requested_by_name || r.requested_by_email}</div>
+            <div className="text-xs text-muted-foreground mt-2">
+              From {r.requested_by_name || r.requested_by_email}
+            </div>
             <div className="flex gap-2 mt-3">
               <Button onClick={() => decide(r.approval_id, 'approved')}>Approve</Button>
               <Button variant="ghost" onClick={() => decide(r.approval_id, 'rejected')}>Reject</Button>
