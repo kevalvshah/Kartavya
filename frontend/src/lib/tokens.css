@@ -1,0 +1,158 @@
+/*
+ * tokens.css — Kartavya v2 Design System
+ * Inter font (body), semantic color tokens, spacing scale
+ * Import this FIRST in globals.css
+ */
+
+/* ── Fonts ─────────────────────────────────────────────────────────────────── */
+@import url('https://rsms.me/inter/inter.css');
+
+/* Wordmark uses Inter Bold — no custom font file needed */
+:root {
+  --font-body:     'Inter', system-ui, -apple-system, sans-serif;
+  --font-wordmark: 'Inter', system-ui, -apple-system, sans-serif;
+  font-feature-settings: 'cv02','cv03','cv04','cv11';
+}
+
+/* ── Spacing scale (4-base) ───────────────────────────────────────────────── */
+:root {
+  --space-1:  4px;
+  --space-2:  8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-12: 48px;
+  --space-16: 64px;
+}
+
+/* ── Typography scale ─────────────────────────────────────────────────────── */
+:root {
+  --text-xs:   12px;
+  --text-sm:   13px;
+  --text-base: 14px;
+  --text-md:   16px;
+  --text-lg:   18px;
+  --text-xl:   20px;
+  --text-2xl:  24px;
+  --text-3xl:  32px;
+  --text-4xl:  40px;
+
+  --weight-normal:   400;
+  --weight-medium:   500;
+  --weight-semibold: 600;
+  --weight-bold:     700;
+
+  --leading-tight:   1.2;
+  --leading-body:    1.4;
+  --leading-button:  1.0;
+}
+
+/* ── Color tokens — LIGHT mode (default) ─────────────────────────────────── */
+:root {
+  --bg-default:   #ffffff;
+  --bg-subtle:    #f8f9fb;
+  --bg-muted:     #f1f3f7;
+  --bg-elevated:  #ffffff;
+  --bg-overlay:   rgba(0, 0, 0, 0.04);
+
+  --border-default: #e2e6ed;
+  --border-subtle:  #eef0f4;
+  --border-strong:  #bcc4d0;
+
+  --text-default:   #111827;
+  --text-muted:     #6b7280;
+  --text-subtle:    #9ca3af;
+  --text-disabled:  #d1d5db;
+  --text-on-accent: #ffffff;
+
+  --accent-default: #1AB8B0;
+  --accent-hover:   #17a39c;
+  --accent-pressed: #148f88;
+  --accent-subtle:  #e8faf9;
+
+  --success:    #16a34a;
+  --success-bg: #f0fdf4;
+  --warning:    #d97706;
+  --warning-bg: #fffbeb;
+  --danger:     #dc2626;
+  --danger-bg:  #fef2f2;
+  --info:       #2563eb;
+  --info-bg:    #eff6ff;
+
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.06);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
+  --shadow-lg: 0 8px 24px rgba(0,0,0,0.10);
+
+  --radius-sm:  4px;
+  --radius-md:  8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-full: 9999px;
+}
+
+/* ── Color tokens — DARK mode ─────────────────────────────────────────────── */
+.dark {
+  --bg-default:   #111318;
+  --bg-subtle:    #181c23;
+  --bg-muted:     #1e232d;
+  --bg-elevated:  #232830;
+  --bg-overlay:   rgba(255,255,255,0.04);
+
+  --border-default: #2d3340;
+  --border-subtle:  #242936;
+  --border-strong:  #3d4558;
+
+  --text-default:   #f1f3f7;
+  --text-muted:     #8b95a6;
+  --text-subtle:    #5c6575;
+  --text-disabled:  #3a404e;
+  --text-on-accent: #ffffff;
+
+  --accent-default: #1AB8B0;
+  --accent-hover:   #1fd4cc;
+  --accent-pressed: #17a39c;
+  --accent-subtle:  #0d2e2d;
+
+  --success:    #22c55e;
+  --success-bg: #052e16;
+  --warning:    #f59e0b;
+  --warning-bg: #1c1400;
+  --danger:     #f87171;
+  --danger-bg:  #2d0a0a;
+  --info:       #60a5fa;
+  --info-bg:    #0c1a3a;
+
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.3);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.4);
+  --shadow-lg: 0 8px 24px rgba(0,0,0,0.5);
+}
+
+/* ── Base resets ──────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { font-size: 14px; -webkit-font-smoothing: antialiased; }
+
+body {
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  font-weight: var(--weight-normal);
+  line-height: var(--leading-body);
+  color: var(--text-default);
+  background: var(--bg-default);
+}
+
+/* ── Wordmark class ───────────────────────────────────────────────────────── */
+.kartavya-wordmark {
+  font-family: var(--font-wordmark);
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+/* ── Scrollbar ────────────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: var(--radius-full); }
+::-webkit-scrollbar-thumb:hover { background: var(--accent-default); }
