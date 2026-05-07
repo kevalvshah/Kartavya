@@ -1,2 +1,2 @@
-// ClientPortal — re-exports ClientPortalPage for backward compat
-export { default } from './ClientPortalPage';
+/** ClientPortal — split from ClientPages.jsx for lazy loading */
+export { ClientPortal as default } from './ClientPages';

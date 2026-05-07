@@ -1,5 +1,6 @@
 /**
- * Sidebar.jsx — left navigation panel.
+ * Sidebar.jsx — left nav.
+ * Week 3: Templates link added.
  */
 import React from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -8,8 +9,9 @@ import { K, KLogo, KWordmark } from '../../lib/brand';
 import { currentUser, useTheme } from '../../lib/auth';
 import { Button } from '../ui/button';
 import {
-  Bell, FolderKanban, LayoutGrid, ListTodo,
+  Bell, FolderKanban, LayoutGrid, ListTodo, LogOut,
   Sun, Moon, Users, ShieldCheck, Settings, CheckCircle2,
+  Activity, Clock, Zap, FileText,
 } from 'lucide-react';
 
 export default function Sidebar() {
@@ -31,6 +33,10 @@ export default function Sidebar() {
         { to: '/tasks',                  label: 'All Tasks',     Icon: ListTodo },
         { to: '/approvals',              label: 'Approvals',     Icon: CheckCircle2 },
         { to: '/teams',                  label: 'Teams',         Icon: Users },
+        { to: '/activity',               label: 'Activity',      Icon: Activity },
+        { to: '/automations',            label: 'Automations',   Icon: Zap },
+        { to: '/time',                   label: 'Time Report',   Icon: Clock },
+        { to: '/templates',              label: 'Templates',     Icon: FileText },
         { to: '/settings/categories',    label: 'Categories',    Icon: Settings },
         { to: '/settings/notifications', label: 'Notifications', Icon: Bell },
         ...(isAdmin ? [{ to: '/admin',   label: 'Admin',         Icon: ShieldCheck }] : []),

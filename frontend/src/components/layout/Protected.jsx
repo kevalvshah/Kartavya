@@ -40,7 +40,7 @@ export default function Protected({ children, requiredRole }) {
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#050e1a' }}>
       <div style={{ textAlign: 'center' }}>
         <KLogo size={40} />
-        <div style={{ marginTop: 16, fontSize: 13, color: '#5a7087', fontFamily: "'Nunito',sans-serif" }}>Loading Kartavya…</div>
+        <div style={{ marginTop: 16, fontSize: 13, color: '#5a7087', fontFamily: "'Inter',sans-serif" }}>Loading Kartavya…</div>
       </div>
     </div>
   );

@@ -376,6 +376,7 @@ async def add_comment(task_id:str,body:CommentCreate,pool=Depends(get_db),user=D
                 await create_notification(pool,rid,"comment",f"New comment on {task['title']}",f"{actor_name}: {preview}",task_id,task["team_id"],"/tasks")
             from services.mentions import process_mentions
             await process_mentions(pool,comment_id,body.body,task_id,user["user_id"])
+            # Log activity
             from services.activity_logger import log_event
             await log_event(pool,task_id=task_id,actor_id=user["user_id"],event_type="commented",data={"preview":preview[:80]})
     except Exception as e:

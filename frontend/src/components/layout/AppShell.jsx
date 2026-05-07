@@ -1,8 +1,6 @@
 /**
- * AppShell.jsx — main layout: sidebar + topbar + outlet.
- * Handles notification polling and mobile sidebar overlay.
- * v2: also re-exports Protected so App.js can do:
- *   import AppShell, { Protected } from './components/layout/AppShell'
+ * AppShell.jsx — main layout shell.
+ * Week 3: Templates added to sidebar nav.
  */
 import React, { useEffect, useState } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
@@ -12,9 +10,6 @@ import { NotificationsModal } from '../NotificationsModal';
 import Sidebar from './Sidebar';
 import Topbar  from './Topbar';
 import { Bell, Menu } from 'lucide-react';
-
-// Re-export Protected so App.js can import it from here
-export { default as Protected } from './Protected';
 
 export default function AppShell() {
   const [notifOpen,   setNotifOpen]   = useState(false);
@@ -46,7 +41,7 @@ export default function AppShell() {
   const teamId = location.pathname.match(/\/projects\/([^/]+)/)?.[1] || teams[0]?.team_id || '';
 
   return (
-    <div data-testid="app-shell" className="min-h-screen bg-app text-foreground" style={{ fontFamily: "'Nunito',sans-serif" }}>
+    <div data-testid="app-shell" className="min-h-screen bg-app text-foreground" style={{ fontFamily: "'Inter',sans-serif" }}>
       <div className="mx-auto max-w-7xl px-4 lg:px-6 py-4 lg:py-6">
         <div className="grid gap-6 lg:grid-cols-[260px_1fr]">
           <div className="hidden lg:block"><Sidebar /></div>
@@ -89,3 +84,6 @@ export default function AppShell() {
     </div>
   );
 }
+
+// re-export Protected so App.js can import from one place
+export { default as Protected } from './Protected';

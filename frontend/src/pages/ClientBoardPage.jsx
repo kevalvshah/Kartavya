@@ -1,2 +1,2 @@
-// Thin re-export so React.lazy can load this as its own chunk
+/** ClientBoardPage — split from ClientPages.jsx for lazy loading */
 export { ClientProjectBoardPage as default } from './ClientPages';

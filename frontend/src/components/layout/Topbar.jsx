@@ -1,5 +1,6 @@
 /**
- * Topbar.jsx — desktop header bar with page title + notifications + sign out.
+ * Topbar.jsx — desktop header bar.
+ * Week 3: Templates title added.
  */
 import React from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -9,9 +10,19 @@ import { useToast } from '../ui/toast';
 import { Bell, LogOut } from 'lucide-react';
 
 const PAGE_TITLES = {
-  '/dashboard': 'Dashboard', '/projects': 'Projects', '/tasks': 'All Tasks',
-  '/teams': 'Teams', '/settings/categories': 'Categories',
-  '/settings/notifications': 'Notifications', '/admin': 'Admin Panel', '/client': 'Client Portal',
+  '/dashboard':   'Dashboard',
+  '/projects':    'Projects',
+  '/tasks':       'All Tasks',
+  '/teams':       'Teams',
+  '/activity':    'Activity Feed',
+  '/automations': 'Automations',
+  '/time':        'Time Report',
+  '/templates':   'Templates',
+  '/approvals':   'Approvals',
+  '/settings/categories':    'Categories',
+  '/settings/notifications': 'Notifications',
+  '/admin':  'Admin Panel',
+  '/client': 'Client Portal',
 };
 
 export default function Topbar({ unread, onOpenNotifications }) {

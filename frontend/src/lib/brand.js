@@ -1,7 +1,4 @@
-/**
- * brand.js — Kartavya design tokens, logo, wordmark.
- * Single source of truth for brand colours used across all components.
- */
+/** Brand tokens, logo, wordmark, role badge — shared across all layouts */
 import React from 'react';
 
 export const K = {
@@ -28,11 +25,13 @@ export function KLogo({ size = 32 }) {
 
 export function KWordmark({ dark = false, size = 'md' }) {
   const fs  = size === 'sm' ? 11 : 14;
-  const sub = size === 'sm' ?  7 :  8;
+  const sub = size === 'sm' ? 7  : 8;
   return (
     <div>
-      <div style={{ fontSize: fs, fontWeight: 600, letterSpacing: 2.5, textTransform: 'uppercase', color: dark ? '#fff' : K.dark }}>Kartavya</div>
-      <div style={{ fontSize: sub, letterSpacing: 2.5, textTransform: 'uppercase', color: K.teal, fontWeight: 500, marginTop: 1 }}>by Aekam Inc</div>
+      <div style={{ fontSize: fs, fontWeight: 800, letterSpacing: 2.5, textTransform: 'uppercase',
+        color: dark ? '#fff' : K.dark }}>Kartavya</div>
+      <div style={{ fontSize: sub, letterSpacing: 2.5, textTransform: 'uppercase',
+        color: K.teal, fontWeight: 700, marginTop: 1 }}>by Aekam Inc</div>
     </div>
   );
 }
@@ -44,7 +43,7 @@ export function RoleBadge({ role }) {
     client: { bg: '#8b5cf622', color: '#8b5cf6', label: 'Client' },
   }[role] || { bg: '#88888822', color: '#888', label: role };
   return (
-    <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: 1.2, textTransform: 'uppercase',
+    <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: 1.2, textTransform: 'uppercase',
       background: cfg.bg, color: cfg.color, padding: '3px 8px', borderRadius: 6, whiteSpace: 'nowrap' }}>
       {cfg.label}
     </span>
