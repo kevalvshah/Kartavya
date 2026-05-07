@@ -1,6 +1,8 @@
 /**
  * AppShell.jsx — main layout: sidebar + topbar + outlet.
  * Handles notification polling and mobile sidebar overlay.
+ * v2: also re-exports Protected so App.js can do:
+ *   import AppShell, { Protected } from './components/layout/AppShell'
  */
 import React, { useEffect, useState } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
@@ -10,6 +12,9 @@ import { NotificationsModal } from '../NotificationsModal';
 import Sidebar from './Sidebar';
 import Topbar  from './Topbar';
 import { Bell, Menu } from 'lucide-react';
+
+// Re-export Protected so App.js can import it from here
+export { default as Protected } from './Protected';
 
 export default function AppShell() {
   const [notifOpen,   setNotifOpen]   = useState(false);
