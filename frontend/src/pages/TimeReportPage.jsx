@@ -65,7 +65,7 @@ export default function TimeReportPage({ teamId }) {
   // load team members for filter
   useEffect(() => {
     if (!teamId) return;
-    api.get(`/api/teams/${teamId}`)
+    api.get(`/teams/${teamId}`)
        .then(r => setMembers(r.data.members || []))
        .catch(() => {});
   }, [teamId]);
@@ -75,7 +75,7 @@ export default function TimeReportPage({ teamId }) {
     setLoading(true);
     const params = { team_id: teamId, from, to };
     if (memberF) params.user_id = memberF;
-    api.get('/api/time/report', { params })
+    api.get('/time/report', { params })
        .then(r => setData(r.data))
        .catch(() => setData({ entries: [], total_minutes: 0 }))
        .finally(() => setLoading(false));
@@ -231,3 +231,4 @@ export default function TimeReportPage({ teamId }) {
     </div>
   );
 }
+

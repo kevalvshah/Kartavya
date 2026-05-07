@@ -39,10 +39,10 @@ export default function ProjectBoardPage() {
     setLoading(true);
     try {
       const [projR, colR, taskR, memR] = await Promise.all([
-        api.get(`/api/teams/${projectId}`),
-        api.get(`/api/projects/${projectId}/columns`),
-        api.get('/api/tasks', { params: { team_id: projectId } }),
-        api.get(`/api/teams/${projectId}`),
+        api.get(`/teams/${projectId}`),
+        api.get(`/projects/${projectId}/columns`),
+        api.get('/tasks', { params: { team_id: projectId } }),
+        api.get(`/teams/${projectId}`),
       ]);
       setProject(projR.data);
       setColumns(colR.data);
@@ -65,7 +65,7 @@ export default function ProjectBoardPage() {
     const map = {};
     Promise.all(tasks.map(async t => {
       try {
-        const r = await api.get(`/api/fields/task/${t.task_id}/values`);
+        const r = await api.get(`/fields/task/${t.task_id}/values`);
         map[t.task_id] = Object.fromEntries(r.data.map(v => [v.field_id, v.value]));
       } catch {}
     })).then(() => setFieldValueMap({ ...map }));
@@ -76,7 +76,7 @@ export default function ProjectBoardPage() {
     const title = window.prompt('Task title:');
     if (!title?.trim()) return;
     try {
-      const r = await api.post('/api/tasks', { title: title.trim(), team_id: projectId, column_id: colId });
+      const r = await api.post('/tasks', { title: title.trim(), team_id: projectId, column_id: colId });
       setTasks(prev => [r.data, ...prev]);
     } catch (e) { console.error(e); }
   };
@@ -197,3 +197,4 @@ export default function ProjectBoardPage() {
     </div>
   );
 }
+

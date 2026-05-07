@@ -62,15 +62,15 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
     setComments([]); setActivity([]); setEntries([]); setTimer(null);
 
     Promise.all([
-      api.get(`/api/tasks/${taskId}`),
-      api.get(`/api/tasks/${taskId}/comments`),
+      api.get(`/tasks/${taskId}`),
+      api.get(`/tasks/${taskId}/comments`),
     ]).then(([tRes, cRes]) => {
       const t = tRes.data;
       setTask(t);
       setDraft({ title: t.title, description: t.description, priority: t.priority, due_at: t.due_at });
       setComments(cRes.data);
       if (t.team_id) {
-        api.get(`/api/fields/team/${t.team_id}`).then(r => {
+        api.get(`/fields/team/${t.team_id}`).then(r => {
           const defs = r.data.map(f =>
             f.type === 'person'
               ? { ...f, config: { ...f.config, members: mentionMembers } }
@@ -78,7 +78,7 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
           );
           setFields(defs);
         });
-        api.get(`/api/fields/task/${taskId}/values`).then(r => {
+        api.get(`/fields/task/${taskId}/values`).then(r => {
           const vals = {};
           r.data.forEach(v => { vals[v.field_id] = v.value; });
           setFValues(vals);
@@ -90,7 +90,7 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
   useEffect(() => {
     if (tab !== 'activity' || !taskId) return;
     setActLoad(true);
-    api.get(`/api/activity/task/${taskId}`)
+    api.get(`/activity/task/${taskId}`)
        .then(r => setActivity(r.data))
        .catch(console.error)
        .finally(() => setActLoad(false));
@@ -98,21 +98,21 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
 
   useEffect(() => {
     if (tab !== 'time' || !taskId) return;
-    api.get(`/api/time/task/${taskId}`)
+    api.get(`/time/task/${taskId}`)
        .then(r => { setEntries(r.data.entries || []); setTimer(r.data.active_entry || null); })
        .catch(console.error);
   }, [tab, taskId]);
 
   const saveFieldValue = useCallback(async (field_id, value) => {
     setFValues(prev => ({ ...prev, [field_id]: value }));
-    try { await api.put(`/api/fields/task/${taskId}/values`, [{ field_id, value }]); }
+    try { await api.put(`/fields/task/${taskId}/values`, [{ field_id, value }]); }
     catch (e) { console.error('Field save failed', e); }
   }, [taskId]);
 
   const saveTask = useCallback(async (patch) => {
     setSaving(true);
     try {
-      const res = await api.put(`/api/tasks/${taskId}`, patch);
+      const res = await api.put(`/tasks/${taskId}`, patch);
       setTask(res.data);
       onSaved?.(res.data);
     } catch (e) { console.error('Save failed', e); }
@@ -121,29 +121,29 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
 
   const postComment = async () => {
     if (!comment.trim()) return;
-    const res = await api.post(`/api/tasks/${taskId}/comments`, { body: comment });
+    const res = await api.post(`/tasks/${taskId}/comments`, { body: comment });
     setComments(prev => [...prev, res.data]);
     setComment('');
   };
 
   const startTimer = async () => {
-    const res = await api.post(`/api/time/start?task_id=${taskId}`);
+    const res = await api.post(`/time/start?task_id=${taskId}`);
     setTimer(res.data);
   };
   const stopTimer = async () => {
-    const res = await api.post('/api/time/stop');
+    const res = await api.post('/time/stop');
     setTimer(null);
     setEntries(prev => [res.data, ...prev]);
   };
   const addManual = async () => {
     const mins = parseInt(manualMin);
     if (!mins || mins < 1) return;
-    const res = await api.post('/api/time/manual', { task_id: taskId, minutes: mins, description: manualDesc });
+    const res = await api.post('/time/manual', { task_id: taskId, minutes: mins, description: manualDesc });
     setEntries(prev => [res.data, ...prev]);
     setManualMin(''); setManualDesc('');
   };
   const deleteEntry = async (id) => {
-    await api.delete(`/api/time/${id}`);
+    await api.delete(`/time/${id}`);
     setEntries(prev => prev.filter(e => e.entry_id !== id));
   };
 
@@ -319,3 +319,4 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
     </div>
   );
 }
+

@@ -12,7 +12,7 @@ export function useTimeEntries(taskId) {
   const load=useCallback(()=>{
     if(!taskId)return;
     setLoading(true);
-    api.get(`/api/time/task/${taskId}`).then(r=>{setEntries(r.data.entries);setTotalMinutes(r.data.total_minutes);}).catch(console.error).finally(()=>setLoading(false));
+    api.get(`/time/task/${taskId}`).then(r=>{setEntries(r.data.entries);setTotalMinutes(r.data.total_minutes);}).catch(console.error).finally(()=>setLoading(false));
   },[taskId]);
   useEffect(load,[load]);
 
@@ -24,17 +24,17 @@ export function useTimeEntries(taskId) {
   },[running]);
 
   const startTimer=useCallback(async()=>{
-    const res=await api.post(`/api/time/start?task_id=${taskId}`);
+    const res=await api.post(`/time/start?task_id=${taskId}`);
     setRunning(res.data);
   },[taskId]);
   const stopTimer=useCallback(async()=>{
-    await api.post('/api/time/stop');setRunning(null);load();
+    await api.post('/time/stop');setRunning(null);load();
   },[load]);
   const addManual=useCallback(async(payload)=>{
-    await api.post('/api/time/manual',{task_id:taskId,...payload});load();
+    await api.post('/time/manual',{task_id:taskId,...payload});load();
   },[taskId,load]);
   const deleteEntry=useCallback(async(entryId)=>{
-    await api.delete(`/api/time/${entryId}`);load();
+    await api.delete(`/time/${entryId}`);load();
   },[load]);
   const fmtElapsed=()=>{
     const h=Math.floor(elapsed/3600),m=Math.floor((elapsed%3600)/60),s=elapsed%60;
@@ -42,3 +42,4 @@ export function useTimeEntries(taskId) {
   };
   return{entries,totalMinutes,running,loading,elapsed,fmtElapsed,startTimer,stopTimer,addManual,deleteEntry};
 }
+

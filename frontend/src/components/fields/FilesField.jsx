@@ -15,7 +15,7 @@ export default function FilesField({ field, value, onChange, readOnly }) {
     const form = new FormData();
     form.append('file', file);
     try {
-      const res = await api.post('/api/upload', form);
+      const res = await api.post('/upload', form);
       onChange([...files, { name: res.data.name, url: res.data.url }]);
     } catch (err) {
       console.error('Upload failed', err);
@@ -57,3 +57,4 @@ export default function FilesField({ field, value, onChange, readOnly }) {
     </div>
   );
 }
+

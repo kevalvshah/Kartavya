@@ -69,7 +69,7 @@ export default function CalendarView({ tasks, teamMembers, onDayClick, onTasksCh
       original.getHours(), original.getMinutes(), original.getSeconds()
     );
     try {
-      const res = await api.put(`/api/tasks/${taskId}`, { due_at: newDue.toISOString() });
+      const res = await api.put(`/tasks/${taskId}`, { due_at: newDue.toISOString() });
       onTasksChange?.(prev => prev.map(t => t.task_id === taskId ? res.data : t));
     } catch (err) {
       console.error('Reschedule failed', err);
@@ -170,3 +170,4 @@ export default function CalendarView({ tasks, teamMembers, onDayClick, onTasksCh
     </div>
   );
 }
+

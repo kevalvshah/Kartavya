@@ -113,11 +113,11 @@ export default function DashboardPage({ teamId, teams = [] }) {
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
-    api.get('/api/dashboards/')
+    api.get('/dashboards/')
        .then(async r => {
          let dash = r.data[0];
          if (!dash) {
-           const cr = await api.post('/api/dashboards/', {
+           const cr = await api.post('/dashboards/', {
              name: 'My Dashboard',
              widgets: defaultWidgets(selectedTeam),
            });
@@ -143,7 +143,7 @@ export default function DashboardPage({ teamId, teams = [] }) {
     await Promise.all(widgets.map(async w => {
       try {
         const cfg = { ...(w.config || {}), team_id: selectedTeam || w.config?.team_id };
-        const r = await api.get(`/api/dashboards/${dashboard.dashboard_id}/data`,
+        const r = await api.get(`/dashboards/${dashboard.dashboard_id}/data`,
           { params: { widget_id: w.id, type: w.type, team_id: cfg.team_id, status: cfg.status } });
         Object.assign(results, r.data);
       } catch {}
@@ -165,7 +165,7 @@ export default function DashboardPage({ teamId, teams = [] }) {
     if (!dashboard) return;
     clearTimeout(saveTimeout.current);
     saveTimeout.current = setTimeout(() => {
-      api.put(`/api/dashboards/${dashboard.dashboard_id}`, { widgets }).catch(console.error);
+      api.put(`/dashboards/${dashboard.dashboard_id}`, { widgets }).catch(console.error);
     }, 800);
   }, [dashboard]);
 
@@ -255,3 +255,4 @@ export default function DashboardPage({ teamId, teams = [] }) {
     </div>
   );
 }
+

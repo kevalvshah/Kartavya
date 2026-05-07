@@ -32,7 +32,7 @@ export default function ActivityFeedPage({ teamId }) {
 
   useEffect(() => {
     if (!teamId) return;
-    api.get(`/api/teams/${teamId}`)
+    api.get(`/teams/${teamId}`)
        .then(r => setMembers(r.data.members || []))
        .catch(() => {});
   }, [teamId]);
@@ -48,7 +48,7 @@ export default function ActivityFeedPage({ teamId }) {
       const params = { limit: LIMIT, offset: off };
       if (filterType)  params.event_type = filterType;
       if (filterActor) params.actor_id   = filterActor;
-      const r = await api.get(`/api/activity/team/${teamId}`, { params, signal: ctrl.signal });
+      const r = await api.get(`/activity/team/${teamId}`, { params, signal: ctrl.signal });
       const data = r.data;
       setEvents(prev => reset ? data : [...prev, ...data]);
       setHasMore(data.length === LIMIT);
@@ -100,3 +100,4 @@ export default function ActivityFeedPage({ teamId }) {
     </div>
   );
 }
+

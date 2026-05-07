@@ -51,19 +51,19 @@ export default function AutomationsPage({ teamId }) {
 
   useEffect(() => {
     if (!teamId) return;
-    api.get(`/api/automations/team/${teamId}`)
+    api.get(`/automations/team/${teamId}`)
        .then(r => setAutomations(r.data))
        .finally(() => setLoading(false));
   }, [teamId]);
 
   const handleToggle = async (auto) => {
-    await api.put(`/api/automations/${auto.automation_id}`, { enabled: !auto.enabled });
+    await api.put(`/automations/${auto.automation_id}`, { enabled: !auto.enabled });
     setAutomations(prev => prev.map(a => a.automation_id === auto.automation_id ? { ...a, enabled: !a.enabled } : a));
   };
 
   const handleDelete = async (id) => {
     if (!window.confirm('Delete this automation?')) return;
-    await api.delete(`/api/automations/${id}`);
+    await api.delete(`/automations/${id}`);
     setAutomations(prev => prev.filter(a => a.automation_id !== id));
   };
 
@@ -93,7 +93,7 @@ export default function AutomationsPage({ teamId }) {
         actions: [{ type: form.action_type, config: actionConfig }],
         enabled: true,
       };
-      const r = await api.post('/api/automations/', payload);
+      const r = await api.post('/automations/', payload);
       setAutomations(prev => [r.data, ...prev]);
       setCreating(false);
       setForm(EMPTY_FORM);
@@ -256,3 +256,4 @@ export default function AutomationsPage({ teamId }) {
     </div>
   );
 }
+

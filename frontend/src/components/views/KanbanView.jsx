@@ -35,7 +35,7 @@ export default function KanbanView({ columns, tasks, fieldDefs, fieldValueMap, t
     setDragging(null); setOver(null);
     const order = targetIdx ?? (byCol[targetColId]?.length ?? 0);
     try {
-      const res = await api.patch(`/api/tasks/${taskId}/move`, { column_id: targetColId, order });
+      const res = await api.patch(`/tasks/${taskId}/move`, { column_id: targetColId, order });
       onTasksChange?.(prev => prev.map(t => t.task_id === taskId ? res.data : t));
     } catch (e) { console.error('Move failed', e); }
   }, [dragging, byCol, onTasksChange]);
@@ -88,3 +88,4 @@ export default function KanbanView({ columns, tasks, fieldDefs, fieldValueMap, t
     </>
   );
 }
+

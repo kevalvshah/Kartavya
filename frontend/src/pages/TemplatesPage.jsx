@@ -73,9 +73,9 @@ export default function TemplatesPage() {
     setLoading(true);
     try {
       const [pt, tt, pr] = await Promise.all([
-        api.get('/api/templates/projects'),
-        api.get('/api/templates/tasks'),
-        api.get('/api/teams'),
+        api.get('/templates/projects'),
+        api.get('/templates/tasks'),
+        api.get('/teams'),
       ]);
       setProjTemplates(pt.data);
       setTaskTemplates(tt.data);
@@ -94,15 +94,15 @@ export default function TemplatesPage() {
     try {
       // snapshot current project's columns + field defs
       const [colR, fieldR] = await Promise.all([
-        api.get(`/api/projects/${saveFrom}/columns`),
-        api.get(`/api/fields/team/${saveFrom}`).catch(() => ({ data: [] })),
+        api.get(`/projects/${saveFrom}/columns`),
+        api.get(`/fields/team/${saveFrom}`).catch(() => ({ data: [] })),
       ]);
       const config = {
         columns: colR.data.map(c => ({ name: c.name, color: c.color, is_done: c.is_done })),
         fields:  fieldR.data.map(f => ({ name: f.name, type: f.type, config: f.config })),
         sample_tasks: [], // empty by default; user can add later
       };
-      await api.post('/api/templates/projects', { name: ptName.trim(), description: ptDesc.trim() || null, config });
+      await api.post('/templates/projects', { name: ptName.trim(), description: ptDesc.trim() || null, config });
       pushToast({ type: 'success', title: `Template "${ptName}" saved` });
       setPtName(''); setPtDesc(''); setSaveFrom('');
       load();
@@ -115,7 +115,7 @@ export default function TemplatesPage() {
     if (!applyTmpl || !applyToProject) { pushToast({ type: 'error', title: 'Choose a template and target project' }); return; }
     setApplying(true);
     try {
-      const res = await api.post(`/api/templates/projects/${applyTmpl}/apply?team_id=${applyToProject}`);
+      const res = await api.post(`/templates/projects/${applyTmpl}/apply?team_id=${applyToProject}`);
       pushToast({ type: 'success', title: `Applied — ${res.data.created.columns} columns, ${res.data.created.tasks} tasks created` });
       setApplyTmpl(''); setApplyToProject('');
       navigate(`/projects/${applyToProject}`);
@@ -128,7 +128,7 @@ export default function TemplatesPage() {
     if (!ttName.trim() || !ttTitle.trim()) { pushToast({ type: 'error', title: 'Template name and task title are required' }); return; }
     setTtSaving(true);
     try {
-      await api.post('/api/templates/tasks', {
+      await api.post('/templates/tasks', {
         name: ttName.trim(),
         team_id: ttProject || null,
         config: { title_pattern: ttTitle.trim(), description: ttDesc.trim() || null, priority: ttPrio },
@@ -148,7 +148,7 @@ export default function TemplatesPage() {
       const tmpl = taskTemplates.find(t => t.template_id === quickTmpl);
       if (!tmpl) throw new Error('Template not found');
       const cfg = typeof tmpl.config === 'string' ? JSON.parse(tmpl.config) : tmpl.config;
-      await api.post('/api/tasks', {
+      await api.post('/tasks', {
         title: cfg.title_pattern || tmpl.name,
         description: cfg.description || null,
         priority: cfg.priority || 'medium',
@@ -164,12 +164,12 @@ export default function TemplatesPage() {
   // ── Delete ────────────────────────────────────────────────────────────────────────
   const deleteProjTmpl = async (id, name) => {
     if (!window.confirm(`Delete template "${name}"?`)) return;
-    try { await api.delete(`/api/templates/projects/${id}`); load(); pushToast({ type: 'success', title: 'Template deleted' }); }
+    try { await api.delete(`/templates/projects/${id}`); load(); pushToast({ type: 'success', title: 'Template deleted' }); }
     catch (_) { pushToast({ type: 'error', title: 'Could not delete' }); }
   };
   const deleteTaskTmpl = async (id, name) => {
     if (!window.confirm(`Delete template "${name}"?`)) return;
-    try { await api.delete(`/api/templates/tasks/${id}`); load(); pushToast({ type: 'success', title: 'Template deleted' }); }
+    try { await api.delete(`/templates/tasks/${id}`); load(); pushToast({ type: 'success', title: 'Template deleted' }); }
     catch (_) { pushToast({ type: 'error', title: 'Could not delete' }); }
   };
 
@@ -345,3 +345,4 @@ export default function TemplatesPage() {
     </div>
   );
 }
+
