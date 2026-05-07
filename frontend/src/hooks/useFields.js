@@ -5,7 +5,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { api } from '../lib/api';
 
 export function useFieldDefs(teamId) {
-  const [defs, setDefs]     = useState([]);
+  const [defs, setDefs]       = useState([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -37,7 +37,7 @@ export function useFieldDefs(teamId) {
 }
 
 export function useFieldValues(taskId) {
-  const [values, setValues]   = useState({});  // { field_id: value }
+  const [values, setValues]   = useState({});
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -63,4 +63,14 @@ export function useFieldValues(taskId) {
   }, [taskId]);
 
   return { values, loading, setValue };
+}
+
+/**
+ * Combined convenience hook — some components import { useFields }.
+ * Returns { defs, fieldValues, loading, createField, updateField, deleteField, setValue }.
+ */
+export function useFields(teamId, taskId) {
+  const fieldDefs   = useFieldDefs(teamId);
+  const fieldValues = useFieldValues(taskId);
+  return { ...fieldDefs, fieldValues: fieldValues.values, setValue: fieldValues.setValue };
 }
