@@ -1,22 +1,9 @@
 /**
  * App.js — Kartavya v2 entry point.
- *
- * Route-level code splitting via React.lazy + Suspense:
- *   • Every page chunk is only downloaded when the user first visits that route.
- *   • The initial JS bundle contains only the shell, auth, and routing logic.
- *   • Heavy pages (ProjectBoard, Dashboard, Automations, …) load on demand.
- *
- * File responsibilities:
- *   • CSS imports           – global styles only
- *   • Lazy page imports     – one per route, no inline components
- *   • Outlet context wrappers – thin, 3-line functions
- *   • AppRouter             – route tree
- *   • App root              – providers only
+ * Week 3: Templates route added to sidebar + lazy import.
  */
 import React, { Suspense, lazy } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useOutletContext } from 'react-router-dom';
-
-// ── Global styles ───────────────────────────────────────────────────────────────
 import './App.css';
 import './lib/tokens.css';
 import './styles/layout.css';
@@ -24,15 +11,11 @@ import './styles/modern-components.css';
 import './styles/dark-theme.css';
 import './styles/animations.css';
 import './styles/mobile-responsive.css';
-
-// ── Providers ───────────────────────────────────────────────────────────────────
 import { ToastProvider } from './components/ui/toast';
+import AppShell, { Protected } from './components/layout/AppShell';
+import { LoginPage, AcceptInvitePage } from './pages/LoginPage';
 
-// ── Eagerly loaded (always needed for shell + auth) ────────────────────────────
-import AppShell, { Protected }          from './components/layout/AppShell';
-import { LoginPage, AcceptInvitePage }   from './pages/LoginPage';
-
-// ── Lazy pages (downloaded only on first visit to that route) ──────────────────
+// ── Lazy pages ──────────────────────────────────────────────────────────────────
 const DashboardPage         = lazy(() => import('./pages/DashboardPage'));
 const ProjectsPage          = lazy(() => import('./pages/ProjectsPage'));
 const ProjectBoardPage      = lazy(() => import('./pages/ProjectBoardPage'));
@@ -42,6 +25,7 @@ const ActivityFeedPage      = lazy(() => import('./pages/ActivityFeedPage'));
 const AutomationsPage       = lazy(() => import('./pages/AutomationsPage'));
 const TimeReportPage        = lazy(() => import('./pages/TimeReportPage'));
 const ApprovalsPage         = lazy(() => import('./pages/ApprovalsPage'));
+const TemplatesPage         = lazy(() => import('./pages/TemplatesPage'));   // Week 3
 const CategoriesPage        = lazy(() => import('./pages/CategoriesPage'));
 const NotificationsSettings = lazy(() => import('./pages/NotificationsSettingsPage'));
 const AdminPage             = lazy(() => import('./pages/AdminPage'));
@@ -52,16 +36,17 @@ const ClientPortal          = lazy(() => import('./pages/ClientPortal'));
 // ── Suspense fallback ───────────────────────────────────────────────────────────────
 function PageLoader() {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60vh', color: 'var(--text-muted)', fontSize: 13, fontFamily: "'Inter',sans-serif" }}>
+    <div style={{ display:'flex', alignItems:'center', justifyContent:'center', minHeight:'60vh', color:'var(--text-muted)', fontSize: 13, fontFamily:"'Inter',sans-serif" }}>
       <span style={{ opacity: 0.5 }}>Loading…</span>
     </div>
   );
 }
 
-// ── Outlet context wrappers ─────────────────────────────────────────────────────
-function DashboardWrapper()    { const { teams }  = useOutletContext(); return <DashboardPage    teams={teams} />; }
-function ActivityWrapper()     { const { teamId } = useOutletContext(); return <ActivityFeedPage teamId={teamId} />; }
-function AutomationsWrapper()  { const { teamId } = useOutletContext(); return <AutomationsPage  teamId={teamId} />; }
+// ── Outlet context wrappers ────────────────────────────────────────────────────
+function DashboardWrapper()   { const { teams  } = useOutletContext(); return <DashboardPage  teams={teams} />; }
+function ActivityWrapper()    { const { teamId } = useOutletContext(); return <ActivityFeedPage teamId={teamId} />; }
+function AutomationsWrapper() { const { teamId } = useOutletContext(); return <AutomationsPage  teamId={teamId} />; }
+function TimeWrapper()        { const { teamId } = useOutletContext(); return <TimeReportPage   teamId={teamId} />; }
 
 // ── Route tree ────────────────────────────────────────────────────────────────────
 function AppRouter() {
@@ -80,7 +65,8 @@ function AppRouter() {
           <Route path="teams"                      element={<TeamsPage />} />
           <Route path="activity"                   element={<ActivityWrapper />} />
           <Route path="automations"                element={<AutomationsWrapper />} />
-          <Route path="time"                       element={<TimeReportPage />} />
+          <Route path="time"                       element={<TimeWrapper />} />
+          <Route path="templates"                  element={<TemplatesPage />} />
           <Route path="approvals"                  element={<ApprovalsPage />} />
           <Route path="settings/categories"        element={<CategoriesPage />} />
           <Route path="settings/notifications"     element={<NotificationsSettings />} />
@@ -97,7 +83,6 @@ function AppRouter() {
   );
 }
 
-// ── Root ───────────────────────────────────────────────────────────────────────
 export default function App() {
   return (
     <ToastProvider>
