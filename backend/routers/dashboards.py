@@ -1,0 +1,117 @@
+"""
+dashboards.py — User dashboard widget grid
+Widgets: count | chart | my_work | deadlines
+"""
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
+from typing import Optional
+import uuid
+
+from auth_router import require_user
+from db import get_pool
+
+router = APIRouter(prefix="/api/dashboards", tags=["dashboards"])
+
+
+class DashboardCreate(BaseModel):
+    name: str
+    widgets: list = []
+
+
+class DashboardUpdate(BaseModel):
+    name: Optional[str] = None
+    widgets: Optional[list] = None
+
+
+@router.get("/")
+async def list_dashboards(pool=Depends(get_pool), user=Depends(require_user)):
+    rows = await pool.fetch(
+        "SELECT * FROM dashboards WHERE user_id=$1 ORDER BY created_at",
+        user["user_id"]
+    )
+    return [dict(r) for r in rows]
+
+
+@router.post("/")
+async def create_dashboard(body: DashboardCreate, pool=Depends(get_pool), user=Depends(require_user)):
+    dash_id = f"dash_{uuid.uuid4().hex[:12]}"
+    await pool.execute(
+        "INSERT INTO dashboards (dashboard_id, user_id, name, widgets) VALUES ($1,$2,$3,$4)",
+        dash_id, user["user_id"], body.name, body.widgets
+    )
+    return {"dashboard_id": dash_id, **body.dict()}
+
+
+@router.put("/{dashboard_id}")
+async def update_dashboard(dashboard_id: str, body: DashboardUpdate, pool=Depends(get_pool), user=Depends(require_user)):
+    updates, vals = [], []
+    if body.name is not None:    updates.append(f"name=${len(vals)+2}");    vals.append(body.name)
+    if body.widgets is not None: updates.append(f"widgets=${len(vals)+2}"); vals.append(body.widgets)
+    if updates:
+        await pool.execute(
+            f"UPDATE dashboards SET {', '.join(updates)} WHERE dashboard_id=$1 AND user_id=${ len(vals)+2 }",
+            dashboard_id, *vals, user["user_id"]
+        )
+    return {"ok": True}
+
+
+@router.delete("/{dashboard_id}")
+async def delete_dashboard(dashboard_id: str, pool=Depends(get_pool), user=Depends(require_user)):
+    await pool.execute("DELETE FROM dashboards WHERE dashboard_id=$1 AND user_id=$2", dashboard_id, user["user_id"])
+    return {"ok": True}
+
+
+@router.get("/{dashboard_id}/data")
+async def get_dashboard_data(dashboard_id: str, pool=Depends(get_pool), user=Depends(require_user)):
+    """Returns pre-computed data for all widgets in one call."""
+    dash = await pool.fetchrow(
+        "SELECT * FROM dashboards WHERE dashboard_id=$1 AND user_id=$2",
+        dashboard_id, user["user_id"]
+    )
+    if not dash:
+        raise HTTPException(404, "Dashboard not found")
+
+    data = {}
+    for widget in (dash["widgets"] or []):
+        wtype = widget.get("type")
+        wid   = widget.get("id", wtype)
+        cfg   = widget.get("config", {})
+
+        if wtype == "count":
+            team_id = cfg.get("team_id")
+            status  = cfg.get("status")
+            count   = await pool.fetchval(
+                "SELECT COUNT(*) FROM tasks WHERE team_id=$1 AND ($2::text IS NULL OR status=$2)",
+                team_id, status
+            )
+            data[wid] = {"count": count}
+
+        elif wtype == "my_work":
+            tasks = await pool.fetch("""
+                SELECT task_id, title, status, priority, due_at
+                FROM tasks WHERE $1=ANY(assignee_user_ids) AND status != 'done'
+                ORDER BY due_at ASC NULLS LAST LIMIT 10
+            """, user["user_id"])
+            data[wid] = {"tasks": [dict(t) for t in tasks]}
+
+        elif wtype == "deadlines":
+            tasks = await pool.fetch("""
+                SELECT task_id, title, status, priority, due_at,
+                       COALESCE(u.full_name, u.name) AS assignee_name
+                FROM tasks t
+                LEFT JOIN users u ON u.user_id = ANY(t.assignee_user_ids::text[])
+                WHERE t.due_at IS NOT NULL AND t.due_at > NOW() AND t.status != 'done'
+                  AND ($1::text IS NULL OR t.team_id=$1)
+                ORDER BY t.due_at ASC LIMIT 15
+            """, cfg.get("team_id"))
+            data[wid] = {"tasks": [dict(t) for t in tasks]}
+
+        elif wtype == "chart":
+            team_id = cfg.get("team_id")
+            rows = await pool.fetch(
+                "SELECT status, COUNT(*) as count FROM tasks WHERE team_id=$1 GROUP BY status",
+                team_id
+            )
+            data[wid] = {"series": [dict(r) for r in rows]}
+
+    return data

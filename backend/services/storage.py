@@ -1,0 +1,112 @@
+"""
+storage.py — Cloudflare R2 file storage with 60-day auto-expiry.
+
+Environment variables required:
+  R2_ACCOUNT_ID      — Cloudflare account ID
+  R2_ACCESS_KEY_ID   — R2 access key
+  R2_SECRET_ACCESS_KEY — R2 secret key
+  R2_BUCKET_NAME     — bucket name (e.g. 'kartavya-uploads')
+  R2_PUBLIC_URL      — public URL prefix (e.g. https://uploads.kartavya.app)
+                       OR leave empty to use presigned URLs
+
+The 60-day lifecycle rule must be set on the bucket in the Cloudflare
+dashboard (Objects > Lifecycle rules > Expiration: 60 days after creation).
+This file does NOT set the rule programmatically — Cloudflare R2 lifecycle
+rules are managed via the dashboard or wrangler, not via the S3 API.
+"""
+import os
+import uuid
+from pathlib import Path
+from typing import Optional
+import logging
+
+log = logging.getLogger(__name__)
+
+# ── lazy import boto3 so the server still starts without it ───────────────────
+_s3 = None
+
+def _client():
+    global _s3
+    if _s3 is not None:
+        return _s3
+    try:
+        import boto3
+        from botocore.config import Config
+        account_id      = os.environ["R2_ACCOUNT_ID"]
+        access_key      = os.environ["R2_ACCESS_KEY_ID"]
+        secret_key      = os.environ["R2_SECRET_ACCESS_KEY"]
+        _s3 = boto3.client(
+            "s3",
+            endpoint_url=f"https://{account_id}.r2.cloudflarestorage.com",
+            aws_access_key_id=access_key,
+            aws_secret_access_key=secret_key,
+            config=Config(signature_version="s3v4"),
+            region_name="auto",
+        )
+        return _s3
+    except Exception as exc:
+        log.warning(f"R2 client init failed — file uploads will fall back to base64: {exc}")
+        return None
+
+
+BUCKET   = os.environ.get("R2_BUCKET_NAME", "kartavya-uploads")
+PUB_URL  = os.environ.get("R2_PUBLIC_URL", "").rstrip("/")
+
+
+async def upload_file(file_bytes: bytes, filename: str, content_type: str, user_id: str) -> dict:
+    """
+    Upload a file to R2. Returns {url, name, key, size}.
+    Falls back to base64 data-URI when R2 is not configured.
+    """
+    client = _client()
+    if client is None:
+        # Fallback: base64 in-memory (no 60-day TTL, but won't crash dev)
+        import base64
+        b64 = base64.b64encode(file_bytes).decode()
+        return {
+            "url":  f"data:{content_type};base64,{b64}",
+            "name": filename,
+            "key":  None,
+            "size": len(file_bytes),
+        }
+
+    ext = Path(filename).suffix
+    key = f"uploads/{user_id}/{uuid.uuid4().hex}{ext}"
+
+    client.put_object(
+        Bucket=BUCKET,
+        Key=key,
+        Body=file_bytes,
+        ContentType=content_type,
+        # Tag files so a lifecycle rule can expire them after 60 days
+        # The actual expiry is enforced by the bucket lifecycle rule —
+        # this tag is optional metadata for auditing.
+        Tagging="ttl=60d",
+    )
+
+    if PUB_URL:
+        url = f"{PUB_URL}/{key}"
+    else:
+        # Generate a 7-day presigned URL (max for R2)
+        url = client.generate_presigned_url(
+            "get_object",
+            Params={"Bucket": BUCKET, "Key": key},
+            ExpiresIn=7 * 24 * 3600,
+        )
+
+    return {"url": url, "name": filename, "key": key, "size": len(file_bytes)}
+
+
+async def delete_file(key: str) -> bool:
+    """Delete a single object from R2 by key."""
+    if not key:
+        return False
+    client = _client()
+    if client is None:
+        return False
+    try:
+        client.delete_object(Bucket=BUCKET, Key=key)
+        return True
+    except Exception as exc:
+        log.warning(f"R2 delete failed for key={key}: {exc}")
+        return False
