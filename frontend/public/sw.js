@@ -1,4 +1,4 @@
-/* Kartavya Service Worker — PWA offline support */
+﻿/* Kartavya Service Worker â€” PWA offline support */
 const CACHE = 'kartavya-v1';
 const PRECACHE = ['/', '/static/js/main.chunk.js', '/static/css/main.chunk.css'];
 
@@ -25,3 +25,6 @@ self.addEventListener('fetch', (e) => {
     }).catch(() => caches.match('/')))
   );
 });
+
+
+
