@@ -127,12 +127,14 @@ export default function DashboardPage({ teamId, teams = [] }) {
        })
        .catch(console.error)
        .finally(() => setLoading(false));
+      // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!dashboard) return;
     fetchAllWidgetData(dashboard.widgets);
+      // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dashboard?.dashboard_id, selectedTeam]);
 
   async function fetchAllWidgetData(widgets) {

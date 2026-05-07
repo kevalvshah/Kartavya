@@ -69,6 +69,7 @@ export default function ProjectBoardPage() {
         map[t.task_id] = Object.fromEntries(r.data.map(v => [v.field_id, v.value]));
       } catch {}
     })).then(() => setFieldValueMap({ ...map }));
+      // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tasks.length, fieldDefs?.length]);
 
   const handleNewTask = async (colId) => {
