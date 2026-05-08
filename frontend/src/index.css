@@ -1,4 +1,7 @@
 /* Kartavya v2 global styles */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 @import './lib/tokens.css';
 
 @keyframes fadeIn   { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:none} }
