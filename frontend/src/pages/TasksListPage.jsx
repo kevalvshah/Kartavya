@@ -1,156 +1,138 @@
 /**
- * TasksListPage.jsx — cross-project flat task list with filters.
+ * TasksListPage.jsx
+ * Works for both members AND clients.
+ * - Members see all tasks they own/are assigned to.
+ * - Clients see their tasks via /client/tasks endpoint.
+ * Full create/edit/delete via TaskEditor (members) or ClientTaskDrawer-like inline.
  */
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { api } from '../lib/api';
-import { formatDue } from '../lib/auth';
-import { cn } from '../lib/utils';
+import { currentUser, formatDue } from '../lib/auth';
 import { Button } from '../components/ui/button';
-import { Input } from '../components/ui/input';
+import { Input }  from '../components/ui/input';
 import { Select } from '../components/ui/select';
-import { Badge } from '../components/ui/badge';
 import { useToast } from '../components/ui/toast';
-import { Trash2, Plus } from 'lucide-react';
 import TaskEditor from '../components/TaskEditor';
+import { ListTodo, Plus, Trash2, Pencil } from 'lucide-react';
+
+const PRIORITY_COLOR = { low: '#22c55e', medium: '#f59e0b', high: '#ef4444', urgent: '#dc2626' };
 
 export default function TasksListPage() {
   const { pushToast } = useToast();
-  const [tasks,      setTasks]      = useState([]);
-  const [categories, setCats]       = useState([]);
-  const [teams,      setTeams]      = useState([]);
-  const [filters,    setFilters]    = useState({ status: '', category_id: '', q: '', team_id: '', assigned_to_me: false });
-  const [editorOpen, setEditorOpen] = useState(false);
-  const [editing,    setEditing]    = useState(null);
+  const user     = currentUser();
+  const isClient = user?.role === 'client';
 
-  const load = async () => {
-    const p = {};
-    if (filters.status)         p.status         = filters.status;
-    if (filters.category_id)    p.category_id    = filters.category_id;
-    if (filters.q)              p.q              = filters.q;
-    if (filters.team_id)        p.team_id        = filters.team_id;
-    if (filters.assigned_to_me) p.assigned_to_me = true;
-    const [t, c, te] = await Promise.all([
-      api.get('/tasks', { params: p }),
-      api.get('/categories'),
-      api.get('/teams'),
-    ]);
-    setTasks(t.data); setCats(c.data); setTeams(te.data);
-  };
+  const [tasks,   setTasks]   = useState([]);
+  const [teams,   setTeams]   = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [search,  setSearch]  = useState('');
+  const [filter,  setFilter]  = useState('all');   // all | mine | done
+  const [editor,  setEditor]  = useState({ open: false, task: null });
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { load().catch(() => pushToast({ type: 'error', title: 'Could not load tasks' })); }, []);
-  useEffect(() => {
-    const id = setTimeout(() => load().catch(() => {}), 250);
-    return () => clearTimeout(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters.status, filters.category_id, filters.q, filters.team_id, filters.assigned_to_me]);
-
-  const toggle = async (task) => {
+  const load = useCallback(async () => {
+    setLoading(true);
     try {
-      const r = await api.patch(`/tasks/${task.task_id}/toggle`);
-      setTasks((p) => p.map((t) => t.task_id === task.task_id ? r.data : t));
-    } catch (_) { pushToast({ type: 'error', title: 'Could not update' }); }
-  };
+      // Clients use the scoped /client/tasks endpoint
+      const endpoint = isClient ? '/client/tasks' : '/tasks';
+      const [tRes, pRes] = await Promise.all([
+        api.get(endpoint),
+        isClient ? api.get('/client/projects') : api.get('/teams'),
+      ]);
+      setTasks(tRes.data || []);
+      setTeams((pRes.data || []).map(t => ({ team_id: t.team_id, name: t.name })));
+    } catch (_) {
+      pushToast({ type: 'error', title: 'Could not load tasks' });
+    } finally { setLoading(false); }
+  }, [isClient, pushToast]);
 
-  const remove = async (task) => {
+  useEffect(() => { load(); }, [load]);
+
+  const deleteTask = async (task) => {
     if (!window.confirm(`Delete "${task.title}"?`)) return;
     try {
       await api.delete(`/tasks/${task.task_id}`);
-      setTasks((p) => p.filter((t) => t.task_id !== task.task_id));
+      pushToast({ type: 'success', title: 'Task deleted' });
+      load();
     } catch (_) { pushToast({ type: 'error', title: 'Could not delete' }); }
   };
 
-  const f  = (k, v) => setFilters((p) => ({ ...p, [k]: v }));
-  const sl = (t) => t.team_id ? teams.find((x) => x.team_id === t.team_id)?.name || 'Project' : 'Personal';
+  const visible = tasks.filter(t => {
+    const matchSearch = !search || t.title.toLowerCase().includes(search.toLowerCase());
+    const matchFilter = filter === 'all' || (filter === 'done' ? t.status === 'done' : t.status !== 'done');
+    return matchSearch && matchFilter;
+  });
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between">
-        <div>
-          <div className="text-sm font-bold">All Tasks</div>
-          <div className="text-sm text-muted-foreground mt-0.5">Across all projects and personal tasks.</div>
-        </div>
-        <Button onClick={() => { setEditing(null); setEditorOpen(true); }}>
-          <Plus size={15} /><span className="ml-1.5">New task</span>
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="text-sm font-bold flex items-center gap-2"><ListTodo size={16} />{isClient ? 'My Tasks' : 'All Tasks'}</div>
+        <Button onClick={() => setEditor({ open: true, task: null })}>
+          <Plus size={14} /><span className="ml-1">New Task</span>
         </Button>
       </div>
 
-      <div className="rounded-3xl border border-border/70 bg-card/50 p-4">
-        <div className="grid gap-3 md:grid-cols-5">
-          <div>
-            <div className="mb-1 text-xs font-bold text-muted-foreground uppercase tracking-wide">Status</div>
-            <Select value={filters.status} onChange={(v) => f('status', v)}
-              options={[{ value: '', label: 'All' }, { value: 'todo', label: 'Todo' }, { value: 'in_progress', label: 'In progress' }, { value: 'done', label: 'Done' }]} />
-          </div>
-          <div>
-            <div className="mb-1 text-xs font-bold text-muted-foreground uppercase tracking-wide">Project</div>
-            <Select value={filters.team_id} onChange={(v) => f('team_id', v)}
-              options={[{ value: '', label: 'All' }, ...teams.map((t) => ({ value: t.team_id, label: t.name }))]} />
-          </div>
-          <div>
-            <div className="mb-1 text-xs font-bold text-muted-foreground uppercase tracking-wide">Category</div>
-            <Select value={filters.category_id} onChange={(v) => f('category_id', v)}
-              options={[{ value: '', label: 'All' }, ...categories.map((c) => ({ value: c.category_id, label: c.name }))]} />
-          </div>
-          <div>
-            <div className="mb-1 text-xs font-bold text-muted-foreground uppercase tracking-wide">Search</div>
-            <Input value={filters.q} onChange={(e) => f('q', e.target.value)} placeholder="Search…" />
-          </div>
-          <div>
-            <div className="mb-1 text-xs font-bold text-muted-foreground uppercase tracking-wide">Assigned</div>
-            <button onClick={() => f('assigned_to_me', !filters.assigned_to_me)}
-              className={cn('h-10 w-full rounded-2xl border border-border/60 bg-background/40 px-3 text-sm transition-colors hover:bg-muted/40 font-medium', filters.assigned_to_me && 'ring-2')}>
-              {filters.assigned_to_me ? 'Assigned to me' : 'All'}
-            </button>
-          </div>
-        </div>
+      <div className="flex gap-3 flex-wrap">
+        <Input
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="Search tasks…"
+          className="max-w-xs"
+        />
+        <Select
+          value={filter}
+          onChange={setFilter}
+          options={[
+            { value: 'all',  label: 'All' },
+            { value: 'mine', label: 'Active' },
+            { value: 'done', label: 'Done' },
+          ]}
+          className="w-36"
+        />
       </div>
 
-      <div className="rounded-3xl border border-border/70 bg-card/50 overflow-hidden">
-        <div className="grid grid-cols-[1fr_160px_120px_120px_200px_160px] border-b border-border/60 px-5 py-3 text-xs font-bold text-muted-foreground uppercase tracking-wide">
-          <div>Title</div><div>Project</div><div>Status</div><div>Priority</div><div>Due</div><div className="text-right">Actions</div>
+      {loading && <div className="text-sm text-muted-foreground">Loading…</div>}
+
+      {!loading && visible.length === 0 && (
+        <div className="rounded-3xl border border-dashed border-border p-10 text-center text-sm text-muted-foreground">
+          {search ? 'No tasks match your search.' : 'No tasks yet — create one!'}
         </div>
-        {tasks.length === 0
-          ? <div className="px-5 py-10 text-sm text-muted-foreground text-center">No tasks found.</div>
-          : tasks.map((t) => (
-            <div key={t.task_id} className="grid grid-cols-[1fr_160px_120px_120px_200px_160px] items-center border-b border-border/40 px-5 py-3.5 hover:bg-muted/20 transition-colors">
-              <button onClick={() => { setEditing(t); setEditorOpen(true); }} className="min-w-0 text-left">
-                <div className="truncate text-sm font-semibold">{t.title}</div>
-                {(t.tags || []).length > 0 && (
-                  <div className="mt-0.5 flex flex-wrap gap-1">
-                    {t.tags.slice(0, 2).map((tag) => <Badge key={tag} tone="neutral">{tag}</Badge>)}
-                  </div>
-                )}
-              </button>
-              <div className="text-sm text-muted-foreground truncate">{sl(t)}</div>
-              <div><Badge tone={t.status === 'done' ? 'success' : t.status === 'in_progress' ? 'info' : 'neutral'}>{t.status === 'in_progress' ? 'In progress' : t.status}</Badge></div>
-              <div><Badge tone={t.priority === 'urgent' ? 'danger' : t.priority === 'high' ? 'warning' : 'neutral'}>{t.priority}</Badge></div>
-              <div className="text-sm text-muted-foreground">{t.due_at ? formatDue(t.due_at) : '—'}</div>
-              <div className="flex justify-end gap-1.5">
-                <Button variant="ghost" onClick={() => toggle(t)} className="text-xs px-2.5 h-8">{t.status === 'done' ? 'Reopen' : 'Done'}</Button>
-                <Button variant="ghost" onClick={() => remove(t)} className="px-2 h-8"><Trash2 size={13} /></Button>
+      )}
+
+      <div className="space-y-2">
+        {visible.map(t => (
+          <div key={t.task_id} className="rounded-2xl border border-border/60 bg-card/50 px-4 py-3 flex items-center gap-3">
+            <div style={{ width: 8, height: 8, borderRadius: '50%', background: PRIORITY_COLOR[t.priority] || '#94a3b8', flexShrink: 0 }} />
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-semibold truncate">{t.title}</div>
+              <div className="text-xs text-muted-foreground">
+                {t.status?.replace('_', ' ')}
+                {t.due_at && <> · Due {formatDue(t.due_at)}</>}
               </div>
             </div>
-          ))}
+            <button
+              onClick={() => setEditor({ open: true, task: t })}
+              className="p-1.5 rounded-lg hover:bg-muted/40 text-muted-foreground transition-colors"
+            >
+              <Pencil size={13} />
+            </button>
+            <button
+              onClick={() => deleteTask(t)}
+              className="p-1.5 rounded-lg hover:bg-red-500/10 text-muted-foreground hover:text-red-500 transition-colors"
+            >
+              <Trash2 size={13} />
+            </button>
+          </div>
+        ))}
       </div>
 
-      {editorOpen && (
-        <TaskEditor
-          key={editing ? editing.task_id : 'new'}
-          open={editorOpen}
-          onOpenChange={setEditorOpen}
-          editing={editing}
-          categories={categories}
-          teams={teams}
-          onSaved={(task) => {
-            setEditorOpen(false); setEditing(null);
-            setTasks((prev) => {
-              const exists = prev.some((t) => t.task_id === task.task_id);
-              return exists ? prev.map((t) => t.task_id === task.task_id ? task : t) : [task, ...prev];
-            });
-          }}
-        />
-      )}
+      <TaskEditor
+        open={editor.open}
+        onOpenChange={(v) => setEditor(e => ({ ...e, open: v }))}
+        editing={editor.task}
+        teams={teams}
+        categories={[]}
+        onSaved={() => { load(); setEditor({ open: false, task: null }); }}
+      />
     </div>
   );
 }

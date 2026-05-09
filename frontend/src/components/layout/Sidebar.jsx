@@ -1,6 +1,6 @@
 /**
  * Sidebar.jsx — left nav.
- * Week 3: Templates link added.
+ * v2: clients get Dashboard, My Tasks, Approvals, Notifications.
  */
 import React from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -24,21 +24,24 @@ export default function Sidebar() {
 
   const nav = isClient
     ? [
-        { to: '/client/projects',        label: 'My Projects',   Icon: FolderKanban },
-        { to: '/settings/notifications', label: 'Notifications', Icon: Bell },
+        { to: '/dashboard',              label: 'Dashboard',       Icon: LayoutGrid    },
+        { to: '/client/projects',        label: 'My Projects',     Icon: FolderKanban  },
+        { to: '/tasks',                  label: 'My Tasks',        Icon: ListTodo      },
+        { to: '/approvals',              label: 'Approvals',       Icon: CheckCircle2  },
+        { to: '/settings/notifications', label: 'Notifications',   Icon: Bell          },
       ]
     : [
-        { to: '/dashboard',              label: 'Dashboard',     Icon: LayoutGrid },
+        { to: '/dashboard',              label: 'Dashboard',     Icon: LayoutGrid  },
         { to: '/projects',               label: 'Projects',      Icon: FolderKanban },
-        { to: '/tasks',                  label: 'All Tasks',     Icon: ListTodo },
+        { to: '/tasks',                  label: 'All Tasks',     Icon: ListTodo    },
         { to: '/approvals',              label: 'Approvals',     Icon: CheckCircle2 },
-        { to: '/teams',                  label: 'Teams',         Icon: Users },
-        { to: '/activity',               label: 'Activity',      Icon: Activity },
-        { to: '/automations',            label: 'Automations',   Icon: Zap },
-        { to: '/time',                   label: 'Time Report',   Icon: Clock },
-        { to: '/templates',              label: 'Templates',     Icon: FileText },
-        { to: '/settings/categories',    label: 'Categories',    Icon: Settings },
-        { to: '/settings/notifications', label: 'Notifications', Icon: Bell },
+        { to: '/teams',                  label: 'Teams',         Icon: Users       },
+        { to: '/activity',               label: 'Activity',      Icon: Activity    },
+        { to: '/automations',            label: 'Automations',   Icon: Zap         },
+        { to: '/time',                   label: 'Time Report',   Icon: Clock       },
+        { to: '/templates',              label: 'Templates',     Icon: FileText    },
+        { to: '/settings/categories',    label: 'Categories',    Icon: Settings    },
+        { to: '/settings/notifications', label: 'Notifications', Icon: Bell        },
         ...(isAdmin ? [{ to: '/admin',   label: 'Admin',         Icon: ShieldCheck }] : []),
       ];
 
@@ -60,7 +63,10 @@ export default function Sidebar() {
               style={active ? { background: K.gradD } : {}}>
               <Icon size={15} />
               {label}
-              {to === '/admin' && <span className="ml-auto text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded" style={{ background: K.teal + '33', color: K.teal }}>admin</span>}
+              {to === '/admin' && (
+                <span className="ml-auto text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded"
+                  style={{ background: K.teal + '33', color: K.teal }}>admin</span>
+              )}
             </button>
           );
         })}
