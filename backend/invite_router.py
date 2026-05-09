@@ -1,6 +1,7 @@
 """
 invite_router.py — Kartavya by Aekam Inc
 Admin-only invite system. No public registration.
+Bug fixed: now sends invite email after insert.
 """
 import os
 import secrets
@@ -21,8 +22,8 @@ FRONTEND_URL = os.environ.get("FRONTEND_URL", "https://kartavya-aekam.vercel.app
 
 class InviteCreate(BaseModel):
     email: EmailStr
-    role: str = "member"  # "member" or "client"
-    name: Optional[str] = None  # optional display hint
+    role: str = "member"  # "admin" | "member" | "client"
+    name: Optional[str] = None
 
 
 class InviteOut(BaseModel):
@@ -37,36 +38,39 @@ class InviteOut(BaseModel):
 
 class UserOut(BaseModel):
     user_id: str
-    name: str
     email: str
+    name: Optional[str] = None
+    full_name: Optional[str] = None
     role: str
     created_at: datetime
 
 
 @router.get("/users", response_model=List[UserOut])
 async def list_users(pool=Depends(get_pool), admin=Depends(require_admin)):
-    rows = await pool.fetch("SELECT user_id, name, email, role, created_at FROM users ORDER BY created_at DESC")
+    # FIX: select full_name too; UserOut now includes it
+    rows = await pool.fetch(
+        "SELECT user_id, email, name, full_name, role, created_at FROM users ORDER BY created_at DESC"
+    )
     return [UserOut(**dict(r)) for r in rows]
 
 
 @router.post("/invites", response_model=InviteOut)
 async def create_invite(body: InviteCreate, pool=Depends(get_pool), admin=Depends(require_admin)):
-    if body.role not in ("member", "client"):
-        raise HTTPException(status_code=400, detail="Role must be 'member' or 'client'")
+    if body.role not in ("admin", "member", "client"):
+        raise HTTPException(status_code=400, detail="Role must be 'admin', 'member', or 'client'")
 
-    # Check not already a user
     existing = await pool.fetchrow("SELECT 1 FROM users WHERE email=$1", body.email.lower())
     if existing:
         raise HTTPException(status_code=409, detail="A user with this email already exists")
 
-    # Invalidate any previous pending invites for this email
+    # Invalidate old pending invites for same email
     await pool.execute(
         "UPDATE invites SET expires_at=NOW() WHERE email=$1 AND accepted_at IS NULL",
         body.email.lower(),
     )
 
-    token = secrets.token_urlsafe(32)
-    invite_id = f"inv_{uuid.uuid4().hex[:12]}"
+    token      = secrets.token_urlsafe(32)
+    invite_id  = f"inv_{uuid.uuid4().hex[:12]}"
     expires_at = datetime.now(timezone.utc) + timedelta(days=7)
 
     await pool.execute(
@@ -75,6 +79,16 @@ async def create_invite(body: InviteCreate, pool=Depends(get_pool), admin=Depend
     )
 
     invite_link = f"{FRONTEND_URL}/accept-invite?token={token}"
+
+    # FIX: actually send the invite email
+    try:
+        from email_service import send_invite_email
+        inviter_name = admin.get("full_name") or admin.get("name") or admin.get("email", "An admin")
+        send_invite_email(body.email.lower(), inviter_name, body.role, token)
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).warning(f"invite email failed: {exc}")
+
     return InviteOut(
         invite_id=invite_id,
         email=body.email.lower(),
@@ -88,9 +102,7 @@ async def create_invite(body: InviteCreate, pool=Depends(get_pool), admin=Depend
 
 @router.get("/invites", response_model=List[InviteOut])
 async def list_invites(pool=Depends(get_pool), admin=Depends(require_admin)):
-    rows = await pool.fetch(
-        "SELECT * FROM invites ORDER BY created_at DESC LIMIT 100"
-    )
+    rows = await pool.fetch("SELECT * FROM invites ORDER BY created_at DESC LIMIT 100")
     result = []
     for r in rows:
         result.append(InviteOut(
