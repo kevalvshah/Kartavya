@@ -1,0 +1,11 @@
+/* styles/index.css
+ * Single barrel import — loaded once at the top of App.js.
+ * Order matters: tokens must be first (all other files use its CSS vars).
+ * Add new global CSS files here, not in App.js.
+ */
+@import '../lib/tokens.css';
+@import './layout.css';
+@import './modern-components.css';
+@import './dark-theme.css';
+@import './animations.css';
+@import './mobile-responsive.css';
