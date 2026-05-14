@@ -1,4 +1,4 @@
-# Kartavya
+# Kartavya — कर्तव्य
 **Do what must be done.**
 
 Team task management built for Indian businesses — by [Aekam Inc](https://www.aekaminc.com)
@@ -6,41 +6,86 @@ Team task management built for Indian businesses — by [Aekam Inc](https://www.
 ---
 
 ## Stack
-- **Frontend:** React (Vercel)
-- **Backend:** FastAPI / Python (Railway)
-- **Database:** MongoDB Atlas
-- **Auth:** Email/password + JWT
-- **Mobile:** Expo + React Native (Android)
+
+| Layer | Tech | Platform |
+|---|---|---|
+| Frontend | React 18 + Tailwind | Vercel |
+| Backend | FastAPI / Python 3.11 | Railway |
+| Database | PostgreSQL | Railway |
+| Auth | Email/password + JWT (httpOnly cookie) | — |
+| File storage | Cloudflare R2 (boto3 API) | — |
+| Email | AWS SES | — |
+| Mobile | Expo + React Native | Android (separate effort) |
 
 ## Brand
-- Primary: `#0082c6` → `#03a1b6` → `#05b7aa`
-- Font: Harabara Mais (brand) + Nunito (UI)
-- Sidebar: Dark solid `#050e1a`
 
-## Quick Start (Local)
+- Accent: `#1AB8B0` (teal) · gradient trail `#0082c6 → #03a1b6 → #05b7aa`
+- Wordmark font: Harabara Mais (used **only** in `KWordmark` component)
+- UI font: Inter (all other text)
+- Sidebar background: `#050e1a`
 
-### Backend
+## Repo structure
+
+```
+Kartavya/
+├── backend/          ← FastAPI app (see backend/README.md)
+│   ├── server.py     ← entry point: app factory + router mounts
+│   ├── routers/      ← one file per feature domain
+│   ├── services/     ← shared business logic
+│   └── migrations/   ← SQL schema changes
+│
+├── frontend/
+│   └── src/          ← React app (see frontend/src/README.md)
+│       ├── App.js    ← route tree + lazy imports
+│       ├── pages/    ← one file per route
+│       ├── components/ ← shared UI + layout
+│       ├── hooks/    ← data-fetching hooks
+│       ├── lib/      ← api client, auth, tokens, brand
+│       └── styles/   ← global CSS (imported by App.js)
+│
+├── mobile/           ← Expo app (separate effort, not in active development)
+├── V2_PLAN.md        ← source of truth for the v2 rebuild plan
+└── docs/             ← deployment guides
+```
+
+Each folder has its own `README.md` with a file map, rules, and a
+cross-folder impact table so you always know what else to update
+when you touch a file.
+
+## Quick start (local)
+
 ```bash
+# Backend
 cd backend
 pip install -r requirements.txt
-cp .env.example .env   # fill in your values
-uvicorn server:app --reload --port 8001
-```
+cp .env.example .env     # fill in DATABASE_URL, JWT_SECRET, SES vars, R2 vars
+uvicorn server:app --reload --port 8000
 
-### Frontend
-```bash
+# Frontend (separate terminal)
 cd frontend
-yarn install
-cp .env.example .env   # set REACT_APP_BACKEND_URL
-yarn start
+npm install
+# create .env.local with: REACT_APP_API_URL=http://localhost:8000
+npm start
 ```
 
-## Deploy
-See [docs/DEPLOY.md](docs/DEPLOY.md) for full Railway + Vercel deployment guide.
+## Deployment
+
+- **Frontend** → Vercel, auto-deploys on push to `main`
+- **Backend** → Railway, auto-deploys on push to `main`
+- See `backend/railway.toml` for start command
 
 ## Branches
-- `main` → live production
-- `staging` → Aekam India team review
+
+- `main` → live production (Vercel + Railway auto-deploy)
+- Feature work → `cursor/description` branches, PR into main
+
+## Key planning documents
+
+- `V2_PLAN.md` — full v2 feature plan, architecture, week-by-week schedule
+- `backend/migrations/README.md` — migration status table
+- `backend/README.md` — backend folder map + cross-folder rules
+- `frontend/src/README.md` — frontend folder map + import rules
 
 ---
+
 *Kartavya (कर्तव्य) — Sanskrit for "duty" or "that which must be done"*
