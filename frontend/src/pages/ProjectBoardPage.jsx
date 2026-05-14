@@ -1,7 +1,14 @@
 /**
  * ProjectBoardPage.jsx — v2 per-project board with view switcher.
+ *
+ * Bug fixes (2026-05-14):
+ * FIX #1 — Removed duplicate GET /teams/:id call. Members now extracted
+ *           from the first call's response (projR.data.members).
+ * FIX #2 — Field-value useEffect now depends on a stable taskIds string
+ *           (via useMemo) instead of tasks.length, preventing thundering-
+ *           herd re-fetches on every task add/remove.
  */
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
 import KanbanView    from '../components/views/KanbanView';
@@ -12,25 +19,25 @@ import { useFields } from '../hooks/useFields';
 import { useViews }  from '../hooks/useViews';
 
 const VIEWS = [
-  { id: 'kanban',    label: 'Board' },
-  { id: 'table',     label: 'Table' },
-  { id: 'calendar',  label: 'Calendar' },
+  { id: 'kanban',   label: 'Board' },
+  { id: 'table',    label: 'Table' },
+  { id: 'calendar', label: 'Calendar' },
 ];
 
 export default function ProjectBoardPage() {
   const { projectId } = useParams();
   const navigate = useNavigate();
 
-  const [project,      setProject]      = useState(null);
-  const [columns,      setColumns]      = useState([]);
-  const [tasks,        setTasks]        = useState([]);
-  const [teamMembers,  setTeamMembers]  = useState([]);
-  const [view,         setView]         = useState('kanban');
-  const [fieldValueMap,setFieldValueMap]= useState({});
-  const [loading,      setLoading]      = useState(true);
-  const [showFieldMgr, setShowFieldMgr] = useState(false);
-  const [newFieldName, setNewFieldName] = useState('');
-  const [newFieldType, setNewFieldType] = useState('text');
+  const [project,       setProject]       = useState(null);
+  const [columns,       setColumns]       = useState([]);
+  const [tasks,         setTasks]         = useState([]);
+  const [teamMembers,   setTeamMembers]   = useState([]);
+  const [view,          setView]          = useState('kanban');
+  const [fieldValueMap, setFieldValueMap] = useState({});
+  const [loading,       setLoading]       = useState(true);
+  const [showFieldMgr,  setShowFieldMgr]  = useState(false);
+  const [newFieldName,  setNewFieldName]  = useState('');
+  const [newFieldType,  setNewFieldType]  = useState('text');
   const [newTaskEditor, setNewTaskEditor] = useState({ open: false, columnId: null });
 
   const { fieldDefs, createField, deleteField } = useFields(projectId);
@@ -40,16 +47,16 @@ export default function ProjectBoardPage() {
     if (!projectId) return;
     setLoading(true);
     try {
-      const [projR, colR, taskR, memR] = await Promise.all([
+      // FIX #1: single /teams/:id call — members come from the same response.
+      const [projR, colR, taskR] = await Promise.all([
         api.get(`/teams/${projectId}`),
         api.get(`/projects/${projectId}/columns`),
         api.get('/tasks', { params: { team_id: projectId } }),
-        api.get(`/teams/${projectId}`),
       ]);
       setProject(projR.data);
       setColumns(colR.data);
       setTasks(taskR.data);
-      setTeamMembers(memR.data.members || []);
+      setTeamMembers(projR.data.members || []);
     } catch (e) {
       console.error('Board load failed', e);
     } finally {
@@ -57,22 +64,23 @@ export default function ProjectBoardPage() {
     }
   }, [projectId]);
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { load(); }, [projectId]);
+  useEffect(() => { load(); }, [projectId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Load field values for all tasks
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // FIX #2: stable dep — only re-fetch when the task ID set actually changes.
+  const taskIds = useMemo(() => tasks.map(t => t.task_id).join(','), [tasks]);
+
   useEffect(() => {
     if (!tasks.length || !fieldDefs?.length) return;
     const map = {};
-    Promise.all(tasks.map(async t => {
-      try {
-        const r = await api.get(`/fields/task/${t.task_id}/values`);
-        map[t.task_id] = Object.fromEntries(r.data.map(v => [v.field_id, v.value]));
-      } catch {}
-    })).then(() => setFieldValueMap({ ...map }));
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tasks.length, fieldDefs?.length]);
+    Promise.all(
+      tasks.map(async t => {
+        try {
+          const r = await api.get(`/fields/task/${t.task_id}/values`);
+          map[t.task_id] = Object.fromEntries(r.data.map(v => [v.field_id, v.value]));
+        } catch {}
+      })
+    ).then(() => setFieldValueMap({ ...map }));
+  }, [taskIds, fieldDefs?.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleColumnChange = (action, payload) => {
     if (action === 'new_task') setNewTaskEditor({ open: true, columnId: payload });
@@ -112,7 +120,6 @@ export default function ProjectBoardPage() {
           ))}
         </div>
 
-        {/* Saved views */}
         {savedViews?.length > 0 && (
           <div style={{ display: 'flex', gap: 4 }}>
             {savedViews.map(sv => (
@@ -124,13 +131,11 @@ export default function ProjectBoardPage() {
           </div>
         )}
 
-        {/* Field manager toggle */}
         <button onClick={() => setShowFieldMgr(v => !v)}
           style={{ padding: '5px 12px', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)', cursor: 'pointer', fontFamily: 'inherit', fontSize: 'var(--text-sm)', background: 'var(--bg-default)', color: 'var(--text-muted)' }}>
           ⚙ Fields
         </button>
 
-        {/* Save view */}
         <button onClick={() => saveView({ name: `View ${(savedViews?.length||0)+1}`, config: { viewType: view } })}
           style={{ padding: '5px 12px', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)', cursor: 'pointer', fontFamily: 'inherit', fontSize: 'var(--text-sm)', background: 'var(--bg-default)', color: 'var(--text-muted)' }}>
           + Save view
@@ -204,4 +209,3 @@ export default function ProjectBoardPage() {
     </div>
   );
 }
-
