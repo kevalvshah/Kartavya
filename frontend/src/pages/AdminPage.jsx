@@ -1,18 +1,55 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { api } from '../lib/api';
 import { K } from '../lib/brand';
 import { RoleBadge } from '../lib/brand';
+
+function QuickClientInvite({ onCreated, pushToast }) {
+  const [name,    setName]    = useState('');
+  const [email,   setEmail]   = useState('');
+  const [saving,  setSaving]  = useState(false);
+
+  const submit = async () => {
+    if (!email.trim()) return;
+    setSaving(true);
+    try {
+      await api.post('/admin/invites', { email: email.trim(), role: 'client', name: name.trim() || undefined });
+      pushToast({ type: 'success', title: 'Client invited — copy link from Pending Invites' });
+      setName(''); setEmail('');
+      onCreated();
+    } catch (err) {
+      pushToast({ type: 'error', title: 'Could not invite client', message: err?.response?.data?.detail });
+    } finally { setSaving(false); }
+  };
+
+  return (
+    <div className="rounded-3xl border border-border/70 bg-card/50 p-5">
+      <div className="flex items-center gap-2 mb-4">
+        <UserPlus size={16} style={{ color: K.teal }} />
+        <div className="text-sm font-bold">Create New Client</div>
+        <span className="ml-auto text-xs text-muted-foreground">Sends an invite with the Client role</span>
+      </div>
+      <div className="grid gap-3 md:grid-cols-[1fr_1fr_120px]">
+        <Input value={name}  onChange={(e) => setName(e.target.value)}  placeholder="Client full name" />
+        <Input value={email} onChange={(e) => setEmail(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && submit()} placeholder="client@company.com" type="email" />
+        <Button onClick={submit} disabled={saving} style={{ background: K.teal }}>
+          {saving ? 'Inviting…' : 'Invite Client'}
+        </Button>
+      </div>
+    </div>
+  );
+}
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Select } from '../components/ui/select';
 import { useToast } from '../components/ui/toast';
-import { Mail, Copy, Check, Trash2 } from 'lucide-react';
+import { Mail, Copy, Check, Trash2, UserPlus } from 'lucide-react';
 
 export default function AdminPage() {
   const { pushToast } = useToast();
   const [users,       setUsers]       = useState([]);
   const [invites,     setInvites]     = useState([]);
   const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteName,  setInviteName]  = useState('');
   const [inviteRole,  setInviteRole]  = useState('member');
   const [sending,     setSending]     = useState(false);
   const [copiedId,    setCopiedId]    = useState(null);
@@ -30,9 +67,9 @@ export default function AdminPage() {
     if (!inviteEmail.trim()) return;
     setSending(true);
     try {
-      await api.post('/admin/invites', { email: inviteEmail.trim(), role: inviteRole });
+      await api.post('/admin/invites', { email: inviteEmail.trim(), role: inviteRole, name: inviteName.trim() || undefined });
       pushToast({ type: 'success', title: 'Invite created — copy link below' });
-      setInviteEmail(''); load();
+      setInviteEmail(''); setInviteName(''); load();
     } catch (err) {
       pushToast({ type: 'error', title: 'Could not create invite', message: err?.response?.data?.detail });
     } finally { setSending(false); }
@@ -75,9 +112,14 @@ export default function AdminPage() {
       <div className="rounded-3xl border border-border/70 bg-card/50 p-5">
         <div className="flex items-center gap-2 mb-4">
           <Mail size={16} style={{ color: K.blue }} />
-          <div className="text-sm font-bold">Send Invite</div>
+          <div className="text-sm font-bold">Invite User</div>
         </div>
-        <div className="grid gap-3 md:grid-cols-[1fr_160px_120px]">
+        <div className="grid gap-3 md:grid-cols-[1fr_1fr_160px_120px]">
+          <Input
+            value={inviteName}
+            onChange={(e) => setInviteName(e.target.value)}
+            placeholder="Full Name"
+          />
           <Input
             value={inviteEmail}
             onChange={(e) => setInviteEmail(e.target.value)}
@@ -97,6 +139,9 @@ export default function AdminPage() {
           <Button onClick={sendInvite} disabled={sending}>{sending ? 'Sending…' : 'Send Invite'}</Button>
         </div>
       </div>
+
+      {/* ── Quick: Create New Client ── */}
+      <QuickClientInvite onCreated={load} pushToast={pushToast} />
 
       {/* ── Pending invites ── */}
       {invites.filter((i) => !i.accepted_at).length > 0 && (

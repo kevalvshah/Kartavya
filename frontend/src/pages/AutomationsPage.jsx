@@ -42,17 +42,31 @@ const PRIORITY_OPTS = ['low','medium','high','urgent'];
 const EMPTY_CONDITION = { field: 'status', op: 'equals', value: 'done' };
 const EMPTY_FORM      = { name: '', trigger_event: 'status_changed', action_type: 'send_notification', action_config: '', conditions: [] };
 
-export default function AutomationsPage({ teamId }) {
+export default function AutomationsPage({ teamId: propTeamId }) {
   const [automations, setAutomations] = useState([]);
   const [loading,     setLoading]     = useState(true);
   const [creating,    setCreating]    = useState(false);
   const [form,        setForm]        = useState(EMPTY_FORM);
   const [saving,      setSaving]      = useState(false);
+  const [teams,       setTeams]       = useState([]);
+  const [teamId,      setTeamId]      = useState(propTeamId || '');
+
+  // Load available teams if no teamId is provided
+  useEffect(() => {
+    if (!propTeamId) {
+      api.get('/teams').then(r => {
+        setTeams(r.data);
+        if (r.data.length > 0) setTeamId(r.data[0].team_id);
+      }).catch(() => {});
+    }
+  }, [propTeamId]);
 
   useEffect(() => {
-    if (!teamId) return;
+    if (!teamId) { setLoading(false); return; }
+    setLoading(true);
     api.get(`/automations/team/${teamId}`)
        .then(r => setAutomations(r.data))
+       .catch(() => setAutomations([]))
        .finally(() => setLoading(false));
   }, [teamId]);
 
@@ -105,17 +119,32 @@ export default function AutomationsPage({ teamId }) {
 
   if (loading) return <div style={{ padding: 32, color: 'var(--text-muted)' }}>Loading automations…</div>;
 
+  if (!teamId && teams.length === 0) return (
+    <div style={{ padding: 32, textAlign: 'center', color: 'var(--text-muted)' }}>
+      <div style={{ fontSize: 40, marginBottom: 12 }}>⚡</div>
+      <p>Create a project first to set up automations.</p>
+    </div>
+  );
+
   return (
     <div style={{ padding: 'var(--space-6)', maxWidth: 860 }}>
       {/* Page header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-6)' }}>
         <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--weight-semibold)', margin: 0 }}>⚡ Automations</h1>
-        {!creating && (
-          <button onClick={() => setCreating(true)}
-            style={{ background: 'var(--accent-default)', color: '#fff', border: 'none', borderRadius: 'var(--radius-md)', padding: '8px 16px', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
-            + New Rule
-          </button>
-        )}
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+          {teams.length > 1 && (
+            <select value={teamId} onChange={e => setTeamId(e.target.value)}
+              style={{ border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)', padding: '6px 10px', fontFamily: 'inherit', fontSize: 'var(--text-sm)', background: 'var(--bg-default)', color: 'var(--text-default)' }}>
+              {teams.map(t => <option key={t.team_id} value={t.team_id}>{t.name}</option>)}
+            </select>
+          )}
+          {!creating && (
+            <button onClick={() => setCreating(true)}
+              style={{ background: 'var(--accent-default)', color: '#fff', border: 'none', borderRadius: 'var(--radius-md)', padding: '8px 16px', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
+              + New Rule
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Builder form */}

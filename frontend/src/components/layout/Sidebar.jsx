@@ -80,6 +80,14 @@ export default function Sidebar() {
             <div className="text-xs font-bold truncate">{user?.full_name || user?.name || 'User'}</div>
             <div className="text-[10px] text-muted-foreground capitalize">{user?.role || 'member'}</div>
           </div>
+          <Button variant="ghost" size="icon" title="Sign out"
+            onClick={async () => {
+              const { apiLogout } = await import('../../lib/auth');
+              await apiLogout();
+              window.location.href = '/login';
+            }}>
+            <LogOut size={14} />
+          </Button>
         </div>
       </div>
     </aside>

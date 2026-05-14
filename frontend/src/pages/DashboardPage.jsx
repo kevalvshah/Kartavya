@@ -7,6 +7,15 @@ import { api } from '../lib/api';
 
 const PRIORITY_COLORS = { low: '#22c55e', medium: '#f59e0b', high: '#ef4444', urgent: '#dc2626' };
 
+// Shown when the DB is genuinely empty (no real tasks exist yet)
+const SEED_WIDGET_DATA = {
+  count_todo:   { count: 0 },
+  count_done:   { count: 0 },
+  chart_main:   { series: [{ status: 'todo', count: 1 }, { status: 'in_progress', count: 0 }, { status: 'done', count: 0 }] },
+  my_work_main: { tasks: [] },
+  deadlines_1:  { tasks: [] },
+};
+
 function relDate(iso) {
   if (!iso) return '—';
   const d   = new Date(iso);
@@ -148,7 +157,16 @@ export default function DashboardPage({ teamId, teams = [] }) {
         Object.assign(results, r.data);
       } catch {}
     }));
-    setWidgetData(results);
+    // If every widget came back empty/zero, fall back to seed data so the
+    // dashboard isn't a blank grid on a fresh install
+    const allEmpty = Object.values(results).every(d => {
+      if (!d) return true;
+      if (d.count === 0) return true;
+      if (Array.isArray(d.tasks) && d.tasks.length === 0) return true;
+      if (Array.isArray(d.series) && d.series.every(s => Number(s.count) === 0)) return true;
+      return false;
+    });
+    setWidgetData(allEmpty ? { ...SEED_WIDGET_DATA, ...results } : results);
   }
 
   function defaultWidgets(tid) {
