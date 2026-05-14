@@ -1,58 +1,50 @@
-# Database Migrations
+# backend/migrations/
 
-## Running Migrations
+Database schema changes. Run against Railway Postgres in order.
 
-### Prerequisites
-- Python 3.8+
-- asyncpg installed (`pip install asyncpg`)
-- DATABASE_URL environment variable set
+## Numbering convention
 
-### Execute Migration
+`NNN_description.sql` — three-digit prefix, ascending. Never re-number.
+Python migration scripts (`*.py`) are for one-off data migrations only;
+schema changes must be `.sql`.
+
+## Current migrations
+
+| File | Status | What it does |
+|---|---|---|
+| `001_role_based_access.py` | ✅ Applied | Creates `project_assignments`, `task_clients` tables; adds `role` column to `users` |
+| `002_custom_fields.sql` | ⏳ Pending | `field_definitions` + `field_values` tables (V2_PLAN §4) |
+| `003_views_and_dashboards.sql` | ⏳ Pending | `saved_views` + `dashboards` tables |
+| `004_automations_and_templates.sql` | ⏳ Pending | `automations`, `project_templates`, `task_templates` tables |
+| `005_activity_and_time.sql` | ⏳ Pending | `activity_events` + `time_entries` tables |
+| `006_mentions.sql` | ⏳ Pending | `mentions` table |
+| `007_rls_and_indexes.sql` | ✅ Applied | Row-level security policies + performance indexes |
+
+> Migrations 002–006 are defined in `V2_PLAN.md §4`. The SQL is the
+> source of truth — this table is a summary.
+
+## Running a migration
 
 ```bash
-# Set your database URL
-export DATABASE_URL="postgresql://user:password@host:port/database"
-
-# Run the migration
-python backend/migrations/001_role_based_access.py
+# Apply a single file against Railway Postgres
+psql "$DATABASE_URL" -f backend/migrations/007_rls_and_indexes.sql
 ```
 
-### Railway Deployment
+Or use the Railway console for one-off scripts.
 
-If deploying on Railway:
+## Rules
 
-```bash
-# Railway automatically sets DATABASE_URL
-# SSH into your Railway container or run locally with Railway's DB URL
-railway run python backend/migrations/001_role_based_access.py
-```
+- **Never edit an applied migration.** Create a new numbered file instead.
+- Every new table needs a matching entry in `seed.py` for dev data.
+- Every new column that is read in Python needs a `row_to_task()` or
+  equivalent Pydantic model update in `server.py` or the relevant router.
+- After applying a migration, update the Status column above.
 
-## Migration 001: Role-Based Access & Approval Workflow
+## Cross-folder impact
 
-**File:** `001_role_based_access.py`
-
-**Changes:**
-1. Creates `project_assignments` table for granular project access control
-2. Adds approval workflow fields to `tasks` table
-3. Migrates existing `team_members` to `project_assignments`
-4. Creates `user_preferences` table for UI settings
-
-**Safe to Re-run:** Yes - uses `IF NOT EXISTS` and `ON CONFLICT DO NOTHING`
-
-## Rollback
-
-To rollback this migration:
-
-```sql
--- Drop new tables
-DROP TABLE IF EXISTS user_preferences;
-DROP TABLE IF EXISTS project_assignments;
-
--- Remove approval fields from tasks
-ALTER TABLE tasks DROP COLUMN IF EXISTS requires_approval;
-ALTER TABLE tasks DROP COLUMN IF EXISTS approval_status;
-ALTER TABLE tasks DROP COLUMN IF EXISTS approved_by;
-ALTER TABLE tasks DROP COLUMN IF EXISTS approval_notes;
-ALTER TABLE tasks DROP COLUMN IF EXISTS approval_requested_at;
-ALTER TABLE tasks DROP COLUMN IF EXISTS approval_decided_at;
-```
+| When you add a migration… | Also update… |
+|---|---|
+| New table | `seed.py` (dev data), relevant router, relevant frontend hook/page |
+| New column on `tasks` | `row_to_task()` in `server.py`, `TaskOut` model, relevant frontend page |
+| New column on `users` | `auth_router.py` `/auth/me` response, `AppShell.jsx` if user data is cached |
+| New index | No code change needed, but note it here |
