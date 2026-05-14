@@ -2,6 +2,14 @@
 server.py — Kartavya API v2 by Aekam Inc
 Monolith routes stay; new v2 routers mounted at the bottom.
 R2 upload router replaces the old base64 /api/upload endpoint.
+
+Bug fixes (2026-05-14):
+  FIX #4: get_visible_team_ids now UNIONs team_members so users who
+          were invited and registered after the invite (no project_assignments
+          row) can still see their teams.
+  FIX #5: update_team_member guards the project_assignments role UPDATE
+          with `if payload.role` to avoid writing NULL when only status
+          is being changed.
 """
 
 import asyncio
@@ -83,11 +91,25 @@ def parse_dt(value):
 async def get_db(): return await get_pool()
 
 async def get_visible_team_ids(pool, user_id, role=None):
+    """Return team IDs visible to user_id.
+
+    FIX #4: Previously only queried project_assignments. Users who were
+    invited via team_members but registered after the invite had no
+    project_assignments row and couldn't see their teams.
+    Now UNIONs with team_members WHERE status='active' to cover both cases.
+    """
     user_row = await pool.fetchrow("SELECT role FROM users WHERE user_id=$1", user_id)
     if user_row and user_row.get("role") == "admin":
         all_teams = await pool.fetch("SELECT team_id FROM teams")
         return [r["team_id"] for r in all_teams]
-    rows = await pool.fetch("SELECT team_id FROM project_assignments WHERE user_id=$1", user_id)
+    rows = await pool.fetch(
+        """
+        SELECT team_id FROM project_assignments WHERE user_id=$1
+        UNION
+        SELECT team_id FROM team_members WHERE user_id=$1 AND status='active'
+        """,
+        user_id,
+    )
     return [r["team_id"] for r in rows]
 
 async def normalize_orders(pool, scope_col, scope_val, column_id):
@@ -325,17 +347,7 @@ async def client_projects(pool=Depends(get_db),user=Depends(require_user)):
 
 @api_router.get("/client/approvals")
 async def client_approvals(pool=Depends(get_db), user=Depends(require_user)):
-    """
-    Returns approval records visible to the client:
-    1) Team-level `approvals` rows for projects the client is assigned to.
-    2) Tasks with approval_status='pending_client' the client can access.
-    The frontend uses approval_id to POST /approvals/{id}/review.
-    For task-level approvals the id is prefixed 'task_approval::' so the
-    review endpoint routes them to a task PATCH instead.
-    """
     uid = user["user_id"]
-
-    # 1) Workflow-level approvals (approvals table)
     approval_rows = await pool.fetch("""
         SELECT a.*,
                COALESCE(u.full_name, u.name, u.email) AS requested_by_name,
@@ -349,8 +361,6 @@ async def client_approvals(pool=Depends(get_db), user=Depends(require_user)):
                )
         ORDER BY a.created_at DESC
     """, uid)
-
-    # 2) Task-level client approval requests
     task_rows = await pool.fetch("""
         SELECT
             CONCAT('task_approval::', t.task_id)              AS approval_id,
@@ -374,7 +384,6 @@ async def client_approvals(pool=Depends(get_db), user=Depends(require_user)):
           )
         ORDER BY t.approval_requested_at DESC NULLS LAST
     """, uid)
-
     return [dict(r) for r in approval_rows] + [dict(r) for r in task_rows]
 
 @api_router.post("/tasks/{task_id}/clients/{target_user_id}")
@@ -411,11 +420,8 @@ async def list_pending_approvals(pool=Depends(get_db),user=Depends(require_user)
 async def review_approval(approval_id:str,body:dict,pool=Depends(get_db),user=Depends(require_user)):
     status=body.get("status"); notes=body.get("notes","")
     if status not in ("approved","rejected"): raise HTTPException(400,"status must be approved or rejected")
-
-    # ── task_approval:: synthetic IDs (from /client/approvals) ──────────────────
     if approval_id.startswith("task_approval::"):
         task_id = approval_id.split("::", 1)[1]
-        # Verify client has access
         if not await client_can_access_task(pool, task_id, user["user_id"]):
             raise HTTPException(403, "Not authorised to review this task")
         new_as = "approved" if status == "approved" else "rejected"
@@ -423,23 +429,19 @@ async def review_approval(approval_id:str,body:dict,pool=Depends(get_db),user=De
             "UPDATE tasks SET approval_status=$1, approved_by=$2, approval_decided_at=NOW(), updated_at=NOW() WHERE task_id=$3",
             new_as, user["user_id"], task_id
         )
-        # Notify task creator
         task = await pool.fetchrow("SELECT title, created_by_user_id, team_id FROM tasks WHERE task_id=$1", task_id)
         if task and task["created_by_user_id"] and task["created_by_user_id"] != user["user_id"]:
             await create_notification(pool, task["created_by_user_id"], status,
                 f"Task {status} by client", f"{task['title']} was {status} by the client.",
                 task_id, task["team_id"], "/tasks")
         return {"ok": True, "status": new_as}
-
-    # ── Real approvals row ──────────────────────────────────────────────────
     approval=await pool.fetchrow("SELECT * FROM approvals WHERE approval_id=$1",approval_id)
     if not approval: raise HTTPException(404)
-    # Allow: project owner/admin OR client who is a project member
     mem=await pool.fetchrow("SELECT role FROM project_assignments WHERE team_id=$1 AND user_id=$2",approval["team_id"],user["user_id"])
     user_data=await pool.fetchrow("SELECT role FROM users WHERE user_id=$1",user["user_id"])
     is_owner_admin = mem and mem["role"] in ("owner","admin")
     is_system_admin = user_data and user_data["role"] == "admin"
-    is_client_member = bool(mem)  # any project_assignments row = has access
+    is_client_member = bool(mem)
     if not (is_owner_admin or is_system_admin or is_client_member):
         raise HTTPException(403, "Not authorised to review this approval")
     await pool.execute("UPDATE approvals SET status=$1,reviewed_by=$2,reviewed_at=NOW(),review_notes=$3 WHERE approval_id=$4",status,user["user_id"],notes,approval_id)
@@ -454,7 +456,6 @@ async def review_approval(approval_id:str,body:dict,pool=Depends(get_db),user=De
 
 @api_router.get("/tasks/{task_id}/comments",response_model=List[CommentOut])
 async def list_comments(task_id:str,pool=Depends(get_db),user=Depends(require_user)):
-    # Clients: allow if they can access the task (project member OR task_clients)
     if user.get("role")=="client":
         if not await client_can_access_task(pool, task_id, user["user_id"]):
             raise HTTPException(403, "Not authorised to view comments on this task")
@@ -463,7 +464,6 @@ async def list_comments(task_id:str,pool=Depends(get_db),user=Depends(require_us
 
 @api_router.post("/tasks/{task_id}/comments",response_model=CommentOut)
 async def add_comment(task_id:str,body:CommentCreate,pool=Depends(get_db),user=Depends(require_user)):
-    # Clients: allow if they can access the task
     if user.get("role")=="client":
         if not await client_can_access_task(pool, task_id, user["user_id"]):
             raise HTTPException(403, "Not authorised to comment on this task")
@@ -561,6 +561,8 @@ async def update_team_member(team_id:str,member_id:str,payload:TeamMemberUpdate,
     updates.append(f"updated_at=${len(vals)+1}"); vals.append(now_utc()); vals+=[team_id,member_id]
     row=await pool.fetchrow(f"UPDATE team_members SET {', '.join(updates)} WHERE team_id=${len(vals)-1} AND member_id=${len(vals)} RETURNING *",*vals)
     if not row: raise HTTPException(404)
+    # FIX #5: only sync project_assignments role when a role was actually provided.
+    # Without this guard a status-only PATCH would write None/NULL into role.
     if payload.role and row["user_id"]:
         await pool.execute("UPDATE project_assignments SET role=$1 WHERE team_id=$2 AND user_id=$3",payload.role,team_id,row["user_id"])
     return TeamMemberOut(**dict(row))
@@ -598,8 +600,8 @@ async def list_tasks(status:Optional[str]=None,category_id:Optional[str]=None,q:
                      team_id:Optional[str]=None,assigned_to_me:Optional[bool]=None,
                      pool=Depends(get_db),user=Depends(require_user)):
     team_ids=await get_visible_team_ids(pool,user["user_id"])
-    conditions=["(t.user_id=$1 OR t.team_id=ANY($2::text[])"  # members/personal
-                " OR t.created_by_user_id=$1"                  # created by client
+    conditions=["(t.user_id=$1 OR t.team_id=ANY($2::text[])"
+                " OR t.created_by_user_id=$1"
                 " OR EXISTS(SELECT 1 FROM task_clients tc WHERE tc.task_id=t.task_id AND tc.user_id=$1))"]
     vals=[user["user_id"],team_ids]
     if team_id:        conditions.append(f"t.team_id=${len(vals)+1}");       vals.append(team_id)
@@ -690,7 +692,6 @@ async def update_task(task_id:str,payload:TaskUpdate,pool=Depends(get_db),user=D
         task_id,user["user_id"],team_ids
     )
     if not existing:
-        # Clients can also update tasks they can access via task_clients
         if await client_can_access_task(pool, task_id, user["user_id"]):
             existing = await pool.fetchrow("SELECT * FROM tasks WHERE task_id=$1", task_id)
         if not existing: raise HTTPException(404)
@@ -698,7 +699,6 @@ async def update_task(task_id:str,payload:TaskUpdate,pool=Depends(get_db),user=D
     old_status=existing["status"]; old_assignees=list(existing.get("assignee_user_ids") or [])
     for k in ["title","description","status","priority","category_id","estimated_minutes","column_id","approval_status"]:
         if k in data: updates.append(f"{k}=${len(vals)+1}"); vals.append(data[k])
-    # If client is setting approval_status, also set decided fields
     if "approval_status" in data and data["approval_status"] in ("approved","rejected"):
         updates.append(f"approved_by=${len(vals)+1}"); vals.append(user["user_id"])
         updates.append(f"approval_decided_at=${len(vals)+1}"); vals.append(now_utc())
@@ -743,7 +743,6 @@ async def patch_task(task_id:str,payload:TaskUpdate,pool=Depends(get_db),user=De
 @api_router.delete("/tasks/{task_id}")
 async def delete_task(task_id:str,pool=Depends(get_db),user=Depends(require_user)):
     team_ids=await get_visible_team_ids(pool,user["user_id"])
-    # Allow: personal tasks, team tasks, or tasks created by this user (clients)
     doc=await pool.fetchrow(
         "SELECT * FROM tasks WHERE task_id=$1 AND (user_id=$2 OR team_id=ANY($3::text[]) OR created_by_user_id=$2)",
         task_id,user["user_id"],team_ids
