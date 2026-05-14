@@ -7,6 +7,7 @@ import { api } from '../lib/api';
 import KanbanView    from '../components/views/KanbanView';
 import TableView     from '../components/views/TableView';
 import CalendarView  from '../components/views/CalendarView';
+import TaskEditor    from '../components/TaskEditor';
 import { useFields } from '../hooks/useFields';
 import { useViews }  from '../hooks/useViews';
 
@@ -30,6 +31,7 @@ export default function ProjectBoardPage() {
   const [showFieldMgr, setShowFieldMgr] = useState(false);
   const [newFieldName, setNewFieldName] = useState('');
   const [newFieldType, setNewFieldType] = useState('text');
+  const [newTaskEditor, setNewTaskEditor] = useState({ open: false, columnId: null });
 
   const { fieldDefs, createField, deleteField } = useFields(projectId);
   const { savedViews, saveView }                = useViews(projectId);
@@ -72,17 +74,8 @@ export default function ProjectBoardPage() {
       // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tasks.length, fieldDefs?.length]);
 
-  const handleNewTask = async (colId) => {
-    const title = window.prompt('Task title:');
-    if (!title?.trim()) return;
-    try {
-      const r = await api.post('/tasks', { title: title.trim(), team_id: projectId, column_id: colId });
-      setTasks(prev => [r.data, ...prev]);
-    } catch (e) { console.error(e); }
-  };
-
   const handleColumnChange = (action, payload) => {
-    if (action === 'new_task') handleNewTask(payload);
+    if (action === 'new_task') setNewTaskEditor({ open: true, columnId: payload });
   };
 
   const addField = async () => {
@@ -194,6 +187,20 @@ export default function ProjectBoardPage() {
       {view === 'calendar' && (
         <CalendarView tasks={tasks} onTaskClick={t => console.log('open', t)} />
       )}
+
+      <TaskEditor
+        open={newTaskEditor.open}
+        onOpenChange={(v) => { if (!v) setNewTaskEditor({ open: false, columnId: null }); }}
+        editing={null}
+        teams={[]}
+        defaultTeamId={projectId}
+        defaultColumnId={newTaskEditor.columnId}
+        lockToProject
+        onSaved={(task) => {
+          setTasks((prev) => [task, ...prev]);
+          setNewTaskEditor({ open: false, columnId: null });
+        }}
+      />
     </div>
   );
 }
