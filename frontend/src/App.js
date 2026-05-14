@@ -1,21 +1,33 @@
 /**
- * App.js — Kartavya v2 entry point.
- * Week 3: Templates route added to sidebar + lazy import.
+ * App.js — Kartavya route tree.
+ *
+ * Rules for this file:
+ *   - Route declarations only. No business logic.
+ *   - Every page is lazy — auth pages included.
+ *   - All CSS imports come from one barrel: styles/index.css
+ *   - Outlet context wrappers use the shared `withContext` helper below.
+ *     Add a new one by adding a line to CONTEXT_ROUTES, not a new function.
+ *
+ * To add a new page:
+ *   1. const MyPage = lazy(() => import('./pages/MyPage'))
+ *   2. Add a <Route> in the correct position below
+ *   3. If the page needs teamId/teams from context, add it to CONTEXT_ROUTES
  */
 import React, { Suspense, lazy } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useOutletContext } from 'react-router-dom';
-import './App.css';
-import './lib/tokens.css';
-import './styles/layout.css';
-import './styles/modern-components.css';
-import './styles/dark-theme.css';
-import './styles/animations.css';
-import './styles/mobile-responsive.css';
-import { ToastProvider } from './components/ui/toast';
-import AppShell, { Protected } from './components/layout/AppShell';
-import { LoginPage, AcceptInvitePage } from './pages/LoginPage';
 
-// ── Lazy pages ──────────────────────────────────────────────────────────────────
+import './App.css';
+import './styles/index.css';
+
+import { ToastProvider }               from './components/ui/toast';
+import AppShell, { Protected }         from './components/layout/AppShell';
+import PageLoader                      from './components/layout/PageLoader';
+
+// ── Auth pages (lazy — no reason to block the bundle for these) ────────────────
+const LoginPage         = lazy(() => import('./pages/LoginPage').then(m => ({ default: m.LoginPage })));
+const AcceptInvitePage  = lazy(() => import('./pages/LoginPage').then(m => ({ default: m.AcceptInvitePage })));
+
+// ── App pages ─────────────────────────────────────────────────────────────────
 const DashboardPage         = lazy(() => import('./pages/DashboardPage'));
 const ProjectsPage          = lazy(() => import('./pages/ProjectsPage'));
 const ProjectBoardPage      = lazy(() => import('./pages/ProjectBoardPage'));
@@ -25,7 +37,7 @@ const ActivityFeedPage      = lazy(() => import('./pages/ActivityFeedPage'));
 const AutomationsPage       = lazy(() => import('./pages/AutomationsPage'));
 const TimeReportPage        = lazy(() => import('./pages/TimeReportPage'));
 const ApprovalsPage         = lazy(() => import('./pages/ApprovalsPage'));
-const TemplatesPage         = lazy(() => import('./pages/TemplatesPage'));   // Week 3
+const TemplatesPage         = lazy(() => import('./pages/TemplatesPage'));
 const CategoriesPage        = lazy(() => import('./pages/CategoriesPage'));
 const NotificationsSettings = lazy(() => import('./pages/NotificationsSettingsPage'));
 const AdminPage             = lazy(() => import('./pages/AdminPage'));
@@ -33,51 +45,67 @@ const ClientProjectsPage    = lazy(() => import('./pages/ClientProjectsPage'));
 const ClientBoardPage       = lazy(() => import('./pages/ClientBoardPage'));
 const ClientPortal          = lazy(() => import('./pages/ClientPortal'));
 
-// ── Suspense fallback ───────────────────────────────────────────────────────────────
-function PageLoader() {
-  return (
-    <div style={{ display:'flex', alignItems:'center', justifyContent:'center', minHeight:'60vh', color:'var(--text-muted)', fontSize: 13, fontFamily:"'Inter',sans-serif" }}>
-      <span style={{ opacity: 0.5 }}>Loading…</span>
-    </div>
-  );
+// ── Outlet context wrappers ────────────────────────────────────────────────────
+// Pages that need teamId or teams from AppShell's outlet context.
+// Pattern: withContext(Page, contextKey) — avoids a boilerplate function per page.
+function withContext(Page, pick) {
+  return function ContextWrapper() {
+    const ctx = useOutletContext();
+    const props = typeof pick === 'function' ? pick(ctx) : { [pick]: ctx[pick] };
+    return <Page {...props} />;
+  };
 }
 
-// ── Outlet context wrappers ────────────────────────────────────────────────────
-function DashboardWrapper()   { const { teams  } = useOutletContext(); return <DashboardPage  teams={teams} />; }
-function ActivityWrapper()    { const { teamId } = useOutletContext(); return <ActivityFeedPage teamId={teamId} />; }
-function AutomationsWrapper() { const { teamId } = useOutletContext(); return <AutomationsPage  teamId={teamId} />; }
-function TimeWrapper()        { const { teamId } = useOutletContext(); return <TimeReportPage   teamId={teamId} />; }
+const DashboardWithContext    = withContext(DashboardPage,    ctx => ({ teams: ctx.teams }));
+const ActivityWithContext     = withContext(ActivityFeedPage, 'teamId');
+const AutomationsWithContext  = withContext(AutomationsPage,  'teamId');
+const TimeWithContext         = withContext(TimeReportPage,   'teamId');
 
-// ── Route tree ────────────────────────────────────────────────────────────────────
+// ── Route tree ─────────────────────────────────────────────────────────────────
 function AppRouter() {
   return (
     <Suspense fallback={<PageLoader />}>
       <Routes>
+        {/* Public */}
         <Route path="/login"         element={<LoginPage />} />
         <Route path="/accept-invite" element={<AcceptInvitePage />} />
 
+        {/* Protected shell — all child routes inherit auth + layout */}
         <Route path="/" element={<Protected><AppShell /></Protected>}>
-          <Route index                             element={<Navigate to="/dashboard" replace />} />
-          <Route path="dashboard"                  element={<DashboardWrapper />} />
-          <Route path="projects"                   element={<ProjectsPage />} />
-          <Route path="projects/:projectId"        element={<ProjectBoardPage />} />
-          <Route path="tasks"                      element={<TasksListPage />} />
-          <Route path="teams"                      element={<TeamsPage />} />
-          <Route path="activity"                   element={<ActivityWrapper />} />
-          <Route path="automations"                element={<AutomationsWrapper />} />
-          <Route path="time"                       element={<TimeWrapper />} />
-          <Route path="templates"                  element={<TemplatesPage />} />
-          <Route path="approvals"                  element={<ApprovalsPage />} />
-          <Route path="settings/categories"        element={<CategoriesPage />} />
-          <Route path="settings/notifications"     element={<NotificationsSettings />} />
-          <Route path="admin"                      element={<AdminPage />} />
-          <Route path="client"                     element={<ClientProjectsPage />} />
-          <Route path="client/projects"            element={<ClientProjectsPage />} />
-          <Route path="client/project/:projectId" element={<ClientBoardPage />} />
+          <Route index element={<Navigate to="/dashboard" replace />} />
+
+          {/* Core */}
+          <Route path="dashboard"              element={<DashboardWithContext />} />
+          <Route path="projects"               element={<ProjectsPage />} />
+          <Route path="projects/:projectId"    element={<ProjectBoardPage />} />
+          <Route path="tasks"                  element={<TasksListPage />} />
+          <Route path="teams"                  element={<TeamsPage />} />
+          <Route path="approvals"              element={<ApprovalsPage />} />
+          <Route path="templates"              element={<TemplatesPage />} />
+
+          {/* Context-dependent */}
+          <Route path="activity"               element={<ActivityWithContext />} />
+          <Route path="automations"            element={<AutomationsWithContext />} />
+          <Route path="time"                   element={<TimeWithContext />} />
+
+          {/* Settings */}
+          <Route path="settings/categories"    element={<CategoriesPage />} />
+          <Route path="settings/notifications" element={<NotificationsSettings />} />
+
+          {/* Admin */}
+          <Route path="admin"                  element={<AdminPage />} />
+
+          {/* Client portal */}
+          <Route path="client"                          element={<ClientProjectsPage />} />
+          <Route path="client/projects"                 element={<ClientProjectsPage />} />
+          <Route path="client/project/:projectId"       element={<ClientBoardPage />} />
         </Route>
 
+        {/* Legacy client portal (direct access, own Protected wrapper) */}
         <Route path="/client/legacy" element={<Protected><ClientPortal /></Protected>} />
-        <Route path="*"              element={<Navigate to="/dashboard" replace />} />
+
+        {/* Fallback */}
+        <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
     </Suspense>
   );
