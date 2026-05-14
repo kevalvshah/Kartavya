@@ -11,6 +11,7 @@ import './styles/modern-components.css';
 import './styles/dark-theme.css';
 import './styles/animations.css';
 import './styles/mobile-responsive.css';
+import './styles/kartavya-design.css';
 import { ToastProvider } from './components/ui/toast';
 import AppShell, { Protected } from './components/layout/AppShell';
 import { LoginPage, AcceptInvitePage } from './pages/LoginPage';

@@ -41,45 +41,51 @@ export default function AppShell() {
   const teamId = location.pathname.match(/\/projects\/([^/]+)/)?.[1] || teams[0]?.team_id || '';
 
   return (
-    <div data-testid="app-shell" className="min-h-screen bg-app text-foreground" style={{ fontFamily: "'Inter',sans-serif" }}>
-      <div className="mx-auto max-w-7xl px-4 lg:px-6 py-4 lg:py-6">
-        <div className="grid gap-6 lg:grid-cols-[260px_1fr]">
-          <div className="hidden lg:block"><Sidebar /></div>
-
-          {sidebarOpen && (
-            <div className="fixed inset-0 z-50 lg:hidden" onClick={() => setSidebarOpen(false)}>
-              <div className="absolute inset-0 bg-black/50" />
-              <div className="absolute left-0 top-0 bottom-0 w-72 max-w-[85vw] bg-card shadow-xl" onClick={e => e.stopPropagation()}>
-                <Sidebar />
-              </div>
-            </div>
-          )}
-
-          <main className="min-w-0">
-            <div className="lg:hidden flex items-center justify-between mb-3">
-              <button onClick={() => setSidebarOpen(true)} className="p-2 rounded-xl border border-border/60 bg-card/50" aria-label="Open menu">
-                <Menu size={18} />
-              </button>
-              <KWordmark size="sm" />
-              <button onClick={() => setNotifOpen(true)} className="p-2 rounded-xl border border-border/60 bg-card/50 relative" aria-label="Notifications">
-                <Bell size={18} />
-                {unread > 0 && (
-                  <span className="absolute -top-1 -right-1 h-4 min-w-[16px] px-1 rounded-full text-[10px] flex items-center justify-center"
-                    style={{ background: '#ef4444', color: '#fff', fontWeight: 500 }}>
-                    {unread > 9 ? '9+' : unread}
-                  </span>
-                )}
-              </button>
-            </div>
-            <div className="hidden lg:block">
-              <Topbar unread={unread} onOpenNotifications={() => setNotifOpen(true)} />
-            </div>
-            <div className="mt-4 lg:mt-6">
-              <Outlet context={{ teamId, teams }} />
-            </div>
-          </main>
-        </div>
+    <div data-testid="app-shell" style={{ display: 'flex', minHeight: '100vh', background: 'var(--bg)' }}>
+      {/* Desktop sidebar */}
+      <div className="hidden lg:block" style={{ flexShrink: 0 }}>
+        <Sidebar />
       </div>
+
+      {/* Mobile drawer */}
+      {sidebarOpen && (
+        <div className="fixed inset-0 z-50 lg:hidden" onClick={() => setSidebarOpen(false)}>
+          <div className="absolute inset-0 bg-black/60" />
+          <div className="absolute left-0 top-0 bottom-0" onClick={e => e.stopPropagation()}>
+            <Sidebar />
+          </div>
+        </div>
+      )}
+
+      {/* Main column */}
+      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+        {/* Mobile header */}
+        <div className="lg:hidden flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: 'var(--rule)', background: 'var(--surface)' }}>
+          <button onClick={() => setSidebarOpen(true)} style={{ padding: 8, borderRadius: 8, border: '1px solid var(--rule)', background: 'transparent', color: 'var(--ink-2)', cursor: 'pointer' }} aria-label="Open menu">
+            <Menu size={18} />
+          </button>
+          <span style={{ fontFamily: 'var(--font-display)', fontSize: 16, color: 'var(--ink)', fontWeight: 500 }}>Kartavya</span>
+          <button onClick={() => setNotifOpen(true)} style={{ padding: 8, borderRadius: 8, border: '1px solid var(--rule)', background: 'transparent', color: 'var(--ink-2)', cursor: 'pointer', position: 'relative' }} aria-label="Notifications">
+            <Bell size={18} />
+            {unread > 0 && (
+              <span style={{ position: 'absolute', top: -4, right: -4, height: 16, minWidth: 16, padding: '0 4px', borderRadius: 99, fontSize: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#dc2626', color: '#fff', fontWeight: 700 }}>
+                {unread > 9 ? '9+' : unread}
+              </span>
+            )}
+          </button>
+        </div>
+
+        {/* Desktop topbar */}
+        <div className="hidden lg:block">
+          <Topbar unread={unread} onOpenNotifications={() => setNotifOpen(true)} />
+        </div>
+
+        {/* Page content */}
+        <main style={{ flex: 1, minWidth: 0, overflow: 'auto' }}>
+          <Outlet context={{ teamId, teams }} />
+        </main>
+      </div>
+
       <NotificationsModal open={notifOpen} onOpenChange={setNotifOpen} />
     </div>
   );

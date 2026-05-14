@@ -1,64 +1,73 @@
 /**
- * Topbar.jsx — desktop header bar.
- * Week 3: Templates title added.
+ * Topbar.jsx — editorial header: "कर्तव्य / Page" breadcrumb, pill search, actions.
  */
-import React from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
-import { K, KLogo } from '../../lib/brand';
-import { apiLogout } from '../../lib/auth';
-import { useToast } from '../ui/toast';
-import { Bell, LogOut } from 'lucide-react';
+import React, { useState } from 'react';
+import { useLocation } from 'react-router-dom';
 
-const PAGE_TITLES = {
-  '/dashboard':   'Dashboard',
-  '/projects':    'Projects',
-  '/tasks':       'All Tasks',
-  '/teams':       'Teams',
-  '/activity':    'Activity Feed',
-  '/automations': 'Automations',
-  '/time':        'Time Report',
-  '/templates':   'Templates',
-  '/approvals':   'Approvals',
-  '/settings/categories':    'Categories',
-  '/settings/notifications': 'Notifications',
-  '/admin':  'Admin Panel',
-  '/client': 'Client Portal',
+const PAGE_META = {
+  '/dashboard':              { en: 'Dashboard',     hi: 'आज' },
+  '/projects':               { en: 'Projects',      hi: 'योजना' },
+  '/tasks':                  { en: 'All Tasks',     hi: 'कर्तव्य' },
+  '/teams':                  { en: 'Teams',         hi: 'सहयोगी' },
+  '/activity':               { en: 'Activity',      hi: 'क्रिया' },
+  '/automations':            { en: 'Automations',   hi: 'स्वतंत्र' },
+  '/time':                   { en: 'Time Report',   hi: 'काल' },
+  '/templates':              { en: 'Templates',     hi: 'साँचा' },
+  '/approvals':              { en: 'Approvals',     hi: 'सम्मति' },
+  '/settings/categories':    { en: 'Categories',    hi: 'वर्ग' },
+  '/settings/notifications': { en: 'Notifications', hi: 'सूचना' },
+  '/admin':                  { en: 'Admin',         hi: 'प्रशासन' },
+  '/client':                 { en: 'Client Portal', hi: 'पोर्टल' },
 };
 
-export default function Topbar({ unread, onOpenNotifications }) {
-  const navigate = useNavigate();
-  const { pushToast } = useToast();
+export default function Topbar({ unread = 0, onOpenNotifications }) {
   const location = useLocation();
-  const pageTitle = PAGE_TITLES[location.pathname] || 'Kartavya';
+  const [search, setSearch] = useState('');
 
-  const logout = async () => {
-    await apiLogout();
-    pushToast({ type: 'success', title: 'Signed out' });
-    navigate('/login', { replace: true });
-  };
+  const meta = PAGE_META[location.pathname]
+    || Object.entries(PAGE_META).find(([k]) => location.pathname.startsWith(k + '/'))?.[1]
+    || { en: 'Kartavya', hi: 'कर्तव्य' };
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 rounded-3xl border border-border/70 px-5 py-3" style={{ background: K.dark }}>
-      <div className="flex items-center gap-3">
-        <KLogo size={28} />
-        <div>
-          <div className="text-sm font-bold text-white">{pageTitle}</div>
-          <div className="text-xs" style={{ color: K.teal }}>Kartavya · Aekam Inc</div>
+    <header className="k-topbar">
+      {/* Left: breadcrumb */}
+      <div className="k-topbar__left">
+        <div className="k-crumb">
+          <span className="k-crumb__hi">कर्तव्य</span>
+          <span className="k-crumb__sep">/</span>
+          <span className="k-crumb__cur">{meta.en}</span>
         </div>
       </div>
-      <div className="flex items-center gap-2">
-        <button onClick={onOpenNotifications}
-          className="relative inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/10 text-white/70 hover:text-white hover:bg-white/10 transition-colors">
-          <Bell size={15} />
-          {unread > 0 && (
-            <span className="absolute -right-1 -top-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-bold text-white"
-              style={{ background: K.blue }}>{unread > 99 ? '99+' : unread}</span>
-          )}
+
+      {/* Center: pill search */}
+      <div className="k-topbar__search">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+          <circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14"/>
+        </svg>
+        <input
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="Search tasks, projects, people…"
+        />
+        <kbd className="k-kbd">⌘K</kbd>
+      </div>
+
+      {/* Right: icon buttons + new task */}
+      <div className="k-topbar__right">
+        <button className="k-iconbtn" title="Notifications" onClick={onOpenNotifications}>
+          <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4">
+            <path d="M13 11l-2-2H5L3 11V4a1 1 0 011-1h8a1 1 0 011 1v7z"/>
+            <path d="M6.5 13.5a1.5 1.5 0 003 0"/>
+          </svg>
+          {unread > 0 && <span className="k-iconbtn__dot" />}
         </button>
-        <button onClick={logout} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-2xl text-xs font-semibold text-white/70 hover:text-white hover:bg-white/10 transition-colors">
-          <LogOut size={13} /> Sign out
+        <button className="k-btn k-btn--primary k-btn--sm">
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M8 3v10M3 8h10"/>
+          </svg>
+          New task
         </button>
       </div>
-    </div>
+    </header>
   );
 }
