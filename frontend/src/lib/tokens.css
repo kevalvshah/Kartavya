@@ -6,11 +6,18 @@
 
 /* ── Fonts ─────────────────────────────────────────────────────────────────── */
 @import url('https://rsms.me/inter/inter.css');
+@import url('https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,300;1,6..72,400&family=Inter:wght@400;500;600;700&family=Tiro+Devanagari+Hindi:ital@0;1&family=JetBrains+Mono:wght@400;500&family=Spectral:ital,wght@0,300;0,400;0,500;0,600;1,400&family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&display=swap');
 
 /* Wordmark uses Inter Bold — no custom font file needed */
 :root {
   --font-body:     'Inter', system-ui, -apple-system, sans-serif;
   --font-wordmark: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-display:  'Newsreader', serif;
+  --font-devanagari: 'Tiro Devanagari Hindi', serif;
+  --font-code:     'JetBrains Mono', monospace;
+  --font-alt-display: 'Spectral', serif;
+  --font-alt-serif:  'Instrument Serif', serif;
+  --font-sans-alt:   'Geist', sans-serif;
   font-feature-settings: 'cv02','cv03','cv04','cv11';
 }
 
@@ -51,10 +58,10 @@
 
 /* ── Color tokens — LIGHT mode (default) ─────────────────────────────────── */
 :root {
-  --bg-default:   #ffffff;
+  --bg-default:   #F6F3EC; /* warm paper/cream */
   --bg-subtle:    #f8f9fb;
   --bg-muted:     #f1f3f7;
-  --bg-elevated:  #ffffff;
+  --bg-elevated:  #FCFAF5; /* slightly elevated cards */
   --bg-overlay:   rgba(0, 0, 0, 0.04);
 
   --border-default: #e2e6ed;
@@ -94,10 +101,10 @@
 
 /* ── Color tokens — DARK mode ─────────────────────────────────────────────── */
 .dark {
-  --bg-default:   #111318;
+  --bg-default:   #050e1a; /* brand dark */
   --bg-subtle:    #181c23;
   --bg-muted:     #1e232d;
-  --bg-elevated:  #232830;
+  --bg-elevated:  #0B1828; /* slightly elevated cards */
   --bg-overlay:   rgba(255,255,255,0.04);
 
   --border-default: #2d3340;

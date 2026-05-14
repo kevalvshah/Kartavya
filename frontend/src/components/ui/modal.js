@@ -18,8 +18,8 @@ export function Modal({ open, onOpenChange, title, children, footer, dataTestId 
       data-testid={dataTestId}
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
     >
-      <div className="w-full max-w-3xl rounded-3xl border border-border/60 bg-card/90 shadow-xl backdrop-blur">
-        <div className="flex items-center justify-between gap-3 border-b border-border/60 px-6 py-4">
+      <div className="w-full max-w-3xl rounded-3xl border border-borderDefault/60 bg-bgDefault/90 shadow-xl backdrop-blur">
+        <div className="flex items-center justify-between gap-3 border-b border-borderDefault/60 px-6 py-4">
           <div data-testid={`${dataTestId}-title`} className="text-sm font-semibold">
             {title}
           </div>
@@ -28,7 +28,7 @@ export function Modal({ open, onOpenChange, title, children, footer, dataTestId 
           </Button>
         </div>
         <div className="max-h-[70vh] overflow-auto px-6 py-5">{children}</div>
-        {footer ? <div className="border-t border-border/60 px-6 py-4">{footer}</div> : null}
+        {footer ? <div className="border-t border-borderDefault/60 px-6 py-4">{footer}</div> : null}
       </div>
     </div>
   );

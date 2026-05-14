@@ -197,14 +197,14 @@ export default function DashboardPage({ teamId, teams = [] }) {
     setDragIdx(null); setOverIdx(null);
   }
 
-  if (loading) return <div style={{ padding: 32, color: 'var(--text-muted)' }}>Loading dashboard…</div>;
+  if (loading) return <div style={{ padding: 32, color: 'var(--text-muted)', fontFamily: 'var(--font-display)' }}>Loading dashboard…</div>;
 
   const widgets = dashboard?.widgets || [];
 
   return (
     <div style={{ padding: 'var(--space-6)' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 'var(--space-6)' }}>
-        <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--weight-semibold)', margin: 0 }}>📊 Dashboard</h1>
+        <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--weight-semibold)', margin: 0, fontFamily: 'var(--font-display)' }}>📊 Dashboard</h1>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
           {teams.length > 0 && (
             <select value={selectedTeam} onChange={e => { setSelectedTeam(e.target.value); if (dashboard) fetchAllWidgetData(dashboard.widgets); }} // eslint-disable-line react-hooks/exhaustive-deps
@@ -221,7 +221,7 @@ export default function DashboardPage({ teamId, teams = [] }) {
             </select>
             {addingType && (
               <button onClick={addWidget}
-                style={{ background: 'var(--accent-default)', color: '#fff', border: 'none', borderRadius: 'var(--radius-sm)', padding: '6px 14px', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', fontSize: 'var(--text-sm)' }}>Add</button>
+                style={{ background: 'var(--accent-default)', color: '#fff', border: 'none', borderRadius: 'var(--radius-sm)', padding: '6px 14px', fontWeight: 600, cursor: 'pointer', fontFamily: 'var(--font-display)', fontSize: 'var(--text-sm)' }}>Add</button>
             )}
           </div>
         </div>
@@ -230,7 +230,7 @@ export default function DashboardPage({ teamId, teams = [] }) {
       {widgets.length === 0 ? (
         <div style={{ textAlign: 'center', padding: 'var(--space-16)', color: 'var(--text-muted)' }}>
           <div style={{ fontSize: 48, marginBottom: 16 }}>📊</div>
-          <p>Your dashboard is empty. Add widgets above to get started.</p>
+          <p style={{ fontFamily: 'var(--font-display)' }}>Your dashboard is empty. Add widgets above to get started.</p>
         </div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 'var(--space-5)' }}>
@@ -243,9 +243,9 @@ export default function DashboardPage({ teamId, teams = [] }) {
               style={{ background: 'var(--bg-elevated)', border: `1px solid ${overIdx === i && dragIdx !== i ? 'var(--accent-default)' : 'var(--border-default)'}`, borderRadius: 'var(--radius-lg)', padding: 'var(--space-5)', cursor: 'grab', opacity: dragIdx === i ? 0.4 : 1, transition: 'border-color 0.15s, opacity 0.15s' }}
             >
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-4)' }}>
-                <span style={{ fontWeight: 600, fontSize: 'var(--text-sm)' }}>{w.config?.label || WIDGET_TITLES[w.type] || w.type}</span>
+                <span style={{ fontWeight: 600, fontSize: 'var(--text-sm)', fontFamily: 'var(--font-display)' }}>{w.config?.label || WIDGET_TITLES[w.type] || w.type}</span>
                 <button onClick={() => removeWidget(w.id)}
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-subtle)', fontSize: 15, lineHeight: 1, padding: 2 }}>×</button>
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-subtle)', fontSize: 15, lineHeight: 1, padding: 2, fontFamily: 'var(--font-display)' }}>×</button>
               </div>
               <WidgetRenderer type={w.type} data={widgetData[w.id]} config={w.config} />
             </div>

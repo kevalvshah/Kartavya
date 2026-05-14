@@ -3,9 +3,9 @@ import { cn } from "../../lib/utils";
 
 export function Badge({ children, className, tone = "neutral", ...props }) {
   const tones = {
-    neutral: "bg-muted/50 text-muted-foreground border-border/60",
-    info: "bg-violet-500/15 text-violet-200 dark:text-violet-100 border-violet-500/20",
-    danger: "bg-rose-500/15 text-rose-200 dark:text-rose-100 border-rose-500/20",
+    neutral: "bg-bgMuted/50 text-textMuted border-borderDefault/60",
+    info: "bg-infoBg/15 text-info dark:text-info/80 border-info/20",
+    danger: "bg-dangerBg/15 text-danger dark:text-danger/80 border-danger/20",
   };
   return (
     <span
@@ -17,6 +17,6 @@ export function Badge({ children, className, tone = "neutral", ...props }) {
       {...props}
     >
       {children}
-    </span>
+    </span
   );
 }
