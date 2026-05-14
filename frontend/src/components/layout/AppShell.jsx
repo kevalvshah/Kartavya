@@ -1,6 +1,13 @@
 /**
  * AppShell.jsx — main layout shell.
  * Week 3: Templates added to sidebar nav.
+ *
+ * Bug fix (2026-05-14):
+ * FIX #3: teamId is now null (not "") until the /teams fetch completes.
+ *   Previously it resolved to "" immediately, and that empty string was
+ *   passed to ActivityFeedPage / AutomationsPage / TimeReportPage via
+ *   outlet context, causing those pages to fire requests with no team_id.
+ *   Child pages should render a loading state while teamId === null.
  */
 import React, { useEffect, useState } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
@@ -12,14 +19,18 @@ import Topbar  from './Topbar';
 import { Bell, Menu } from 'lucide-react';
 
 export default function AppShell() {
-  const [notifOpen,   setNotifOpen]   = useState(false);
-  const [unread,      setUnread]      = useState(0);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [teams,       setTeams]       = useState([]);
+  const [notifOpen,    setNotifOpen]    = useState(false);
+  const [unread,       setUnread]       = useState(0);
+  const [sidebarOpen,  setSidebarOpen]  = useState(false);
+  const [teams,        setTeams]        = useState([]);
+  const [teamsLoaded,  setTeamsLoaded]  = useState(false);
   const location = useLocation();
 
   useEffect(() => {
-    api.get('/teams').then(r => setTeams(r.data)).catch(() => {});
+    api.get('/teams')
+      .then(r => setTeams(r.data))
+      .catch(() => {})
+      .finally(() => setTeamsLoaded(true));
   }, []);
 
   useEffect(() => {
@@ -38,7 +49,9 @@ export default function AppShell() {
 
   useEffect(() => { setSidebarOpen(false); }, [location.pathname]);
 
-  const teamId = location.pathname.match(/\/projects\/([^/]+)/)?.[1] || teams[0]?.team_id || '';
+  // FIX #3: null until loaded — child pages guard on null to avoid empty requests.
+  const teamIdFromPath = location.pathname.match(/\/projects\/([^/]+)/)?.[1];
+  const teamId = teamIdFromPath || (teamsLoaded ? (teams[0]?.team_id || '') : null);
 
   return (
     <div data-testid="app-shell" className="min-h-screen bg-app text-foreground" style={{ fontFamily: "'Inter',sans-serif" }}>
