@@ -17,6 +17,6 @@ export function Badge({ children, className, tone = "neutral", ...props }) {
       {...props}
     >
       {children}
-    </span
+    </span>
   );
 }
