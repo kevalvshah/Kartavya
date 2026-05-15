@@ -1,6 +1,5 @@
 /**
- * ActivityFeedPage.jsx — Project-level activity feed.
- * Week 2: actor filter, load-more pagination, uses ActivityList.
+ * ActivityFeedPage.jsx — k-* design system.
  */
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { api } from '../lib/api';
@@ -20,14 +19,14 @@ const EVENT_TYPES = [
 const LIMIT = 50;
 
 export default function ActivityFeedPage({ teamId }) {
-  const [events,     setEvents]     = useState([]);
-  const [loading,    setLoading]    = useState(true);
-  const [loadingMore,setLoadingMore]= useState(false);
-  const [hasMore,    setHasMore]    = useState(false);
-  const [offset,     setOffset]     = useState(0);
-  const [filterType, setFilterType] = useState('');
-  const [filterActor,setFilterActor]= useState('');
-  const [members,    setMembers]    = useState([]);
+  const [events,      setEvents]      = useState([]);
+  const [loading,     setLoading]     = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore,     setHasMore]     = useState(false);
+  const [offset,      setOffset]      = useState(0);
+  const [filterType,  setFilterType]  = useState('');
+  const [filterActor, setFilterActor] = useState('');
+  const [members,     setMembers]     = useState([]);
   const abortRef = useRef(null);
 
   useEffect(() => {
@@ -63,23 +62,24 @@ export default function ActivityFeedPage({ teamId }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { load(true); }, [teamId, filterType, filterActor]);
 
-  const sel = {
-    border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)',
-    padding: '6px 10px', fontFamily: 'inherit', fontSize: 'var(--text-sm)',
-    background: 'var(--bg-default)', color: 'var(--text-default)', cursor: 'pointer',
-  };
-
   return (
-    <div style={{ padding: 'var(--space-6)', maxWidth: 760 }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 'var(--space-5)' }}>
-        <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--weight-semibold)', margin: 0 }}>📋 Activity Feed</h1>
-        <button onClick={() => load(true)} style={{ ...sel, fontWeight: 600 }}>↻ Refresh</button>
+    <div className="k-page">
+      <div className="k-pageh">
+        <h1 className="k-pageh__title">Activity</h1>
+        <span className="k-pageh__sans">गतिविधि</span>
+        <div className="k-pageh__actions">
+          <button className="k-btn k-btn--ghost k-btn--sm" onClick={() => load(true)}>
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M14 8A6 6 0 1 1 8 2a6 6 0 0 1 4.24 1.76M14 2v4h-4"/></svg>
+            Refresh
+          </button>
+        </div>
       </div>
-      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 'var(--space-5)' }}>
-        <select value={filterType} onChange={e => setFilterType(e.target.value)} style={sel}>
+
+      <div style={{ display: 'flex', gap: 10, marginBottom: 'var(--sp-5)', flexWrap: 'wrap' }}>
+        <select className="k-select" value={filterType} onChange={e => setFilterType(e.target.value)}>
           {EVENT_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
         </select>
-        <select value={filterActor} onChange={e => setFilterActor(e.target.value)} style={sel}>
+        <select className="k-select" value={filterActor} onChange={e => setFilterActor(e.target.value)}>
           <option value=''>All members</option>
           {members.map(m => (
             <option key={m.user_id || m.email} value={m.user_id || ''}>
@@ -88,11 +88,14 @@ export default function ActivityFeedPage({ teamId }) {
           ))}
         </select>
       </div>
-      <ActivityList events={events} loading={loading} showTask />
+
+      <div className="k-card" style={{ padding: 0, overflow: 'hidden' }}>
+        <ActivityList events={events} loading={loading} showTask />
+      </div>
+
       {hasMore && !loading && (
-        <div style={{ textAlign: 'center', marginTop: 'var(--space-5)' }}>
-          <button onClick={() => load(false)} disabled={loadingMore}
-            style={{ ...sel, fontWeight: 600, minWidth: 120 }}>
+        <div style={{ textAlign: 'center', marginTop: 'var(--sp-5)' }}>
+          <button className="k-btn k-btn--ghost" onClick={() => load(false)} disabled={loadingMore}>
             {loadingMore ? 'Loading…' : 'Load more'}
           </button>
         </div>
@@ -100,4 +103,3 @@ export default function ActivityFeedPage({ teamId }) {
     </div>
   );
 }
-

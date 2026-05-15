@@ -1,14 +1,12 @@
 /**
- * ProjectsPage.jsx — grid of team/project cards.
+ * ProjectsPage.jsx — project grid using k-* design system.
  */
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
-import { K } from '../lib/brand';
-import { Button } from '../components/ui/button';
-import { Input } from '../components/ui/input';
 import { useToast } from '../components/ui/toast';
-import { FolderKanban, LayoutGrid, Trash2, Plus } from 'lucide-react';
+
+const PROJECT_COLORS = ['#0082c6','#05b7aa','#8b5cf6','#ec4899','#f59e0b','#10b981','#6366f1'];
 
 export default function ProjectsPage() {
   const navigate = useNavigate();
@@ -18,9 +16,8 @@ export default function ProjectsPage() {
   const [creating, setCreating] = useState(false);
   const [showNew,  setShowNew]  = useState(false);
 
-  const load = () => api.get('/teams').then((r) => setProjects(r.data)).catch(() => {});
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { load(); }, []);
+  const load = () => api.get('/teams').then(r => setProjects(r.data)).catch(() => {});
+  useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const create = async () => {
     if (!name.trim()) return;
@@ -34,55 +31,93 @@ export default function ProjectsPage() {
   };
 
   const remove = async (p) => {
-    if (!window.confirm(`Delete project "${p.name}"? All tasks in it will be deleted.`)) return;
-    try { await api.delete(`/teams/${p.team_id}`); pushToast({ type: 'success', title: 'Project deleted' }); load(); }
+    if (!window.confirm(`Delete "${p.name}"? All tasks will be deleted.`)) return;
+    try { await api.delete(`/teams/${p.team_id}`); pushToast({ type: 'success', title: 'Deleted' }); load(); }
     catch (_) { pushToast({ type: 'error', title: 'Could not delete' }); }
   };
 
   return (
-    <div className="space-y-5">
-      <div className="flex items-center justify-between">
-        <div>
-          <div className="text-sm font-bold">Projects</div>
-          <div className="text-sm text-muted-foreground mt-0.5">Each project has its own customisable board.</div>
+    <div className="k-page">
+      {/* Page header */}
+      <div className="k-pageh">
+        <h1 className="k-pageh__title">Projects</h1>
+        <span className="k-pageh__sans">योजना</span>
+        <div className="k-pageh__actions">
+          <button className="k-btn k-btn--primary k-btn--sm" onClick={() => setShowNew(v => !v)}>
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2"><path d="M8 3v10M3 8h10"/></svg>
+            New project
+          </button>
         </div>
-        <Button onClick={() => setShowNew(true)}><Plus size={15} /><span className="ml-1.5">New project</span></Button>
       </div>
+
+      {/* New project form */}
       {showNew && (
-        <div className="rounded-3xl border border-border/70 bg-card/50 p-5 flex gap-3">
-          <Input value={name} onChange={(e) => setName(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && create()}
-            placeholder="Project name e.g. Website Redesign" autoFocus />
-          <Button onClick={create} disabled={creating}>Create</Button>
-          <Button variant="ghost" onClick={() => setShowNew(false)}>Cancel</Button>
+        <div className="k-card" style={{ marginBottom: 'var(--sp-5)' }}>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <input
+              className="k-input"
+              value={name}
+              onChange={e => setName(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && create()}
+              placeholder="Project name e.g. Diwali Campaign"
+              autoFocus
+            />
+            <button className="k-btn k-btn--primary" onClick={create} disabled={creating}>
+              {creating ? 'Creating…' : 'Create'}
+            </button>
+            <button className="k-btn k-btn--ghost" onClick={() => setShowNew(false)}>Cancel</button>
+          </div>
         </div>
       )}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {projects.length === 0 && (
-          <div className="col-span-3 rounded-3xl border border-dashed border-border p-10 text-center text-sm text-muted-foreground">
-            No projects yet. Create your first one above.
-          </div>
-        )}
-        {projects.map((p) => (
-          <div key={p.team_id} className="rounded-3xl border border-border/70 bg-card/50 p-5 flex flex-col gap-3 hover:border-border transition-colors">
-            <div className="flex items-start gap-3">
-              <div style={{ width: 40, height: 40, borderRadius: 12, background: K.gradD, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                <FolderKanban size={18} color="#fff" />
+
+      {/* Grid */}
+      {projects.length === 0 ? (
+        <div className="k-empty">
+          <div className="k-empty__icon">📁</div>
+          <div className="k-empty__title">No projects yet</div>
+          <div className="k-empty__sub">Create your first project to get started with tasks and boards.</div>
+        </div>
+      ) : (
+        <div className="k-projgrid">
+          {projects.map((p, i) => {
+            const color = PROJECT_COLORS[i % PROJECT_COLORS.length];
+            const initials = p.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
+            const created = p.created_at ? new Date(p.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '';
+            return (
+              <div key={p.team_id} className="k-projcard">
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div style={{ width: 44, height: 44, borderRadius: 12, background: color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, fontWeight: 700, color: '#fff', flexShrink: 0 }}>
+                    {initials}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div className="k-projcard__name" style={{ fontSize: 16 }}>{p.name}</div>
+                    <div className="k-projcard__meta">{created}</div>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+                  <button className="k-btn k-btn--primary k-btn--sm" style={{ flex: 1 }}
+                    onClick={() => navigate(`/projects/${p.team_id}`)}>
+                    <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4"><rect x="2" y="3" width="3" height="10" rx="1"/><rect x="6.5" y="3" width="3" height="7" rx="1"/><rect x="11" y="3" width="3" height="9" rx="1"/></svg>
+                    Open Board
+                  </button>
+                  <button className="k-btn k-btn--ghost k-btn--sm" onClick={() => remove(p)} title="Delete project"
+                    style={{ padding: '6px 10px', color: 'var(--danger)' }}>
+                    <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4"><path d="M3 4h10M5 4V3h6v1M6 7v5M10 7v5M4 4l1 9h6l1-9"/></svg>
+                  </button>
+                </div>
               </div>
-              <div className="flex-1 min-w-0">
-                <div className="font-bold text-sm truncate">{p.name}</div>
-                <div className="text-xs text-muted-foreground mt-0.5">Project · {new Date(p.created_at).toLocaleDateString()}</div>
-              </div>
-            </div>
-            <div className="flex gap-2 pt-1">
-              <Button onClick={() => navigate(`/projects/${p.team_id}`)} className="flex-1">
-                <LayoutGrid size={13} /><span className="ml-1.5">Open Board</span>
-              </Button>
-              <Button variant="ghost" onClick={() => remove(p)} className="px-2.5"><Trash2 size={13} /></Button>
-            </div>
-          </div>
-        ))}
-      </div>
+            );
+          })}
+
+          {/* Add project tile */}
+          <button className="k-projcard" onClick={() => setShowNew(true)}
+            style={{ border: '1px dashed var(--rule-strong)', background: 'transparent', alignItems: 'center', justifyContent: 'center', minHeight: 140, cursor: 'pointer', gap: 8 }}>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: 28, color: 'var(--ink-3)', lineHeight: 1 }}>+</div>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: 15, color: 'var(--ink-2)', fontWeight: 500 }}>New project</div>
+            <div style={{ fontSize: 12, color: 'var(--ink-3)' }}>Create a board for your team</div>
+          </button>
+        </div>
+      )}
     </div>
   );
 }
