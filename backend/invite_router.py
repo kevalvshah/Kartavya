@@ -73,10 +73,17 @@ async def create_invite(body: InviteCreate, pool=Depends(get_pool), admin=Depend
     invite_id  = f"inv_{uuid.uuid4().hex[:12]}"
     expires_at = datetime.now(timezone.utc) + timedelta(days=7)
 
+    # Store the pre-filled name if the admin provided one (used to pre-populate the accept-invite form)
     await pool.execute(
         "INSERT INTO invites (invite_id, email, role, token, invited_by, expires_at) VALUES ($1,$2,$3,$4,$5,$6)",
         invite_id, body.email.lower(), body.role, token, admin["user_id"], expires_at,
     )
+    # Persist the suggested name in a non-blocking way (column may not exist on older schemas)
+    if body.name:
+        try:
+            await pool.execute("UPDATE invites SET name=$1 WHERE invite_id=$2", body.name, invite_id)
+        except Exception:
+            pass  # column doesn't exist yet — safe to ignore
 
     invite_link = f"{FRONTEND_URL}/accept-invite?token={token}"
 

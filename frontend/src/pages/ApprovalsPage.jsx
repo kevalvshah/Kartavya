@@ -1,14 +1,9 @@
 /**
- * ApprovalsPage.jsx
- * - admin/member: see all pending approvals, can approve or reject.
- * - client: sees only approval requests on THEIR tasks (tasks where
- *   they are the requester or the task is shared with them), and can
- *   approve/reject those.
+ * ApprovalsPage.jsx — k-* design system.
  */
 import React, { useState, useEffect } from 'react';
 import { api } from '../lib/api';
 import { currentUser } from '../lib/auth';
-import { Button } from '../components/ui/button';
 import { useToast } from '../components/ui/toast';
 
 export default function ApprovalsPage() {
@@ -21,8 +16,6 @@ export default function ApprovalsPage() {
   const load = async () => {
     setLoading(true);
     try {
-      // Clients hit /client/approvals which returns only approvals on
-      // tasks visible to them. Members/admins hit /approvals/pending.
       const endpoint = isClient ? '/client/approvals' : '/approvals/pending';
       const r = await api.get(endpoint);
       setRequests(r.data || []);
@@ -39,7 +32,7 @@ export default function ApprovalsPage() {
   const decide = async (approvalId, status) => {
     try {
       await api.post(`/approvals/${approvalId}/review`, { status, notes: '' });
-      pushToast({ type: 'success', title: status === 'approved' ? 'Approved ✓' : 'Rejected' });
+      pushToast({ type: 'success', title: status === 'approved' ? 'Approved' : 'Rejected' });
       load();
     } catch (e) {
       pushToast({ type: 'error', title: 'Action failed', message: e?.response?.data?.detail || 'Try again' });
@@ -47,39 +40,61 @@ export default function ApprovalsPage() {
   };
 
   return (
-    <div className="space-y-5">
-      <div className="text-sm font-bold">
-        {isClient ? 'Tasks Awaiting Your Review' : 'Approvals'}
+    <div className="k-page">
+      <div className="k-pageh">
+        <h1 className="k-pageh__title">{isClient ? 'My Approvals' : 'Approvals'}</h1>
+        <span className="k-pageh__sans">अनुमोदन</span>
       </div>
 
-      {loading && <div className="text-sm text-muted-foreground">Loading…</div>}
-
-      {!loading && requests.length === 0 && (
-        <div className="rounded-3xl border border-dashed border-border p-10 text-center text-sm text-muted-foreground">
-          {isClient ? 'No tasks awaiting your review.' : 'All caught up — nothing pending.'}
+      {loading && (
+        <div style={{ padding: '32px 0', textAlign: 'center', color: 'var(--ink-3)', fontFamily: 'var(--font-display)', fontStyle: 'italic' }}>
+          Loading approvals…
         </div>
       )}
 
-      {requests.map((r) => {
-        const data = typeof r.request_data === 'string' ? JSON.parse(r.request_data) : r.request_data;
-        return (
-          <div key={r.approval_id} className="rounded-3xl border border-border/70 bg-card/50 p-5">
-            <div className="text-sm font-bold">{data?.title || r.task_title || 'Untitled task'}</div>
-            {data?.description && (
-              <div className="text-xs text-muted-foreground mt-1">{data.description}</div>
-            )}
-            <div className="text-xs text-muted-foreground mt-2">
-              {isClient
-                ? `Submitted by ${r.requested_by_name || r.requested_by_email || 'team'}`
-                : `From ${r.requested_by_name || r.requested_by_email}`}
+      {!loading && requests.length === 0 && (
+        <div className="k-empty">
+          <div className="k-empty__icon">✓</div>
+          <div className="k-empty__title">All caught up</div>
+          <div className="k-empty__sub">{isClient ? 'No tasks awaiting your review.' : 'Nothing pending right now.'}</div>
+        </div>
+      )}
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-4)' }}>
+        {requests.map((r) => {
+          const data = typeof r.request_data === 'string' ? JSON.parse(r.request_data) : r.request_data;
+          return (
+            <div key={r.approval_id} className="k-card">
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
+                <div style={{ width: 40, height: 40, borderRadius: 10, background: 'rgba(0,130,198,.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>
+                  📋
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontFamily: 'var(--font-display)', fontSize: 16, fontWeight: 600, color: 'var(--ink)', marginBottom: 4 }}>
+                    {data?.title || r.task_title || 'Untitled task'}
+                  </div>
+                  {data?.description && (
+                    <div style={{ fontSize: 13, color: 'var(--ink-3)', marginBottom: 4 }}>{data.description}</div>
+                  )}
+                  <div style={{ fontSize: 11, color: 'var(--ink-faint)' }}>
+                    {isClient
+                      ? `Submitted by ${r.requested_by_name || r.requested_by_email || 'team'}`
+                      : `From ${r.requested_by_name || r.requested_by_email}`}
+                  </div>
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 8, marginTop: 'var(--sp-4)' }}>
+                <button className="k-btn k-btn--primary k-btn--sm" onClick={() => decide(r.approval_id, 'approved')}>
+                  Approve
+                </button>
+                <button className="k-btn k-btn--ghost k-btn--sm" style={{ color: 'var(--danger)' }} onClick={() => decide(r.approval_id, 'rejected')}>
+                  Reject
+                </button>
+              </div>
             </div>
-            <div className="flex gap-2 mt-3">
-              <Button onClick={() => decide(r.approval_id, 'approved')}>Approve</Button>
-              <Button variant="ghost" onClick={() => decide(r.approval_id, 'rejected')}>Reject</Button>
-            </div>
-          </div>
-        );
-      })}
+          );
+        })}
+      </div>
     </div>
   );
 }

@@ -15,9 +15,9 @@
  */
 import React, { Suspense, lazy } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useOutletContext } from 'react-router-dom';
-
 import './App.css';
 import './styles/index.css';
+import './styles/kartavya-design.css';
 
 import { ToastProvider }               from './components/ui/toast';
 import AppShell, { Protected }         from './components/layout/AppShell';

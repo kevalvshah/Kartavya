@@ -1,86 +1,176 @@
 /**
- * Sidebar.jsx — left nav.
- * v2: clients get Dashboard, My Tasks, Approvals, Notifications.
+ * Sidebar.jsx — redesigned dark ink sidebar with bilingual grouped nav.
  */
 import React from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { cn } from '../../lib/utils';
-import { K, KLogo, KWordmark } from '../../lib/brand';
-import { currentUser, useTheme } from '../../lib/auth';
-import { Button } from '../ui/button';
-import {
-  Bell, FolderKanban, LayoutGrid, ListTodo, LogOut,
-  Sun, Moon, Users, ShieldCheck, Settings, CheckCircle2,
-  Activity, Clock, Zap, FileText,
-} from 'lucide-react';
+import { currentUser } from '../../lib/auth';
+import { K } from '../../lib/brand';
+
+// ── Nav icons (inline SVG, stroke-based) ────────────────────────────────
+const ICONS = {
+  dashboard:   <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4"><circle cx="8" cy="8" r="6"/><path d="M8 5v3l2 1.5"/></svg>,
+  projects:    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4"><path d="M2 5l1.5-2H7l1.5 2H14v8H2V5z"/></svg>,
+  tasks:       <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4"><path d="M3 4h10M3 8h7M3 12h9"/><circle cx="13" cy="8" r="1.4" fill="currentColor" stroke="none"/></svg>,
+  approvals:   <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4"><circle cx="8" cy="8" r="6"/><path d="M5.5 8l1.8 1.8L10.5 6.5"/></svg>,
+  activity:    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4"><path d="M1 8h3l2-5 4 10 2-5h3"/></svg>,
+  automations: <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4"><path d="M9 2L3 9h4l-1 5 6-7H8l1-5z"/></svg>,
+  time:        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4"><circle cx="8" cy="8.5" r="5.5"/><path d="M8 5.5v3l2 1.5"/><path d="M5.5 1.5h5"/></svg>,
+  templates:   <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4"><path d="M3 2.5h7l3 3v8H3z"/><path d="M9.5 2.5V6H13"/><path d="M5.5 9h5M5.5 11h3"/></svg>,
+  teams:       <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4"><circle cx="6" cy="6" r="2.4"/><path d="M1.5 13c0-2.6 2-4.2 4.5-4.2S10.5 10.4 10.5 13"/><circle cx="12" cy="6" r="1.6"/><path d="M11.5 9.2c1.7 0 3 1.1 3 2.6"/></svg>,
+  categories:  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4"><path d="M2 2h5.5l6.5 6.5-5.5 5.5L2 7.5V2z"/><circle cx="5.5" cy="5.5" r="1"/></svg>,
+  notifications:<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4"><path d="M13 11l-2-2H5L3 11V4a1 1 0 011-1h8a1 1 0 011 1v7z"/><path d="M6.5 13.5a1.5 1.5 0 003 0"/></svg>,
+  admin:       <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4"><path d="M8 2l5 2v4.5c0 3-2.2 5.2-5 5.8C5.2 13.7 3 11.5 3 8.5V4l5-2z"/><path d="M6 8.2l1.3 1.3L10 6.8"/></svg>,
+  logout:      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M6 2H3a1 1 0 00-1 1v10a1 1 0 001 1h3M11 11l3-3-3-3M14 8H6"/></svg>,
+};
+
+// ── Nav structure ────────────────────────────────────────────────────────
+const NAV_FULL = [
+  {
+    section: 'workspace', sans: 'कार्यक्षेत्र',
+    items: [
+      { to: '/dashboard', icon: 'dashboard', en: 'Dashboard',  hi: 'अद्य' },
+      { to: '/projects',  icon: 'projects',  en: 'Projects',   hi: 'योजना' },
+      { to: '/tasks',     icon: 'tasks',     en: 'All Tasks',  hi: 'कर्तव्य' },
+    ],
+  },
+  {
+    section: 'operations', sans: 'संचालन',
+    items: [
+      { to: '/approvals',   icon: 'approvals',   en: 'Approvals',   hi: 'सम्मति' },
+      { to: '/activity',    icon: 'activity',    en: 'Activity',    hi: 'क्रिया' },
+      { to: '/automations', icon: 'automations', en: 'Automations', hi: 'स्वतंत्र' },
+      { to: '/time',        icon: 'time',        en: 'Time Report', hi: 'काल' },
+      { to: '/templates',   icon: 'templates',   en: 'Templates',   hi: 'साँचा' },
+    ],
+  },
+  {
+    section: 'team', sans: 'दल',
+    items: [
+      { to: '/teams', icon: 'teams', en: 'Teams', hi: 'सहयोगी' },
+    ],
+  },
+  {
+    section: 'settings', sans: 'व्यवस्था',
+    items: [
+      { to: '/settings/categories',    icon: 'categories',    en: 'Categories',   hi: 'वर्ग' },
+      { to: '/settings/notifications', icon: 'notifications', en: 'Notifications',hi: 'सूचना' },
+    ],
+  },
+];
+
+const NAV_CLIENT = [
+  {
+    section: 'workspace', sans: 'कार्यक्षेत्र',
+    items: [
+      { to: '/dashboard',       icon: 'dashboard', en: 'Dashboard',     hi: 'अद्य' },
+      { to: '/client/projects', icon: 'projects',  en: 'My Projects',   hi: 'योजना' },
+      { to: '/tasks',           icon: 'tasks',     en: 'My Tasks',      hi: 'कर्तव्य' },
+      { to: '/approvals',       icon: 'approvals', en: 'Approvals',     hi: 'सम्मति' },
+      { to: '/settings/notifications', icon: 'notifications', en: 'Notifications', hi: 'सूचना' },
+    ],
+  },
+];
+
+function KMark({ size = 30 }) {
+  return (
+    <div style={{
+      width: size, height: size, borderRadius: size * 0.26,
+      background: 'linear-gradient(135deg,#0082c6,#03a1b6 55%,#05b7aa)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      flexShrink: 0,
+      boxShadow: '0 1px 0 rgba(255,255,255,.22) inset, 0 4px 14px rgba(0,130,198,.28)',
+    }}>
+      <svg width={size * 0.52} height={size * 0.52} viewBox="0 0 22 22" fill="none">
+        <path d="M4 11L11 4L18 11L11 18L4 11Z" stroke="white" strokeWidth="1.8"/>
+        <path d="M7.5 11L11 7.5L14.5 11L11 14.5L7.5 11Z" fill="white" opacity=".88"/>
+      </svg>
+    </div>
+  );
+}
 
 export default function Sidebar() {
-  const navigate = useNavigate();
-  const location = useLocation();
-  const { theme, setTheme } = useTheme();
-  const user     = currentUser();
-  const isAdmin  = user?.role === 'admin';
-  const isClient = user?.role === 'client';
+  const navigate  = useNavigate();
+  const location  = useLocation();
+  const user      = currentUser();
+  const isAdmin   = user?.role === 'admin';
+  const isClient  = user?.role === 'client';
 
-  const nav = isClient
-    ? [
-        { to: '/dashboard',              label: 'Dashboard',       Icon: LayoutGrid    },
-        { to: '/client/projects',        label: 'My Projects',     Icon: FolderKanban  },
-        { to: '/tasks',                  label: 'My Tasks',        Icon: ListTodo      },
-        { to: '/approvals',              label: 'Approvals',       Icon: CheckCircle2  },
-        { to: '/settings/notifications', label: 'Notifications',   Icon: Bell          },
-      ]
-    : [
-        { to: '/dashboard',              label: 'Dashboard',     Icon: LayoutGrid  },
-        { to: '/projects',               label: 'Projects',      Icon: FolderKanban },
-        { to: '/tasks',                  label: 'All Tasks',     Icon: ListTodo    },
-        { to: '/approvals',              label: 'Approvals',     Icon: CheckCircle2 },
-        { to: '/teams',                  label: 'Teams',         Icon: Users       },
-        { to: '/activity',               label: 'Activity',      Icon: Activity    },
-        { to: '/automations',            label: 'Automations',   Icon: Zap         },
-        { to: '/time',                   label: 'Time Report',   Icon: Clock       },
-        { to: '/templates',              label: 'Templates',     Icon: FileText    },
-        { to: '/settings/categories',    label: 'Categories',    Icon: Settings    },
-        { to: '/settings/notifications', label: 'Notifications', Icon: Bell        },
-        ...(isAdmin ? [{ to: '/admin',   label: 'Admin',         Icon: ShieldCheck }] : []),
-      ];
+  const groups = isClient ? NAV_CLIENT : NAV_FULL;
+  // Inject admin item for admins
+  const allGroups = isAdmin
+    ? groups.map(g =>
+        g.section === 'settings'
+          ? { ...g, items: [...g.items, { to: '/admin', icon: 'admin', en: 'Admin', hi: 'प्रशासन', adminOnly: true }] }
+          : g
+      )
+    : groups;
+
+  const isActive = (to) =>
+    location.pathname === to || location.pathname.startsWith(to + '/');
+
+  const initials = ((user?.full_name || user?.name || 'U')
+    .split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase());
 
   return (
-    <aside className="rounded-3xl border border-border/70 bg-card/50 shadow-sm lg:sticky lg:top-6 lg:h-[calc(100vh-48px)] flex flex-col">
-      <div className="flex items-center justify-between p-4 border-b border-border/60">
-        <div className="flex items-center gap-3"><KLogo size={34} /><KWordmark size="sm" /></div>
-        <Button variant="ghost" size="icon" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>
-          {theme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
-        </Button>
+    <aside className="k-sidebar">
+      {/* Brand */}
+      <div className="k-sidebar__brand">
+        <KMark size={32} />
+        <div className="k-wordmark">
+          <div className="k-wordmark__main">Kartavya</div>
+          <div className="k-wordmark__sans">कर्तव्य</div>
+          <div className="k-wordmark__sub">by Aekam Inc</div>
+        </div>
       </div>
-      <div className="flex-1 overflow-y-auto p-3 space-y-0.5">
-        {nav.map(({ to, label, Icon }) => {
-          const active = location.pathname === to || location.pathname.startsWith(to + '/');
-          return (
-            <button key={to} onClick={() => navigate(to)}
-              className={cn('w-full rounded-2xl px-3 py-2.5 text-left text-sm font-semibold transition-all duration-150 flex items-center gap-2.5',
-                active ? 'text-white shadow-sm' : 'text-muted-foreground hover:bg-muted/40 hover:text-foreground')}
-              style={active ? { background: K.gradD } : {}}>
-              <Icon size={15} />
-              {label}
-              {to === '/admin' && (
-                <span className="ml-auto text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded"
-                  style={{ background: K.teal + '33', color: K.teal }}>admin</span>
-              )}
-            </button>
-          );
-        })}
-      </div>
-      <div className="p-3 border-t border-border/60">
-        <div className="flex items-center gap-2.5 px-2 py-1.5">
-          <div style={{ width: 30, height: 30, borderRadius: '50%', background: K.gradD, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 600, color: '#fff', flexShrink: 0 }}>
-            {(user?.full_name || user?.name || '?')[0].toUpperCase()}
+
+      {/* Nav */}
+      <nav className="k-sidebar__nav">
+        {allGroups.map(({ section, sans, items }) => (
+          <div key={section} className="k-sidebar__group">
+            <div className="k-sidebar__section">
+              <span>{section}</span>
+              <span className="k-sidebar__section-hi">{sans}</span>
+            </div>
+            {items.map(({ to, icon, en, hi, adminOnly }) => (
+              <button
+                key={to}
+                className={'k-sidebar__item' + (isActive(to) ? ' is-active' : '')}
+                onClick={() => navigate(to)}
+              >
+                <span className="k-sidebar__icon">{ICONS[icon]}</span>
+                <span>{en}</span>
+                <span className="k-sidebar__hi-mute">{hi}</span>
+                {adminOnly && (
+                  <span className="k-sidebar__badge" style={{ fontSize: 9, letterSpacing: '0.1em' }}>
+                    ADMIN
+                  </span>
+                )}
+              </button>
+            ))}
           </div>
-          <div className="flex-1 min-w-0">
-            <div className="text-xs font-bold truncate">{user?.full_name || user?.name || 'User'}</div>
-            <div className="text-[10px] text-muted-foreground capitalize">{user?.role || 'member'}</div>
+        ))}
+      </nav>
+
+      {/* Footer */}
+      <div className="k-sidebar__foot">
+        <div className="k-avatar k-avatar--me">{initials}</div>
+        <div className="k-sidebar__me">
+          <div className="k-sidebar__me-name">{user?.full_name || user?.name || 'User'}</div>
+          <div className="k-sidebar__me-role" style={{ textTransform: 'capitalize' }}>
+            {user?.role || 'member'}
           </div>
         </div>
+        <button
+          className="k-sidebar__foot-btn"
+          title="Sign out"
+          onClick={async () => {
+            const { apiLogout } = await import('../../lib/auth');
+            await apiLogout();
+            window.location.href = '/login';
+          }}
+        >
+          {ICONS.logout}
+        </button>
       </div>
     </aside>
   );
