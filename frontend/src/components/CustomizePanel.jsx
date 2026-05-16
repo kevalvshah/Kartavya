@@ -59,8 +59,17 @@ function applyPrefs(prefs) {
   root.style.setProperty('--k-gradD',   `linear-gradient(135deg, ${acc.deep}cc, ${acc.mid}cc 55%, ${acc.color}cc)`);
   root.style.setProperty('--side-active', `${acc.color}29`);
 
-  // Font
+  // Font — change both display AND ui so body text visibly changes too
   root.style.setProperty('--font-display', fnt.value);
+  // When "Inter · sans only" is chosen, body stays Inter (already default).
+  // For serif fonts, also shift body to that font family for a full editorial feel.
+  if (prefs.font === 'inter') {
+    root.style.setProperty('--font-ui', "'Inter', system-ui, sans-serif");
+    document.body.style.fontFamily = "'Inter', system-ui, sans-serif";
+  } else {
+    root.style.setProperty('--font-ui', fnt.value);
+    document.body.style.fontFamily = fnt.value;
+  }
 
   // Mode
   root.setAttribute('data-theme', prefs.mode);

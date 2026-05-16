@@ -188,12 +188,12 @@ export default function DashboardPage({ teams = [] }) {
               <span style={{ color: 'var(--rule-strong)' }}>·</span>
               <span>{now.toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
               <span style={{ color: 'var(--rule-strong)' }}>·</span>
-              <span style={{ color: 'var(--k-primary)', fontFamily: 'var(--font-hindi)' }}>विक्रम संवत् {vikYear}</span>
+              <span className="k-hi" style={{ color: 'var(--k-primary)', fontFamily: 'var(--font-hindi)' }}>विक्रम संवत् {vikYear}</span>
             </div>
 
             {/* Greeting */}
             <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(28px,4vw,48px)', fontWeight: 400, color: 'var(--ink)', margin: 0, lineHeight: 1.1 }}>
-              <span style={{ fontFamily: 'var(--font-hindi)', color: 'var(--k-primary)' }}>नमस्ते,</span>{' '}
+              <span className="k-hi" style={{ fontFamily: 'var(--font-hindi)', color: 'var(--k-primary)' }}>नमस्ते,</span>{' '}
               {firstName}.
             </h1>
 
@@ -204,7 +204,7 @@ export default function DashboardPage({ teams = [] }) {
                 {dueTodayTasks.length > 0 && <>, <strong style={{ color: '#f59e0b' }}>{dueTodayTasks.length} due today</strong></>}
                 {overdueTasks.length > 0 && <>, <strong style={{ color: 'var(--danger)' }}>{overdueTasks.length} running late</strong></>}
                 {overdueTasks.length === 0 && <>, 0 running late</>}.
-                {' '}<span style={{ fontFamily: 'var(--font-hindi)', color: 'var(--ink-3)' }}>करणीय कुरु</span>
+                {' '}<span className="k-hi" style={{ fontFamily: 'var(--font-hindi)', color: 'var(--ink-3)' }}>करणीय कुरु</span>
                 {' '}<em style={{ color: 'var(--ink-faint)' }}>— Do what must be done.</em>
               </p>
             )}
@@ -212,7 +212,7 @@ export default function DashboardPage({ teams = [] }) {
 
           {/* Vikram date block */}
           <div style={{ textAlign: 'right', flexShrink: 0 }}>
-            <div style={{ fontSize: 11, color: 'var(--ink-3)', fontFamily: 'var(--font-hindi)' }}>विक्रम संवत् {vikYear}</div>
+            <div className="k-hi" style={{ fontSize: 11, color: 'var(--ink-3)', fontFamily: 'var(--font-hindi)' }}>विक्रम संवत् {vikYear}</div>
             <div style={{ fontSize: 12, color: 'var(--ink-faint)' }}>
               {now.toLocaleDateString('en-IN', { weekday: 'long' }).slice(0,3)} · {vikMonth}
             </div>
@@ -254,7 +254,7 @@ export default function DashboardPage({ teams = [] }) {
                 <div key={s.en} className="k-card" style={{ padding: '18px 20px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
                     <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--ink-3)' }}>{s.en}</span>
-                    <span style={{ fontFamily: 'var(--font-hindi)', fontSize: 11, color: 'var(--ink-faint)' }}>{s.hi}</span>
+                    <span className="k-hi" style={{ fontFamily: 'var(--font-hindi)', fontSize: 11, color: 'var(--ink-faint)' }}>{s.hi}</span>
                   </div>
                   <div style={{ fontFamily: 'var(--font-display)', fontSize: 44, fontWeight: 400, color: s.color, lineHeight: 1 }}>{s.value}</div>
                   <div style={{ fontSize: 11, color: 'var(--ink-3)', marginTop: 6 }}>{s.sub}</div>
@@ -273,7 +273,7 @@ export default function DashboardPage({ teams = [] }) {
                   <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--rule-soft)', display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
                     <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
                       <span style={{ fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 600, color: 'var(--ink)' }}>On your plate</span>
-                      <span style={{ fontFamily: 'var(--font-hindi)', fontSize: 12, color: 'var(--ink-3)' }}>आपके हाथ में</span>
+                      <span className="k-hi" style={{ fontFamily: 'var(--font-hindi)', fontSize: 12, color: 'var(--ink-3)' }}>आपके हाथ में</span>
                     </div>
                     <button onClick={() => navigate('/tasks')}
                       style={{ fontSize: 12, color: 'var(--k-primary)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>
@@ -325,7 +325,7 @@ export default function DashboardPage({ teams = [] }) {
                   <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 16 }}>
                     <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
                       <span style={{ fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 600, color: 'var(--ink)' }}>Status breakdown</span>
-                      <span style={{ fontFamily: 'var(--font-hindi)', fontSize: 12, color: 'var(--ink-3)' }}>स्थिति विश्लेषण</span>
+                      <span className="k-hi" style={{ fontFamily: 'var(--font-hindi)', fontSize: 12, color: 'var(--ink-3)' }}>स्थिति विश्लेषण</span>
                     </div>
                     <button onClick={() => navigate('/projects')}
                       style={{ fontSize: 12, color: 'var(--k-primary)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>
@@ -354,7 +354,7 @@ export default function DashboardPage({ teams = [] }) {
                           <span style={{ flex: 1, fontSize: 13, color: 'var(--ink-2)', textTransform: 'capitalize' }}>
                             {s.replace('_',' ')}
                           </span>
-                          <span style={{ fontFamily: 'var(--font-hindi)', fontSize: 11, color: 'var(--ink-faint)' }}>
+                          <span className="k-hi" style={{ fontFamily: 'var(--font-hindi)', fontSize: 11, color: 'var(--ink-faint)' }}>
                             {STATUS_HI[s]}
                           </span>
                           <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 700, color: 'var(--ink)', minWidth: 20, textAlign: 'right' }}>
@@ -372,7 +372,7 @@ export default function DashboardPage({ teams = [] }) {
                     <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--ink-3)', flexShrink: 0 }}>
                       {donePct}% complete
                     </span>
-                    <span style={{ fontFamily: 'var(--font-hindi)', fontSize: 11, color: 'var(--ink-faint)', flexShrink: 0 }}>सम्पन्न</span>
+                    <span className="k-hi" style={{ fontFamily: 'var(--font-hindi)', fontSize: 11, color: 'var(--ink-faint)', flexShrink: 0 }}>सम्पन्न</span>
                   </div>
                 </div>
 
@@ -385,7 +385,7 @@ export default function DashboardPage({ teams = [] }) {
                 <div className="k-card" style={{ padding: 0, overflow: 'hidden' }}>
                   <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--rule-soft)', display: 'flex', alignItems: 'baseline', gap: 8 }}>
                     <span style={{ fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 600, color: 'var(--ink)' }}>Upcoming</span>
-                    <span style={{ fontFamily: 'var(--font-hindi)', fontSize: 12, color: 'var(--ink-3)' }}>आगामी</span>
+                    <span className="k-hi" style={{ fontFamily: 'var(--font-hindi)', fontSize: 12, color: 'var(--ink-3)' }}>आगामी</span>
                   </div>
 
                   {upcoming.length === 0 ? (
@@ -416,7 +416,7 @@ export default function DashboardPage({ teams = [] }) {
                     <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--rule-soft)', display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
                       <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
                         <span style={{ fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 600, color: 'var(--ink)' }}>Team pulse</span>
-                        <span style={{ fontFamily: 'var(--font-hindi)', fontSize: 12, color: 'var(--ink-3)' }}>दल की गतिविधि</span>
+                        <span className="k-hi" style={{ fontFamily: 'var(--font-hindi)', fontSize: 12, color: 'var(--ink-3)' }}>दल की गतिविधि</span>
                       </div>
                       <button onClick={() => navigate('/activity')}
                         style={{ fontSize: 12, color: 'var(--k-primary)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>
@@ -447,7 +447,7 @@ export default function DashboardPage({ teams = [] }) {
 
                 {/* Bhagavad Gita quote */}
                 <div style={{ padding: '16px 20px', background: 'rgba(5,183,170,.06)', borderRadius: 12, border: '1px solid rgba(5,183,170,.15)' }}>
-                  <p style={{ fontFamily: 'var(--font-hindi)', fontSize: 14, color: 'var(--ink-2)', margin: '0 0 6px', lineHeight: 1.6 }}>
+                  <p className="k-hi" style={{ fontFamily: 'var(--font-hindi)', fontSize: 14, color: 'var(--ink-2)', margin: '0 0 6px', lineHeight: 1.6 }}>
                     कर्मण्येवाधिकारस्ते मा फलेषु कदाचन।
                   </p>
                   <p style={{ fontSize: 11, color: 'var(--ink-faint)', margin: 0, fontStyle: 'italic' }}>
