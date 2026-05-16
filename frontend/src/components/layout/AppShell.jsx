@@ -14,12 +14,14 @@ import { Outlet, useLocation } from 'react-router-dom';
 import { api } from '../../lib/api';
 import { KWordmark } from '../../lib/brand';
 import { NotificationsModal } from '../NotificationsModal';
+import NewTaskModal from '../NewTaskModal';
 import Sidebar from './Sidebar';
 import Topbar  from './Topbar';
 import { Bell, Menu } from 'lucide-react';
 
 export default function AppShell() {
   const [notifOpen,    setNotifOpen]    = useState(false);
+  const [newTaskOpen,  setNewTaskOpen]  = useState(false);
   const [unread,       setUnread]       = useState(0);
   const [sidebarOpen,  setSidebarOpen]  = useState(false);
   const [teams,        setTeams]        = useState([]);
@@ -57,7 +59,7 @@ export default function AppShell() {
     <div data-testid="app-shell" style={{ display: 'flex', minHeight: '100vh', background: 'var(--bg)' }}>
       {/* Desktop sidebar */}
       <div className="hidden lg:block" style={{ flexShrink: 0 }}>
-        <Sidebar />
+        <Sidebar inboxCount={unread} />
       </div>
 
       {/* Mobile drawer */}
@@ -90,7 +92,7 @@ export default function AppShell() {
 
         {/* Desktop topbar */}
         <div className="hidden lg:block">
-          <Topbar unread={unread} onOpenNotifications={() => setNotifOpen(true)} />
+          <Topbar unread={unread} onOpenNotifications={() => setNotifOpen(true)} onNewTask={() => setNewTaskOpen(true)} />
         </div>
 
         {/* Page content */}
@@ -100,6 +102,7 @@ export default function AppShell() {
       </div>
 
       <NotificationsModal open={notifOpen} onOpenChange={setNotifOpen} />
+      <NewTaskModal open={newTaskOpen} onClose={() => setNewTaskOpen(false)} onCreated={() => setNewTaskOpen(false)} />
     </div>
   );
 }

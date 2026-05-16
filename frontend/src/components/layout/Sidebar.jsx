@@ -19,6 +19,7 @@ const ICONS = {
   teams:       <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4"><circle cx="6" cy="6" r="2.4"/><path d="M1.5 13c0-2.6 2-4.2 4.5-4.2S10.5 10.4 10.5 13"/><circle cx="12" cy="6" r="1.6"/><path d="M11.5 9.2c1.7 0 3 1.1 3 2.6"/></svg>,
   categories:  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4"><path d="M2 2h5.5l6.5 6.5-5.5 5.5L2 7.5V2z"/><circle cx="5.5" cy="5.5" r="1"/></svg>,
   notifications:<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4"><path d="M13 11l-2-2H5L3 11V4a1 1 0 011-1h8a1 1 0 011 1v7z"/><path d="M6.5 13.5a1.5 1.5 0 003 0"/></svg>,
+  inbox:       <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4"><path d="M2 11h3l1 2h4l1-2h3V4a1 1 0 00-1-1H3a1 1 0 00-1 1v7z"/><path d="M5.5 7.5h5"/><path d="M5.5 5.5h3"/></svg>,
   admin:       <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4"><path d="M8 2l5 2v4.5c0 3-2.2 5.2-5 5.8C5.2 13.7 3 11.5 3 8.5V4l5-2z"/><path d="M6 8.2l1.3 1.3L10 6.8"/></svg>,
   logout:      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M6 2H3a1 1 0 00-1 1v10a1 1 0 001 1h3M11 11l3-3-3-3M14 8H6"/></svg>,
 };
@@ -46,7 +47,8 @@ const NAV_FULL = [
   {
     section: 'team', sans: 'दल',
     items: [
-      { to: '/teams', icon: 'teams', en: 'Teams', hi: 'सहयोगी' },
+      { to: '/teams',  icon: 'teams', en: 'Teams', hi: 'सहयोगी' },
+      { to: '/inbox',  icon: 'inbox', en: 'Inbox', hi: 'सन्देश', badge: 'unread' },
     ],
   },
   {
@@ -88,7 +90,7 @@ function KMark({ size = 30 }) {
   );
 }
 
-export default function Sidebar() {
+export default function Sidebar({ inboxCount = 0 }) {
   const navigate  = useNavigate();
   const location  = useLocation();
   const user      = currentUser();
@@ -131,22 +133,30 @@ export default function Sidebar() {
               <span>{section}</span>
               <span className="k-sidebar__section-hi">{sans}</span>
             </div>
-            {items.map(({ to, icon, en, hi, adminOnly }) => (
-              <button
-                key={to}
-                className={'k-sidebar__item' + (isActive(to) ? ' is-active' : '')}
-                onClick={() => navigate(to)}
-              >
-                <span className="k-sidebar__icon">{ICONS[icon]}</span>
-                <span>{en}</span>
-                <span className="k-sidebar__hi-mute">{hi}</span>
-                {adminOnly && (
-                  <span className="k-sidebar__badge" style={{ fontSize: 9, letterSpacing: '0.1em' }}>
-                    ADMIN
-                  </span>
-                )}
-              </button>
-            ))}
+            {items.map(({ to, icon, en, hi, adminOnly, badge }) => {
+              const badgeCount = badge === 'unread' ? inboxCount : 0;
+              return (
+                <button
+                  key={to}
+                  className={'k-sidebar__item' + (isActive(to) ? ' is-active' : '')}
+                  onClick={() => navigate(to)}
+                >
+                  <span className="k-sidebar__icon">{ICONS[icon]}</span>
+                  <span>{en}</span>
+                  <span className="k-sidebar__hi-mute">{hi}</span>
+                  {adminOnly && (
+                    <span className="k-sidebar__badge" style={{ fontSize: 9, letterSpacing: '0.1em' }}>
+                      ADMIN
+                    </span>
+                  )}
+                  {badgeCount > 0 && (
+                    <span style={{ marginLeft: 'auto', minWidth: 18, height: 18, padding: '0 4px', borderRadius: 99, background: '#dc2626', color: '#fff', fontSize: 10, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      {badgeCount > 9 ? '9+' : badgeCount}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
           </div>
         ))}
       </nav>
