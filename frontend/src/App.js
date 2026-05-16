@@ -22,6 +22,7 @@ import './styles/kartavya-design.css';
 import { ToastProvider }               from './components/ui/toast';
 import AppShell, { Protected }         from './components/layout/AppShell';
 import PageLoader                      from './components/layout/PageLoader';
+import { CustomizeProvider, CustomizePanel, CustomizeFAB } from './components/CustomizePanel';
 
 // ── Auth pages (lazy — no reason to block the bundle for these) ────────────────
 const LoginPage         = lazy(() => import('./pages/LoginPage').then(m => ({ default: m.LoginPage })));
@@ -113,10 +114,14 @@ function AppRouter() {
 
 export default function App() {
   return (
-    <ToastProvider>
-      <BrowserRouter>
-        <AppRouter />
-      </BrowserRouter>
-    </ToastProvider>
+    <CustomizeProvider>
+      <ToastProvider>
+        <BrowserRouter>
+          <AppRouter />
+          <CustomizePanel />
+          <CustomizeFAB />
+        </BrowserRouter>
+      </ToastProvider>
+    </CustomizeProvider>
   );
 }
