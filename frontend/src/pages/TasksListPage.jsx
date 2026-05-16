@@ -113,7 +113,7 @@ export default function TasksListPage() {
                 {t.title}
               </div>
               <div>
-                <span style={{ fontFamily: 'var(--font-hindi)', fontSize: 12, color: 'var(--ink-3)' }}>
+                <span className="k-hi" style={{ fontFamily: 'var(--font-hindi)', fontSize: 12, color: 'var(--ink-3)' }}>
                   {STATUS_SANS[t.status] || t.status?.replace('_', ' ')}
                 </span>
               </div>
