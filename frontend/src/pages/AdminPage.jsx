@@ -1,12 +1,26 @@
 /**
- * AdminPage.jsx — k-* design system. Full user + invite management.
+ * AdminPage.jsx — k-* design system.
+ * Invite form: Full Name, Email, Account Type, Role title, Client Approval toggle.
+ * User list: inline role select + Edit slide-over + Remove.
  */
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../lib/api';
 import { useToast } from '../components/ui/toast';
 
 const ROLE_COLORS = { admin: '#0082c6', member: '#6E7B91', client: '#ec4899', owner: '#8b5cf6' };
 const AVATARS     = ['#0082c6','#05b7aa','#8b5cf6','#ec4899','#f59e0b','#10b981'];
+
+const EMPTY_INVITE = {
+  full_name: '', email: '', role: 'member',
+  member_role: '', receives_approval_emails: true,
+};
+
+const EMPTY_EDIT = {
+  full_name: '', role: 'member', member_role: '',
+  company_name: '', receives_approval_emails: true,
+};
+
+// ── Small components ──────────────────────────────────────────────────────────
 
 function RolePill({ role }) {
   const color = ROLE_COLORS[role] || '#6E7B91';
@@ -18,39 +32,154 @@ function RolePill({ role }) {
   );
 }
 
-function Avatar({ user, index }) {
+function UserAvatar({ user, index, size = 40 }) {
   const name = user.full_name || user.name || user.email || '?';
-  if (user.avatar) {
-    return <img src={user.avatar} alt="" style={{ width: 40, height: 40, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />;
-  }
+  if (user.avatar) return <img src={user.avatar} alt="" style={{ width: size, height: size, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />;
   return (
-    <div style={{ width: 40, height: 40, borderRadius: '50%', background: AVATARS[index % AVATARS.length],
+    <div style={{ width: size, height: size, borderRadius: '50%', background: AVATARS[index % AVATARS.length],
       display: 'flex', alignItems: 'center', justifyContent: 'center',
-      fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 700, color: '#fff', flexShrink: 0 }}>
+      fontFamily: 'var(--font-display)', fontSize: size * 0.375, fontWeight: 700, color: '#fff', flexShrink: 0 }}>
       {name[0].toUpperCase()}
     </div>
   );
 }
 
-function MetaChip({ label, value, mono }) {
-  if (!value) return null;
+function Toggle({ checked, onChange, label }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
-      <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--ink-faint)' }}>{label}</span>
-      <span style={{ fontSize: 11, color: 'var(--ink-3)', fontFamily: mono ? 'var(--font-mono)' : 'inherit' }}>{value}</span>
+    <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', userSelect: 'none' }}>
+      <div onClick={() => onChange(!checked)}
+        style={{ width: 40, height: 22, borderRadius: 11, background: checked ? 'var(--k-primary)' : 'var(--rule-soft)',
+          position: 'relative', transition: 'background .2s', flexShrink: 0, cursor: 'pointer' }}>
+        <div style={{ position: 'absolute', top: 3, left: checked ? 21 : 3, width: 16, height: 16,
+          borderRadius: '50%', background: '#fff', transition: 'left .2s', boxShadow: '0 1px 3px rgba(0,0,0,.2)' }} />
+      </div>
+      <span style={{ fontSize: 13, color: 'var(--ink-2)' }}>{label}</span>
+    </label>
+  );
+}
+
+// ── Edit slide-over ───────────────────────────────────────────────────────────
+
+function EditSlideOver({ user, onClose, onSaved, pushToast }) {
+  const [form, setForm] = useState({
+    full_name:                user.full_name || '',
+    role:                     user.role || 'member',
+    member_role:              user.member_role || '',
+    company_name:             user.company_name || '',
+    receives_approval_emails: user.receives_approval_emails !== false,
+  });
+  const [saving, setSaving] = useState(false);
+  const panelRef = useRef();
+
+  // Close on backdrop click
+  const handleBackdrop = (e) => { if (e.target === e.currentTarget) onClose(); };
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      const res = await api.patch(`/admin/users/${user.user_id}`, {
+        full_name:                form.full_name.trim() || null,
+        role:                     form.role,
+        member_role:              form.member_role.trim() || null,
+        company_name:             form.company_name.trim() || null,
+        receives_approval_emails: form.receives_approval_emails,
+      });
+      pushToast({ type: 'success', title: 'User updated' });
+      onSaved(res.data);
+      onClose();
+    } catch (err) {
+      pushToast({ type: 'error', title: err?.response?.data?.detail || 'Could not save' });
+    } finally { setSaving(false); }
+  };
+
+  const labelSt = { fontSize: 11, fontWeight: 700, color: 'var(--ink-3)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 5, display: 'block' };
+
+  return (
+    <div onClick={handleBackdrop} style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(5,14,26,.45)', display: 'flex', justifyContent: 'flex-end' }}>
+      <div ref={panelRef} style={{ width: 420, maxWidth: '90vw', height: '100%', background: 'var(--surface)', display: 'flex', flexDirection: 'column', boxShadow: '-8px 0 40px rgba(0,0,0,.18)' }}>
+        {/* Header */}
+        <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--rule-soft)', display: 'flex', alignItems: 'center', gap: 12 }}>
+          <UserAvatar user={user} index={0} size={36} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: 16, fontWeight: 600, color: 'var(--ink)' }}>
+              {user.full_name || user.name || 'Edit User'}
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--ink-3)' }}>{user.email}</div>
+          </div>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-3)', fontSize: 20, lineHeight: 1, padding: 4 }}>✕</button>
+        </div>
+
+        {/* Body */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '24px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+
+            <div>
+              <label style={labelSt}>Full Name</label>
+              <input className="k-input" value={form.full_name} onChange={e => setForm(f => ({ ...f, full_name: e.target.value }))} placeholder="Jane Doe" />
+            </div>
+
+            <div>
+              <label style={labelSt}>Account Type</label>
+              <select className="k-select" style={{ width: '100%' }} value={form.role} onChange={e => setForm(f => ({ ...f, role: e.target.value }))}>
+                <option value="member">Member</option>
+                <option value="admin">Admin</option>
+                <option value="client">Client</option>
+              </select>
+            </div>
+
+            <div>
+              <label style={labelSt}>Job Title / Role</label>
+              <input className="k-input" value={form.member_role} onChange={e => setForm(f => ({ ...f, member_role: e.target.value }))} placeholder="e.g. Product Manager, Designer" />
+            </div>
+
+            <div>
+              <label style={labelSt}>Company</label>
+              <input className="k-input" value={form.company_name} onChange={e => setForm(f => ({ ...f, company_name: e.target.value }))} placeholder="e.g. Aekam Inc" />
+            </div>
+
+            {/* Client approval — only for client account type */}
+            {form.role === 'client' && (
+              <div style={{ padding: '14px 16px', background: 'var(--bg-soft)', borderRadius: 10, border: '1px solid var(--rule-soft)' }}>
+                <Toggle
+                  checked={form.receives_approval_emails}
+                  onChange={v => setForm(f => ({ ...f, receives_approval_emails: v }))}
+                  label="Receives client approval emails"
+                />
+                <p style={{ fontSize: 11, color: 'var(--ink-faint)', marginTop: 8, marginBottom: 0 }}>
+                  When enabled, this client will receive email notifications whenever a task or project requires their approval.
+                </p>
+              </div>
+            )}
+
+            <div style={{ padding: '12px 14px', background: 'var(--bg-soft)', borderRadius: 8 }}>
+              <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--ink-faint)', marginBottom: 4 }}>Email (immutable)</div>
+              <div style={{ fontSize: 13, color: 'var(--ink-3)', fontFamily: 'var(--font-mono)' }}>{user.email}</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div style={{ padding: '16px 24px', borderTop: '1px solid var(--rule-soft)', display: 'flex', gap: 10 }}>
+          <button className="k-btn k-btn--primary" style={{ flex: 1 }} onClick={save} disabled={saving}>
+            {saving ? 'Saving…' : 'Save changes'}
+          </button>
+          <button className="k-btn k-btn--ghost" onClick={onClose}>Cancel</button>
+        </div>
+      </div>
     </div>
   );
 }
 
+// ── Main page ─────────────────────────────────────────────────────────────────
+
 export default function AdminPage() {
   const { pushToast } = useToast();
-  const [users,       setUsers]       = useState([]);
-  const [invites,     setInvites]     = useState([]);
-  const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteName,  setInviteName]  = useState('');
-  const [inviteRole,  setInviteRole]  = useState('member');
-  const [sending,     setSending]     = useState(false);
-  const [copiedId,    setCopiedId]    = useState(null);
+  const [users,     setUsers]     = useState([]);
+  const [invites,   setInvites]   = useState([]);
+  const [invite,    setInvite]    = useState(EMPTY_INVITE);
+  const [sending,   setSending]   = useState(false);
+  const [copiedId,  setCopiedId]  = useState(null);
+  const [editUser,  setEditUser]  = useState(null);   // user being edited
 
   const me = JSON.parse(localStorage.getItem('kartavya_user') || 'null');
 
@@ -61,17 +190,28 @@ export default function AdminPage() {
 
   useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── Invite ────────────────────────────────────────────────────────────────
+
   const sendInvite = async () => {
-    if (!inviteEmail.trim()) return;
+    if (!invite.email.trim()) return;
     setSending(true);
     try {
-      await api.post('/admin/invites', { email: inviteEmail.trim(), role: inviteRole, name: inviteName.trim() || undefined });
+      await api.post('/admin/invites', {
+        email:                    invite.email.trim(),
+        full_name:                invite.full_name.trim() || undefined,
+        role:                     invite.role,
+        member_role:              invite.member_role.trim() || undefined,
+        receives_approval_emails: invite.receives_approval_emails,
+      });
       pushToast({ type: 'success', title: 'Invite sent — copy the link below' });
-      setInviteEmail(''); setInviteName(''); load();
+      setInvite(EMPTY_INVITE);
+      load();
     } catch (err) {
-      pushToast({ type: 'error', title: err?.response?.data?.detail || 'Could not create invite' });
+      pushToast({ type: 'error', title: err?.response?.data?.detail || 'Could not send invite' });
     } finally { setSending(false); }
   };
+
+  // ── Invite actions ────────────────────────────────────────────────────────
 
   const copyLink = (link, id) => {
     navigator.clipboard.writeText(link);
@@ -86,10 +226,11 @@ export default function AdminPage() {
       setInvites(prev => prev.filter(i => i.invite_id !== id));
       pushToast({ type: 'success', title: 'Invite revoked' });
     } catch (_) {
-      pushToast({ type: 'error', title: 'Could not revoke invite' });
-      load();
+      pushToast({ type: 'error', title: 'Could not revoke invite' }); load();
     }
   };
+
+  // ── User actions ──────────────────────────────────────────────────────────
 
   const removeUser = async (u) => {
     if (u.user_id === me?.user_id) { pushToast({ type: 'error', title: 'You cannot remove yourself' }); return; }
@@ -101,21 +242,30 @@ export default function AdminPage() {
     } catch (_) { pushToast({ type: 'error', title: 'Could not remove user' }); }
   };
 
-  const changeRole = async (u, role) => {
-    if (u.user_id === me?.user_id) { pushToast({ type: 'error', title: 'You cannot change your own role' }); return; }
-    try {
-      await api.put(`/admin/users/${u.user_id}/role`, { role });
-      setUsers(prev => prev.map(x => x.user_id === u.user_id ? { ...x, role } : x));
-      pushToast({ type: 'success', title: 'Role updated' });
-    } catch (_) { pushToast({ type: 'error', title: 'Could not change role' }); }
+  const handleUserSaved = (updated) => {
+    setUsers(prev => prev.map(u => u.user_id === updated.user_id ? updated : u));
   };
 
-  const pendingInvites = invites.filter(i => !i.accepted_at && new Date(i.expires_at) > new Date());
+  // ── Derived ───────────────────────────────────────────────────────────────
+
+  const pendingInvites  = invites.filter(i => !i.accepted_at && new Date(i.expires_at) > new Date());
   const acceptedInvites = invites.filter(i => i.accepted_at);
-  const roleCounts = users.reduce((acc, u) => { acc[u.role] = (acc[u.role] || 0) + 1; return acc; }, {});
+  const roleCounts      = users.reduce((acc, u) => { acc[u.role] = (acc[u.role] || 0) + 1; return acc; }, {});
+
+  const labelSt = { fontSize: 11, fontWeight: 700, color: 'var(--ink-3)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 5, display: 'block' };
 
   return (
     <div className="k-page">
+      {/* Edit slide-over */}
+      {editUser && (
+        <EditSlideOver
+          user={editUser}
+          onClose={() => setEditUser(null)}
+          onSaved={handleUserSaved}
+          pushToast={pushToast}
+        />
+      )}
+
       <div className="k-pageh">
         <h1 className="k-pageh__title">Admin</h1>
         <span className="k-pageh__sans">प्रशासन</span>
@@ -138,24 +288,66 @@ export default function AdminPage() {
         ))}
       </div>
 
-      {/* ── Invite panel ── */}
+      {/* ── Invite form ── */}
       <div className="k-card" style={{ marginBottom: 'var(--sp-5)' }}>
         <div className="k-card__head">
-          <span className="k-card__title">Invite user</span>
+          <span className="k-card__title">New Invite</span>
           <span className="k-card__sans">आमंत्रण</span>
         </div>
-        <div style={{ display: 'grid', gap: 10, gridTemplateColumns: '1fr 1fr auto auto' }}>
-          <input className="k-input" value={inviteName} onChange={e => setInviteName(e.target.value)} placeholder="Full name (optional)" />
-          <input className="k-input" type="email" value={inviteEmail}
-            onChange={e => setInviteEmail(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && sendInvite()}
-            placeholder="user@company.com" />
-          <select className="k-select" value={inviteRole} onChange={e => setInviteRole(e.target.value)}>
-            <option value="member">Member</option>
-            <option value="admin">Admin</option>
-            <option value="client">Client</option>
-          </select>
-          <button className="k-btn k-btn--primary" onClick={sendInvite} disabled={sending || !inviteEmail.trim()}>
+
+        {/* Row 1: Full Name | Email | Account Type */}
+        <div style={{ display: 'grid', gap: 10, gridTemplateColumns: '35% 40% 25%', marginBottom: 10 }}>
+          <div>
+            <label style={labelSt}>Full Name</label>
+            <input className="k-input" value={invite.full_name}
+              onChange={e => setInvite(f => ({ ...f, full_name: e.target.value }))}
+              placeholder="Jane Doe" />
+          </div>
+          <div>
+            <label style={labelSt}>Email Address</label>
+            <input className="k-input" type="email" value={invite.email}
+              onChange={e => setInvite(f => ({ ...f, email: e.target.value }))}
+              onKeyDown={e => e.key === 'Enter' && sendInvite()}
+              placeholder="jane@company.com" />
+          </div>
+          <div>
+            <label style={labelSt}>Account Type</label>
+            <select className="k-select" style={{ width: '100%' }} value={invite.role}
+              onChange={e => setInvite(f => ({ ...f, role: e.target.value }))}>
+              <option value="member">Member</option>
+              <option value="admin">Admin</option>
+              <option value="client">Client</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Row 2: Job Title | Client Approval (conditional) | Send button */}
+        <div style={{ display: 'grid', gap: 10, gridTemplateColumns: '35% 1fr auto', alignItems: 'end' }}>
+          <div>
+            <label style={labelSt}>Job Title / Role</label>
+            <input className="k-input" value={invite.member_role}
+              onChange={e => setInvite(f => ({ ...f, member_role: e.target.value }))}
+              placeholder="e.g. Project Stakeholder" />
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', paddingBottom: 2 }}>
+            {invite.role === 'client' ? (
+              <div style={{ padding: '10px 14px', background: 'var(--bg-soft)', borderRadius: 10, border: '1px solid var(--rule-soft)', width: '100%' }}>
+                <Toggle
+                  checked={invite.receives_approval_emails}
+                  onChange={v => setInvite(f => ({ ...f, receives_approval_emails: v }))}
+                  label={`Client Approval Emails: ${invite.receives_approval_emails ? 'Yes' : 'No'}`}
+                />
+              </div>
+            ) : (
+              <div style={{ fontSize: 12, color: 'var(--ink-faint)', fontStyle: 'italic', paddingLeft: 4 }}>
+                Client Approval toggle available when Account Type = Client
+              </div>
+            )}
+          </div>
+
+          <button className="k-btn k-btn--primary" onClick={sendInvite}
+            disabled={sending || !invite.email.trim()} style={{ height: 38 }}>
             {sending ? 'Sending…' : 'Send Invite'}
           </button>
         </div>
@@ -165,8 +357,11 @@ export default function AdminPage() {
       <div className="k-card" style={{ padding: 0, overflow: 'hidden', marginBottom: 'var(--sp-5)' }}>
         <div style={{ padding: '12px 20px', borderBottom: '1px solid var(--rule-soft)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <span style={{ fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 600, color: 'var(--ink)' }}>Pending Invites</span>
-          <span style={{ fontSize: 11, color: 'var(--ink-3)', background: 'var(--bg-soft)', borderRadius: 99, padding: '2px 8px' }}>{pendingInvites.length} pending</span>
+          <span style={{ fontSize: 11, color: 'var(--ink-3)', background: 'var(--bg-soft)', borderRadius: 99, padding: '2px 8px' }}>
+            {pendingInvites.length} pending
+          </span>
         </div>
+
         {pendingInvites.length === 0 ? (
           <div style={{ padding: '20px', textAlign: 'center', color: 'var(--ink-faint)', fontSize: 13, fontStyle: 'italic' }}>
             No pending invites
@@ -175,21 +370,30 @@ export default function AdminPage() {
           const daysLeft = Math.ceil((new Date(inv.expires_at) - new Date()) / 86_400_000);
           return (
             <div key={inv.invite_id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 20px', borderBottom: '1px dashed var(--rule-soft)' }}>
-              <div style={{ width: 38, height: 38, borderRadius: '50%', background: 'rgba(5,183,170,.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 17, flexShrink: 0 }}>✉</div>
+              <div style={{ width: 38, height: 38, borderRadius: '50%', background: 'rgba(5,183,170,.12)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, flexShrink: 0 }}>✉</div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--ink)' }}>
                   {inv.full_name || inv.email}
                 </div>
-                {inv.full_name && (
-                  <div style={{ fontSize: 11, color: 'var(--ink-3)' }}>{inv.email}</div>
-                )}
+                {inv.full_name && <div style={{ fontSize: 11, color: 'var(--ink-3)' }}>{inv.email}</div>}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4, flexWrap: 'wrap' }}>
                   <RolePill role={inv.role} />
+                  {inv.member_role && (
+                    <span style={{ fontSize: 11, color: 'var(--ink-3)' }}>{inv.member_role}</span>
+                  )}
+                  {inv.role === 'client' && (
+                    <span style={{ fontSize: 10, fontWeight: 600, padding: '1px 6px', borderRadius: 99,
+                      background: inv.receives_approval_emails ? 'rgba(5,183,170,.12)' : 'var(--bg-soft)',
+                      color: inv.receives_approval_emails ? 'var(--k-primary)' : 'var(--ink-faint)' }}>
+                      {inv.receives_approval_emails ? '✓ Approval emails on' : 'Approval emails off'}
+                    </span>
+                  )}
                   <span style={{ fontSize: 11, color: daysLeft <= 1 ? 'var(--danger)' : 'var(--ink-faint)' }}>
                     Expires in {daysLeft}d
                   </span>
                   {inv.invited_by_name && (
-                    <span style={{ fontSize: 11, color: 'var(--ink-faint)' }}>· Invited by {inv.invited_by_name}</span>
+                    <span style={{ fontSize: 11, color: 'var(--ink-faint)' }}>· by {inv.invited_by_name}</span>
                   )}
                 </div>
               </div>
@@ -215,42 +419,58 @@ export default function AdminPage() {
         {users.map((u, i) => {
           const isSelf      = u.user_id === me?.user_id;
           const displayName = u.full_name || u.name || u.email || '?';
-          const joined      = u.created_at ? new Date(u.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : null;
+          const joined      = u.created_at
+            ? new Date(u.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+            : null;
 
           return (
             <div key={u.user_id} style={{ padding: '16px 20px', borderBottom: '1px dashed var(--rule-soft)' }}>
-              {/* Top row: avatar + name + controls */}
+              {/* Top row */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <Avatar user={u} index={i} />
+                <UserAvatar user={u} index={i} />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--ink)', display: 'flex', alignItems: 'center', gap: 6 }}>
                     {displayName}
                     {isSelf && <span style={{ fontSize: 11, color: 'var(--ink-faint)', fontWeight: 400 }}>(you)</span>}
                   </div>
-                  <div style={{ fontSize: 12, color: 'var(--ink-3)' }}>{u.email}</div>
+                  <div style={{ fontSize: 12, color: 'var(--ink-3)' }}>
+                    {u.email}
+                    {u.member_role && <span style={{ color: 'var(--ink-faint)' }}> · {u.member_role}</span>}
+                    {u.company_name && <span style={{ color: 'var(--ink-faint)' }}> @ {u.company_name}</span>}
+                  </div>
                 </div>
                 <RolePill role={u.role} />
-                <select className="k-select" style={{ fontSize: 12 }} value={u.role}
-                  onChange={e => changeRole(u, e.target.value)} disabled={isSelf}>
-                  <option value="admin">Admin</option>
-                  <option value="member">Member</option>
-                  <option value="client">Client</option>
-                </select>
+
+                {/* Edit button */}
+                <button className="k-btn k-btn--ghost k-btn--sm" onClick={() => setEditUser(u)} title="Edit user">
+                  <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M11 2l3 3-9 9H2v-3L11 2z"/></svg>
+                  Edit
+                </button>
+
+                {/* Remove button */}
                 <button className="k-iconbtn" style={{ color: 'var(--danger)', opacity: isSelf ? 0.3 : 1 }}
                   onClick={() => removeUser(u)} disabled={isSelf} title="Remove user">
                   <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4"><path d="M3 4h10M5 4V3h6v1M6 7v5M10 7v5M4 4l1 9h6l1-9"/></svg>
                 </button>
               </div>
 
-              {/* Detail chips — always visible */}
-              <div style={{ marginTop: 10, marginLeft: 52, display: 'flex', flexWrap: 'wrap', gap: '6px 20px', padding: '10px 14px', background: 'var(--bg-soft)', borderRadius: 8 }}>
-                <MetaChip label="ID"       value={u.user_id}     mono />
-                <MetaChip label="Provider" value={u.provider || 'local'} />
-                {u.position     && <MetaChip label="Position"  value={u.position} />}
-                {u.company_name && <MetaChip label="Company"   value={u.company_name} />}
-                {u.member_role  && <MetaChip label="Role title" value={u.member_role} />}
-                <MetaChip label="Approval emails" value={u.receives_approval_emails !== false ? 'Yes' : 'No'} />
-                {joined         && <MetaChip label="Joined"    value={joined} />}
+              {/* Detail strip — always visible */}
+              <div style={{ marginTop: 10, marginLeft: 52, display: 'flex', flexWrap: 'wrap', gap: '6px 20px',
+                padding: '10px 14px', background: 'var(--bg-soft)', borderRadius: 8 }}>
+                {[
+                  { label: 'User ID',          value: u.user_id,     mono: true },
+                  { label: 'Provider',         value: u.provider || 'local' },
+                  { label: 'Position',         value: u.position },
+                  { label: 'Company',          value: u.company_name },
+                  { label: 'Job title',        value: u.member_role },
+                  { label: 'Approval emails',  value: u.role === 'client' ? (u.receives_approval_emails !== false ? 'Yes' : 'No') : null },
+                  { label: 'Joined',           value: joined },
+                ].map(f => !f.value ? null : (
+                  <div key={f.label}>
+                    <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--ink-faint)', marginBottom: 2 }}>{f.label}</div>
+                    <div style={{ fontSize: 11, color: 'var(--ink-2)', fontFamily: f.mono ? 'var(--font-mono)' : 'inherit', wordBreak: 'break-all' }}>{f.value}</div>
+                  </div>
+                ))}
               </div>
             </div>
           );
