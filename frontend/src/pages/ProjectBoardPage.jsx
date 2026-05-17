@@ -1,22 +1,37 @@
 /**
- * ProjectBoardPage.jsx — v2 per-project board with view switcher.
+ * ProjectBoardPage.jsx — v3 with Supabase Realtime + Presence.
  *
- * Bug fixes (2026-05-14):
- * FIX #1 — Removed duplicate GET /teams/:id call. Members now extracted
- *           from the first call's response (projR.data.members).
- * FIX #2 — Field-value useEffect now depends on a stable taskIds string
- *           (via useMemo) instead of tasks.length, preventing thundering-
- *           herd re-fetches on every task add/remove.
+ * Changes from v2:
+ *   - useRealtimeTasks() replaces local useState for tasks — any INSERT/UPDATE/DELETE
+ *     on the tasks table (filtered to this project) patches state instantly for ALL
+ *     users on the board without a page refresh.
+ *   - usePresence() tracks who else is viewing this board right now and renders
+ *     an avatar stack in the header.
+ *
+ * No backend changes required. Supabase Realtime operates via WAL directly.
+ *
+ * Prerequisites (one-time, run in Supabase SQL Editor):
+ *   ALTER TABLE tasks   REPLICA IDENTITY FULL;
+ *   ALTER TABLE columns REPLICA IDENTITY FULL;
+ *   -- Then: Supabase Dashboard > Database > Replication > supabase_realtime
+ *   --        add `tasks` and `columns` tables
+ *
+ * Vercel env vars required:
+ *   REACT_APP_SUPABASE_URL
+ *   REACT_APP_SUPABASE_ANON_KEY
  */
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { api } from '../lib/api';
+import { api }                    from '../lib/api';
+import { currentUser }            from '../lib/auth';
 import KanbanView    from '../components/views/KanbanView';
 import TableView     from '../components/views/TableView';
 import CalendarView  from '../components/views/CalendarView';
 import TaskEditor    from '../components/TaskEditor';
-import { useFields } from '../hooks/useFields';
-import { useViews }  from '../hooks/useViews';
+import { useFields }          from '../hooks/useFields';
+import { useViews }           from '../hooks/useViews';
+import { useRealtimeTasks }   from '../hooks/useRealtimeTasks';
+import { usePresence }        from '../hooks/usePresence';
 
 const VIEWS = [
   { id: 'kanban',   label: 'Board' },
@@ -26,11 +41,12 @@ const VIEWS = [
 
 export default function ProjectBoardPage() {
   const { projectId } = useParams();
-  const navigate = useNavigate();
+  const navigate      = useNavigate();
+  const me            = currentUser();
 
   const [project,       setProject]       = useState(null);
   const [columns,       setColumns]       = useState([]);
-  const [tasks,         setTasks]         = useState([]);
+  const [rawTasks,      setRawTasks]      = useState([]);   // fetched from API
   const [teamMembers,   setTeamMembers]   = useState([]);
   const [view,          setView]          = useState('kanban');
   const [fieldValueMap, setFieldValueMap] = useState({});
@@ -43,11 +59,18 @@ export default function ProjectBoardPage() {
   const { fieldDefs, createField, deleteField } = useFields(projectId);
   const { savedViews, saveView }                = useViews(projectId);
 
+  // ── Realtime: tasks state is now owned by this hook ──────────────────────
+  // rawTasks (from API load) seed the hook; from then on Supabase pushes patches.
+  const { tasks, setTasks } = useRealtimeTasks(projectId, rawTasks);
+
+  // ── Presence: who else is on this board right now ────────────────────────
+  const onlineUsers = usePresence(projectId, me);
+
+  // ── Initial data load ────────────────────────────────────────────────────
   const load = useCallback(async () => {
     if (!projectId) return;
     setLoading(true);
     try {
-      // FIX #1: single /teams/:id call — members come from the same response.
       const [projR, colR, taskR] = await Promise.all([
         api.get(`/teams/${projectId}`),
         api.get(`/projects/${projectId}/columns`),
@@ -55,7 +78,7 @@ export default function ProjectBoardPage() {
       ]);
       setProject(projR.data);
       setColumns(colR.data);
-      setTasks(taskR.data);
+      setRawTasks(taskR.data);     // seeds useRealtimeTasks
       setTeamMembers(projR.data.members || []);
     } catch (e) {
       console.error('Board load failed', e);
@@ -66,7 +89,7 @@ export default function ProjectBoardPage() {
 
   useEffect(() => { load(); }, [projectId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // FIX #2: stable dep — only re-fetch when the task ID set actually changes.
+  // ── Field-value fetch (stable dep — only when task IDs change) ───────────
   const taskIds = useMemo(() => tasks.map(t => t.task_id).join(','), [tasks]);
 
   useEffect(() => {
@@ -92,6 +115,7 @@ export default function ProjectBoardPage() {
     setNewFieldName('');
   };
 
+  // ── Styles ───────────────────────────────────────────────────────────────
   const labelSt = { fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4, display: 'block' };
   const inputSt = { border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)', padding: '6px 10px', fontFamily: 'inherit', fontSize: 'var(--text-sm)', background: 'var(--bg-default)', color: 'var(--text-default)' };
 
@@ -99,9 +123,11 @@ export default function ProjectBoardPage() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-      {/* Header */}
+
+      {/* ── Header ────────────────────────────────────────────────────── */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-        <button onClick={() => navigate('/projects')}
+        <button
+          onClick={() => navigate('/projects')}
           style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 'var(--text-sm)', fontFamily: 'inherit' }}>
           ← Projects
         </button>
@@ -110,11 +136,73 @@ export default function ProjectBoardPage() {
           {project?.team?.name || project?.name || '…'}
         </span>
 
-        {/* View switcher */}
+        {/* ── Presence avatar stack ──────────────────────────────────── */}
+        {onlineUsers.length > 0 && (
+          <div
+            style={{ display: 'flex', alignItems: 'center', gap: 0, marginLeft: 8 }}
+            title={onlineUsers.map(u => u.name).join(', ')}
+          >
+            {onlineUsers.slice(0, 5).map((u, i) => (
+              <div
+                key={u.user_id}
+                title={u.user_id === me?.user_id ? `${u.name} (you)` : u.name}
+                style={{
+                  width: 28,
+                  height: 28,
+                  borderRadius: '50%',
+                  background: u.color,
+                  color: '#fff',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: 11,
+                  fontWeight: 600,
+                  border: '2px solid var(--bg-default)',
+                  marginLeft: i === 0 ? 0 : -8,
+                  zIndex: onlineUsers.length - i,
+                  position: 'relative',
+                  opacity: u.user_id === me?.user_id ? 0.75 : 1,
+                  cursor: 'default',
+                  flexShrink: 0,
+                }}
+              >
+                {u.initials}
+              </div>
+            ))}
+            {onlineUsers.length > 5 && (
+              <div style={{
+                width: 28, height: 28, borderRadius: '50%',
+                background: 'var(--bg-muted)', color: 'var(--text-muted)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 11, fontWeight: 600,
+                border: '2px solid var(--bg-default)',
+                marginLeft: -8, zIndex: 0,
+              }}>
+                +{onlineUsers.length - 5}
+              </div>
+            )}
+            <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 8, whiteSpace: 'nowrap' }}>
+              {onlineUsers.length === 1 ? 'Only you' : `${onlineUsers.length} online`}
+            </span>
+          </div>
+        )}
+
+        {/* ── View switcher ──────────────────────────────────────────── */}
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 4, background: 'var(--bg-muted)', borderRadius: 'var(--radius-md)', padding: 3 }}>
           {VIEWS.map(v => (
-            <button key={v.id} onClick={() => setView(v.id)}
-              style={{ padding: '4px 12px', border: 'none', borderRadius: 'var(--radius-sm)', cursor: 'pointer', fontFamily: 'inherit', fontSize: 'var(--text-sm)', fontWeight: view === v.id ? 600 : 400, background: view === v.id ? 'var(--bg-elevated)' : 'transparent', color: view === v.id ? 'var(--text-default)' : 'var(--text-muted)', boxShadow: view === v.id ? 'var(--shadow-sm)' : 'none', transition: 'all 0.15s' }}>
+            <button
+              key={v.id}
+              onClick={() => setView(v.id)}
+              style={{
+                padding: '4px 12px', border: 'none', borderRadius: 'var(--radius-sm)',
+                cursor: 'pointer', fontFamily: 'inherit', fontSize: 'var(--text-sm)',
+                fontWeight: view === v.id ? 600 : 400,
+                background: view === v.id ? 'var(--bg-elevated)' : 'transparent',
+                color: view === v.id ? 'var(--text-default)' : 'var(--text-muted)',
+                boxShadow: view === v.id ? 'var(--shadow-sm)' : 'none',
+                transition: 'all 0.15s',
+              }}
+            >
               {v.label}
             </button>
           ))}
@@ -123,56 +211,76 @@ export default function ProjectBoardPage() {
         {savedViews?.length > 0 && (
           <div style={{ display: 'flex', gap: 4 }}>
             {savedViews.map(sv => (
-              <button key={sv.view_id} onClick={() => setView(sv.config?.viewType || 'kanban')}
-                style={{ padding: '4px 10px', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)', cursor: 'pointer', fontFamily: 'inherit', fontSize: 'var(--text-xs)', background: 'var(--bg-default)', color: 'var(--text-muted)' }}>
+              <button
+                key={sv.view_id}
+                onClick={() => setView(sv.config?.viewType || 'kanban')}
+                style={{ padding: '4px 10px', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)', cursor: 'pointer', fontFamily: 'inherit', fontSize: 'var(--text-xs)', background: 'var(--bg-default)', color: 'var(--text-muted)' }}
+              >
                 {sv.name}
               </button>
             ))}
           </div>
         )}
 
-        <button onClick={() => setShowFieldMgr(v => !v)}
-          style={{ padding: '5px 12px', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)', cursor: 'pointer', fontFamily: 'inherit', fontSize: 'var(--text-sm)', background: 'var(--bg-default)', color: 'var(--text-muted)' }}>
+        <button
+          onClick={() => setShowFieldMgr(v => !v)}
+          style={{ padding: '5px 12px', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)', cursor: 'pointer', fontFamily: 'inherit', fontSize: 'var(--text-sm)', background: 'var(--bg-default)', color: 'var(--text-muted)' }}
+        >
           ⚙ Fields
         </button>
 
-        <button onClick={() => saveView({ name: `View ${(savedViews?.length||0)+1}`, config: { viewType: view } })}
-          style={{ padding: '5px 12px', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)', cursor: 'pointer', fontFamily: 'inherit', fontSize: 'var(--text-sm)', background: 'var(--bg-default)', color: 'var(--text-muted)' }}>
+        <button
+          onClick={() => saveView({ name: `View ${(savedViews?.length || 0) + 1}`, config: { viewType: view } })}
+          style={{ padding: '5px 12px', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)', cursor: 'pointer', fontFamily: 'inherit', fontSize: 'var(--text-sm)', background: 'var(--bg-default)', color: 'var(--text-muted)' }}
+        >
           + Save view
         </button>
       </div>
 
-      {/* Field manager panel */}
+      {/* ── Field manager panel ───────────────────────────────────────── */}
       {showFieldMgr && (
         <div style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-lg)', padding: 'var(--space-5)' }}>
           <div style={{ fontWeight: 600, fontSize: 'var(--text-sm)', marginBottom: 12 }}>Custom Fields</div>
           <div style={{ display: 'flex', gap: 8, marginBottom: 12, alignItems: 'flex-end' }}>
             <div style={{ flex: 1 }}>
               <label style={labelSt}>Name</label>
-              <input value={newFieldName} onChange={e => setNewFieldName(e.target.value)}
-                placeholder="Field name" style={{ ...inputSt, width: '100%' }} />
+              <input
+                value={newFieldName}
+                onChange={e => setNewFieldName(e.target.value)}
+                placeholder="Field name"
+                style={{ ...inputSt, width: '100%' }}
+              />
             </div>
             <div>
               <label style={labelSt}>Type</label>
               <select value={newFieldType} onChange={e => setNewFieldType(e.target.value)} style={inputSt}>
-                {['text','number','date','select','checkbox','url','person'].map(t => <option key={t} value={t}>{t}</option>)}
+                {['text', 'number', 'date', 'select', 'checkbox', 'url', 'person'].map(t => (
+                  <option key={t} value={t}>{t}</option>
+                ))}
               </select>
             </div>
-            <button onClick={addField}
-              style={{ padding: '6px 14px', background: 'var(--accent-default)', color: '#fff', border: 'none', borderRadius: 'var(--radius-sm)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600, fontSize: 'var(--text-sm)' }}>
+            <button
+              onClick={addField}
+              style={{ padding: '6px 14px', background: 'var(--accent-default)', color: '#fff', border: 'none', borderRadius: 'var(--radius-sm)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600, fontSize: 'var(--text-sm)' }}
+            >
               Add
             </button>
           </div>
-          {(fieldDefs||[]).length === 0 ? (
+          {(fieldDefs || []).length === 0 ? (
             <p style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)' }}>No custom fields yet.</p>
           ) : (
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-              {(fieldDefs||[]).map(f => (
-                <div key={f.field_id} style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--bg-muted)', borderRadius: 'var(--radius-sm)', padding: '4px 10px', fontSize: 'var(--text-sm)' }}>
+              {(fieldDefs || []).map(f => (
+                <div
+                  key={f.field_id}
+                  style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--bg-muted)', borderRadius: 'var(--radius-sm)', padding: '4px 10px', fontSize: 'var(--text-sm)' }}
+                >
                   <span style={{ fontWeight: 500 }}>{f.name}</span>
                   <span style={{ color: 'var(--text-subtle)', fontSize: 'var(--text-xs)' }}>{f.type}</span>
-                  <button onClick={() => deleteField(f.field_id)}
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 14, lineHeight: 1 }}>×</button>
+                  <button
+                    onClick={() => deleteField(f.field_id)}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 14, lineHeight: 1 }}
+                  >×</button>
                 </div>
               ))}
             </div>
@@ -180,19 +288,33 @@ export default function ProjectBoardPage() {
         </div>
       )}
 
-      {/* Board view */}
+      {/* ── Board views ──────────────────────────────────────────────── */}
       {view === 'kanban' && (
-        <KanbanView columns={columns} tasks={tasks} fieldDefs={fieldDefs} fieldValueMap={fieldValueMap}
-          teamMembers={teamMembers} onTasksChange={setTasks} onColumnChange={handleColumnChange} />
+        <KanbanView
+          columns={columns}
+          tasks={tasks}
+          fieldDefs={fieldDefs}
+          fieldValueMap={fieldValueMap}
+          teamMembers={teamMembers}
+          onTasksChange={setTasks}
+          onColumnChange={handleColumnChange}
+        />
       )}
       {view === 'table' && (
-        <TableView tasks={tasks} columns={columns} fieldDefs={fieldDefs} fieldValueMap={fieldValueMap}
-          teamMembers={teamMembers} onTasksChange={setTasks} />
+        <TableView
+          tasks={tasks}
+          columns={columns}
+          fieldDefs={fieldDefs}
+          fieldValueMap={fieldValueMap}
+          teamMembers={teamMembers}
+          onTasksChange={setTasks}
+        />
       )}
       {view === 'calendar' && (
         <CalendarView tasks={tasks} onTaskClick={t => console.log('open', t)} />
       )}
 
+      {/* ── Task editor (new task from column button) ─────────────── */}
       <TaskEditor
         open={newTaskEditor.open}
         onOpenChange={(v) => { if (!v) setNewTaskEditor({ open: false, columnId: null }); }}
