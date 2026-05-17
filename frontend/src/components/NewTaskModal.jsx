@@ -87,11 +87,12 @@ export default function NewTaskModal({ open, onClose, onCreated }) {
 
   return (
     <div
-      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
+      className="k-modal-scrim"
+      style={{ zIndex: 300 }}
       onClick={e => e.target === e.currentTarget && onClose()}
       onKeyDown={handleKeyDown}
     >
-      <div style={{ width: '100%', maxWidth: 620, background: 'var(--surface)', borderRadius: 16, boxShadow: '0 24px 80px rgba(0,0,0,0.25)', display: 'flex', flexDirection: 'column', maxHeight: '90vh', overflow: 'hidden' }}>
+      <div className="k-modal">
 
         {/* Modal header */}
         <div style={{ padding: '20px 24px 0', flexShrink: 0 }}>

@@ -1,7 +1,3 @@
-/**
- * TaskDrawer.jsx — v2 right-slide drawer.
- * Week 2 upgrade: @mention autocomplete, ActivityList, real time entries.
- */
 import React, { useState, useEffect, useCallback } from 'react';
 import { api } from '../lib/api';
 import FieldRenderer from './fields/FieldRenderer';
@@ -30,24 +26,24 @@ function ElapsedTimer({ startedAt }) {
   const h = Math.floor(s / 3600);
   const m = Math.floor((s % 3600) / 60);
   const sec = s % 60;
-  return <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>{h ? `${h}:` : ''}{String(m).padStart(2,'0')}:{String(sec).padStart(2,'0')}</span>;
+  return <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>{h ? `${h}:` : ''}{String(m).padStart(2, '0')}:{String(sec).padStart(2, '0')}</span>;
 }
 
 export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers = [] }) {
-  const [task,     setTask]     = useState(null);
-  const [fields,   setFields]   = useState([]);
-  const [fValues,  setFValues]  = useState({});
-  const [comments, setComments] = useState([]);
-  const [activity, setActivity] = useState([]);
-  const [actLoad,  setActLoad]  = useState(false);
-  const [entries,  setEntries]  = useState([]);
-  const [timer,    setTimer]    = useState(null);
-  const [comment,  setComment]  = useState('');
-  const [tab,      setTab]      = useState('details');
-  const [saving,   setSaving]   = useState(false);
-  const [draft,    setDraft]    = useState({});
-  const [manualMin,setManualMin]= useState('');
-  const [manualDesc,setManualDesc]=useState('');
+  const [task,       setTask]       = useState(null);
+  const [fields,     setFields]     = useState([]);
+  const [fValues,    setFValues]    = useState({});
+  const [comments,   setComments]   = useState([]);
+  const [activity,   setActivity]   = useState([]);
+  const [actLoad,    setActLoad]    = useState(false);
+  const [entries,    setEntries]    = useState([]);
+  const [timer,      setTimer]      = useState(null);
+  const [comment,    setComment]    = useState('');
+  const [tab,        setTab]        = useState('details');
+  const [saving,     setSaving]     = useState(false);
+  const [draft,      setDraft]      = useState({});
+  const [manualMin,  setManualMin]  = useState('');
+  const [manualDesc, setManualDesc] = useState('');
 
   const mentionMembers = teamMembers.map(m => ({
     user_id:      m.user_id,
@@ -149,81 +145,93 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
 
   if (!open) return null;
 
-  const s = {
-    overlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', zIndex: 200, display: 'flex', justifyContent: 'flex-end' },
-    drawer:  { width: 'min(600px,100vw)', height: '100vh', background: 'var(--bg-elevated)', boxShadow: 'var(--shadow-lg)', display: 'flex', flexDirection: 'column', overflowY: 'hidden' },
-    header:  { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 24px', borderBottom: '1px solid var(--border-default)', flexShrink: 0 },
-    body:    { flex: 1, overflowY: 'auto', padding: '24px' },
-    label:   { fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6, display: 'block' },
-    field:   { marginBottom: 20 },
-    tab:     (active) => ({ padding: '6px 14px', border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit', fontSize: 'var(--text-sm)', fontWeight: active ? 600 : 400, color: active ? 'var(--accent-default)' : 'var(--text-muted)', borderBottom: active ? '2px solid var(--accent-default)' : '2px solid transparent' }),
-    btn:     (v = 'primary') => ({ display: 'inline-flex', alignItems: 'center', gap: 6, border: 'none', borderRadius: 'var(--radius-sm)', padding: '7px 14px', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600, fontSize: 'var(--text-sm)', ...(v === 'primary' ? { background: 'var(--accent-default)', color: '#fff' } : v === 'ghost' ? { background: 'transparent', color: 'var(--text-muted)', border: '1px solid var(--border-default)' } : { background: 'var(--danger-bg)', color: 'var(--danger)', border: '1px solid var(--danger)' }) }),
-  };
+  const lbl = { fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--ink-3)', marginBottom: 6, display: 'block' };
 
   return (
-    <div style={s.overlay} onClick={e => e.target === e.currentTarget && onClose()}>
-      <div style={s.drawer}>
-        <div style={s.header}>
+    <div className="k-dr-scrim" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="k-dr">
+
+        {/* Header */}
+        <div className="k-dr__head">
           <div style={{ flex: 1 }}>
             {task ? (
-              <input value={draft.title || ''}
+              <input
+                value={draft.title || ''}
                 onChange={e => setDraft(d => ({ ...d, title: e.target.value }))}
                 onBlur={() => draft.title !== task.title && saveTask({ title: draft.title })}
-                style={{ width: '100%', border: 'none', outline: 'none', fontSize: 'var(--text-xl)', fontWeight: 700, background: 'transparent', color: 'var(--text-default)', fontFamily: 'inherit' }}
+                style={{ width: '100%', border: 'none', outline: 'none', fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 500, background: 'transparent', color: 'var(--ink)' }}
               />
             ) : (
-              <div style={{ height: 28, background: 'var(--bg-muted)', borderRadius: 4, width: '60%' }} />
+              <div style={{ height: 28, background: 'var(--rule-soft)', borderRadius: 4, width: '60%' }} />
+            )}
+            {task && (
+              <div style={{ fontSize: 11, color: 'var(--ink-3)', marginTop: 4, fontFamily: 'var(--font-mono)' }}>
+                #{task.task_id?.toString().slice(-6)}
+              </div>
             )}
           </div>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 22, color: 'var(--text-muted)', marginLeft: 12 }}>×</button>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 22, color: 'var(--ink-3)', marginLeft: 12, lineHeight: 1 }}>×</button>
         </div>
 
-        <div style={{ display: 'flex', borderBottom: '1px solid var(--border-default)', paddingLeft: 24, flexShrink: 0 }}>
-          {[['details','Details'],['activity','Activity'],['time','Time']].map(([id,label]) => (
-            <button key={id} style={s.tab(tab === id)} onClick={() => setTab(id)}>{label}</button>
+        {/* Tabs */}
+        <div className="k-dr__tabs">
+          {[['details', 'Details'], ['activity', 'Activity'], ['time', 'Time']].map(([id, label]) => (
+            <button key={id} className={`k-dr__tab${tab === id ? ' is-active' : ''}`} onClick={() => setTab(id)}>
+              {label}
+            </button>
           ))}
         </div>
 
-        <div style={s.body}>
+        {/* Body */}
+        <div className="k-dr__body">
           {tab === 'details' && task && (
             <>
-              <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', marginBottom: 24 }}>
-                <div style={s.field}>
-                  <span style={s.label}>Priority</span>
-                  <select value={draft.priority || 'medium'}
+              {/* Meta row */}
+              <div className="k-dr__props">
+                <div>
+                  <span style={lbl}>Priority</span>
+                  <select
+                    value={draft.priority || 'medium'}
                     onChange={e => { setDraft(d => ({ ...d, priority: e.target.value })); saveTask({ priority: e.target.value }); }}
-                    style={{ border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)', padding: '4px 10px', fontFamily: 'inherit', fontSize: 'var(--text-sm)', background: 'var(--bg-default)', color: PRIORITY_COLORS[draft.priority || 'medium'], fontWeight: 600, cursor: 'pointer' }}
+                    className="k-input"
+                    style={{ color: PRIORITY_COLORS[draft.priority || 'medium'], fontWeight: 600 }}
                   >
-                    {Object.entries(PRIORITY_LABELS).map(([v,l]) => <option key={v} value={v}>{l}</option>)}
+                    {Object.entries(PRIORITY_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
                   </select>
                 </div>
-                <div style={s.field}>
-                  <span style={s.label}>Due date</span>
-                  <input type="date" value={draft.due_at ? draft.due_at.slice(0,10) : ''}
+                <div>
+                  <span style={lbl}>Due date</span>
+                  <input
+                    type="date"
+                    className="k-input"
+                    value={draft.due_at ? draft.due_at.slice(0, 10) : ''}
                     onChange={e => { const v = e.target.value ? new Date(e.target.value).toISOString() : null; setDraft(d => ({ ...d, due_at: v })); saveTask({ due_at: v }); }}
-                    style={{ border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)', padding: '4px 8px', fontFamily: 'inherit', fontSize: 'var(--text-sm)', background: 'var(--bg-default)', color: 'var(--text-default)' }}
                   />
                 </div>
               </div>
 
-              <div style={s.field}>
-                <span style={s.label}>Description</span>
-                <textarea value={draft.description || ''}
+              {/* Description */}
+              <div style={{ marginBottom: 20 }}>
+                <span style={lbl}>Description</span>
+                <textarea
+                  className="k-input"
+                  value={draft.description || ''}
                   onChange={e => setDraft(d => ({ ...d, description: e.target.value }))}
                   onBlur={() => draft.description !== task.description && saveTask({ description: draft.description })}
                   rows={4}
-                  style={{ width: '100%', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)', padding: '8px 12px', fontFamily: 'inherit', fontSize: 'var(--text-sm)', background: 'var(--bg-default)', color: 'var(--text-default)', resize: 'vertical', outline: 'none', lineHeight: 1.6 }}
+                  style={{ width: '100%', resize: 'vertical', lineHeight: 1.6 }}
                   placeholder="Add a description…"
                 />
               </div>
 
+              {/* Custom Fields */}
               {fields.length > 0 && (
                 <div style={{ marginBottom: 24 }}>
-                  <div style={{ ...s.label, marginBottom: 12 }}>Custom Fields</div>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(220px,1fr))', gap: 16 }}>
+                  <span style={{ ...lbl, marginBottom: 12 }}>Custom Fields</span>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(200px,1fr))', gap: 16 }}>
                     {fields.map(f => (
                       <div key={f.field_id}>
-                        <span style={s.label}>{f.name}</span>
+                        <span style={lbl}>{f.name}</span>
                         <FieldRenderer field={f} value={fValues[f.field_id] ?? null} onChange={v => saveFieldValue(f.field_id, v)} />
                       </div>
                     ))}
@@ -231,20 +239,21 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
                 </div>
               )}
 
+              {/* Comments */}
               <div>
-                <div style={{ ...s.label, marginBottom: 12 }}>Comments</div>
+                <span style={{ ...lbl, marginBottom: 12 }}>Comments</span>
                 {comments.map(c => (
                   <div key={c.comment_id} style={{ display: 'flex', gap: 10, marginBottom: 14 }}>
-                    <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'var(--accent-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 'var(--text-xs)', fontWeight: 700, color: 'var(--accent-default)', flexShrink: 0 }}>
+                    <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'color-mix(in srgb, var(--k-primary) 15%, var(--surface))', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: 'var(--k-primary)', flexShrink: 0 }}>
                       {c.user_name?.[0]?.toUpperCase() || '?'}
                     </div>
                     <div style={{ flex: 1 }}>
-                      <span style={{ fontWeight: 600, fontSize: 'var(--text-sm)' }}>{c.user_name}</span>{' '}
-                      <span style={{ color: 'var(--text-subtle)', fontSize: 'var(--text-xs)' }}>{new Date(c.created_at).toLocaleString()}</span>
-                      <p style={{ margin: '4px 0 0', fontSize: 'var(--text-sm)', lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>
+                      <span style={{ fontWeight: 600, fontSize: 13 }}>{c.user_name}</span>{' '}
+                      <span style={{ color: 'var(--ink-3)', fontSize: 11 }}>{new Date(c.created_at).toLocaleString()}</span>
+                      <p style={{ margin: '4px 0 0', fontSize: 13, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>
                         {c.body.split(/(@[\w.-]+)/g).map((part, i) =>
                           part.startsWith('@')
-                            ? <strong key={i} style={{ color: 'var(--accent-default)' }}>{part}</strong>
+                            ? <strong key={i} style={{ color: 'var(--k-primary)' }}>{part}</strong>
                             : part
                         )}
                       </p>
@@ -254,7 +263,7 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
                 <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
                   <MentionTextarea value={comment} onChange={setComment} onSubmit={postComment}
                     members={mentionMembers} placeholder="Add a comment… type @ to mention someone" rows={2} />
-                  <button onClick={postComment} style={s.btn()}>Send</button>
+                  <button onClick={postComment} className="k-btn k-btn--primary k-btn--sm">Send</button>
                 </div>
               </div>
             </>
@@ -266,35 +275,35 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
                 {timer ? (
-                  <><button onClick={stopTimer} style={s.btn('danger')}>⏹ Stop</button>
-                    <span style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)' }}><ElapsedTimer startedAt={timer.started_at} /></span>
+                  <>
+                    <button onClick={stopTimer} className="k-btn" style={{ background: 'var(--k-danger)', color: '#fff', border: 'none' }}>⏹ Stop</button>
+                    <span style={{ color: 'var(--ink-3)', fontSize: 13 }}><ElapsedTimer startedAt={timer.started_at} /></span>
                   </>
                 ) : (
-                  <button onClick={startTimer} style={s.btn()}>▶ Start Timer</button>
+                  <button onClick={startTimer} className="k-btn k-btn--primary k-btn--sm">▶ Start Timer</button>
                 )}
               </div>
               <div style={{ display: 'flex', gap: 8, marginBottom: 20, alignItems: 'center' }}>
                 <input type="number" min="1" value={manualMin} onChange={e => setManualMin(e.target.value)}
-                  placeholder="mins" style={{ width: 70, border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)', padding: '6px 8px', fontFamily: 'inherit', fontSize: 'var(--text-sm)', background: 'var(--bg-default)', color: 'var(--text-default)' }} />
+                  placeholder="mins" className="k-input" style={{ width: 70 }} />
                 <input value={manualDesc} onChange={e => setManualDesc(e.target.value)}
-                  placeholder="Description (optional)"
-                  style={{ flex: 1, border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)', padding: '6px 10px', fontFamily: 'inherit', fontSize: 'var(--text-sm)', background: 'var(--bg-default)', color: 'var(--text-default)' }} />
-                <button onClick={addManual} style={s.btn('ghost')}>+ Log</button>
+                  placeholder="Description (optional)" className="k-input" style={{ flex: 1 }} />
+                <button onClick={addManual} className="k-btn k-btn--ghost k-btn--sm">+ Log</button>
               </div>
               {entries.length === 0 ? (
-                <p style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)' }}>No time logged yet.</p>
+                <p style={{ color: 'var(--ink-3)', fontSize: 13 }}>No time logged yet.</p>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                   {entries.map(e => (
-                    <div key={e.entry_id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid var(--border-subtle)', fontSize: 'var(--text-sm)' }}>
-                      <span style={{ color: 'var(--text-muted)' }}>{e.description || 'No description'}</span>
+                    <div key={e.entry_id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid var(--rule-soft)', fontSize: 13 }}>
+                      <span style={{ color: 'var(--ink-3)' }}>{e.description || 'No description'}</span>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                         <strong>{fmtMinutes(e.minutes)}</strong>
-                        <button onClick={() => deleteEntry(e.entry_id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-subtle)', fontSize: 14 }}>×</button>
+                        <button onClick={() => deleteEntry(e.entry_id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-3)', fontSize: 14 }}>×</button>
                       </div>
                     </div>
                   ))}
-                  <div style={{ textAlign: 'right', fontWeight: 600, fontSize: 'var(--text-sm)', paddingTop: 8 }}>
+                  <div style={{ textAlign: 'right', fontWeight: 600, fontSize: 13, paddingTop: 8 }}>
                     Total: {fmtMinutes(entries.reduce((sum, e) => sum + (e.minutes || 0), 0))}
                   </div>
                 </div>
@@ -304,19 +313,19 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
 
           {!task && tab === 'details' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-              {[60,40,80,40].map((w,i) => (
-                <div key={i} style={{ height: 16, background: 'var(--bg-muted)', borderRadius: 4, width: `${w}%` }} />
+              {[60, 40, 80, 40].map((w, i) => (
+                <div key={i} style={{ height: 16, background: 'var(--rule-soft)', borderRadius: 4, width: `${w}%` }} />
               ))}
             </div>
           )}
         </div>
 
-        <div style={{ padding: '14px 24px', borderTop: '1px solid var(--border-default)', display: 'flex', justifyContent: 'flex-end', flexShrink: 0 }}>
-          {saving && <span style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)', marginRight: 'auto' }}>Saving…</span>}
-          <button onClick={onClose} style={s.btn('ghost')}>Close</button>
+        {/* Footer */}
+        <div style={{ padding: '14px 24px', borderTop: '1px solid var(--rule)', display: 'flex', justifyContent: 'flex-end', flexShrink: 0, background: 'var(--bg-soft)' }}>
+          {saving && <span style={{ color: 'var(--ink-3)', fontSize: 12, marginRight: 'auto' }}>Saving…</span>}
+          <button onClick={onClose} className="k-btn k-btn--ghost k-btn--sm">Close</button>
         </div>
       </div>
     </div>
   );
 }
-

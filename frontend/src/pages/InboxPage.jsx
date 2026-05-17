@@ -64,14 +64,9 @@ export default function InboxPage() {
 
   return (
     <div className="k-page">
-      {/* Page header */}
-      <div style={{ marginBottom: 'var(--sp-6)' }}>
-        <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--k-primary)', marginBottom: 4 }}>TEAM</div>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 12 }}>
-          <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 40, fontWeight: 400, color: 'var(--ink)', margin: 0 }}>Inbox</h1>
-          <span className="k-hi" style={{ fontFamily: 'var(--font-hindi)', fontSize: 28, color: 'var(--k-primary)', fontWeight: 400 }}>सन्देश</span>
-        </div>
-        <p style={{ fontSize: 14, color: 'var(--ink-3)', marginTop: 4, marginBottom: 0 }}>Mentions, assignments, and approvals routed to you.</p>
+      <div className="k-pageh">
+        <h1 className="k-pageh__title">Inbox</h1>
+        <span className="k-pageh__sans">सन्देश</span>
       </div>
 
       {/* Unread badge */}
@@ -95,46 +90,35 @@ export default function InboxPage() {
         </div>
       )}
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+      <div className="k-inbox">
         {notifications.map((n, i) => {
-          const badge   = getBadge(n);
-          const label   = getBadgeLabel(n);
-          const initials = (n.sender_name || n.actor_name || 'K').split(' ').map(w => w[0]).join('').slice(0,2).toUpperCase();
+          const label     = getBadgeLabel(n).toLowerCase();
+          const initials  = (n.sender_name || n.actor_name || 'K').split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
           const avatarColor = AVATAR_COLORS[i % AVATAR_COLORS.length];
           return (
             <div key={n.notification_id || i}
+              className={`k-inboxrow${n.read ? '' : ' is-unread'}`}
               onClick={() => !n.read && markRead(n.notification_id)}
-              style={{ display: 'flex', gap: 14, padding: '14px 18px', background: n.read ? 'transparent' : 'rgba(0,130,198,0.04)', borderRadius: 10, cursor: n.read ? 'default' : 'pointer', border: `1px solid ${n.read ? 'var(--rule-soft)' : 'rgba(0,130,198,.18)'}`, transition: 'background 0.2s', marginBottom: 2 }}>
-
-              {/* Avatar */}
-              <div style={{ width: 36, height: 36, borderRadius: '50%', background: avatarColor, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700, color: '#fff', flexShrink: 0 }}>
+              style={{ cursor: n.read ? 'default' : 'pointer' }}
+            >
+              <div style={{ width: 34, height: 34, borderRadius: '50%', background: avatarColor, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: '#fff', flexShrink: 0 }}>
                 {initials}
               </div>
-
-              {/* Content */}
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3, flexWrap: 'wrap' }}>
-                  <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink)' }}>
-                    {n.sender_name || n.actor_name || 'System'}
-                  </span>
-                  <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.1em', padding: '2px 7px', borderRadius: 99, background: badge.bg, color: badge.color }}>
-                    {label}
-                  </span>
-                  {n.task_title && (
-                    <span style={{ fontSize: 12, color: 'var(--ink-3)' }}>· on {n.task_title}</span>
-                  )}
+                <div className="k-inboxrow__head">
+                  <span style={{ fontWeight: 600 }}>{n.sender_name || n.actor_name || 'System'}</span>
+                  <span className={`k-inboxkind k-inboxkind--${label}`}>{getBadgeLabel(n)}</span>
+                  {n.task_title && <span style={{ color: 'var(--ink-3)' }}>· {n.task_title}</span>}
                   <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--ink-faint)', whiteSpace: 'nowrap' }}>
                     {relTime(n.created_at)}
                   </span>
                 </div>
-                <p style={{ margin: 0, fontSize: 13, color: 'var(--ink-2)', lineHeight: 1.5 }}>
+                <div className="k-inboxrow__snip">
                   {n.message || n.body || n.content || 'No preview available.'}
-                </p>
+                </div>
               </div>
-
-              {/* Unread dot */}
               {!n.read && (
-                <div style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--k-primary)', flexShrink: 0, marginTop: 6 }} />
+                <div style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--k-primary)', flexShrink: 0, marginTop: 4 }} />
               )}
             </div>
           );

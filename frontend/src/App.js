@@ -18,6 +18,7 @@ import { BrowserRouter, Routes, Route, Navigate, useOutletContext } from 'react-
 import './App.css';
 import './styles/index.css';
 import './styles/kartavya-design.css';
+import './styles/editorial.css';
 
 import { ToastProvider }               from './components/ui/toast';
 import AppShell, { Protected }         from './components/layout/AppShell';

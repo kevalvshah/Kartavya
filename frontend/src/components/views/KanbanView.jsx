@@ -1,6 +1,3 @@
-/**
- * KanbanView.jsx — v2 drag-and-drop kanban board.
- */
 import React, { useState, useRef, useCallback, useMemo } from 'react';
 import { api } from '../../lib/api';
 import KanbanCard from './KanbanCard';
@@ -40,52 +37,52 @@ export default function KanbanView({ columns, tasks, fieldDefs, fieldValueMap, t
     } catch (e) { console.error('Move failed', e); }
   }, [dragging, byCol, onTasksChange]);
 
-  const S = {
-    board:  { display:'flex', gap:16, overflowX:'auto', paddingBottom:16, alignItems:'flex-start', minHeight:'calc(100vh - 180px)' },
-    col:    (isOver) => ({ display:'flex', flexDirection:'column', gap:8, minWidth:272, maxWidth:272, background:isOver?'var(--accent-subtle)':'var(--bg-subtle)', borderRadius:'var(--radius-lg)', padding:12, border:`1px solid ${isOver?'var(--accent-default)':'var(--border-subtle)'}`, transition:'background 0.15s, border-color 0.15s' }),
-    header: { display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:4 },
-    colName:{ fontSize:'var(--text-sm)', fontWeight:700, color:'var(--text-default)' },
-    badge:  (col) => ({ background:col.color+'22', color:col.color, border:`1px solid ${col.color}44`, borderRadius:'var(--radius-full)', padding:'1px 8px', fontSize:'var(--text-xs)', fontWeight:700 }),
-    drop:   { height:60, border:'2px dashed var(--accent-default)', borderRadius:'var(--radius-md)', display:'flex', alignItems:'center', justifyContent:'center', color:'var(--accent-default)', fontSize:'var(--text-sm)' },
-    addBtn: { width:'100%', background:'transparent', border:'1px dashed var(--border-default)', borderRadius:'var(--radius-md)', padding:'7px 0', cursor:'pointer', color:'var(--text-muted)', fontSize:'var(--text-sm)', fontFamily:'inherit', marginTop:4 },
-  };
-
   return (
     <>
-      <div style={S.board}>
+      <div className="k-board">
         {(columns || []).map(col => {
           const colTasks = byCol[col.column_id] || [];
           const isOver = over === col.column_id;
           return (
-            <div key={col.column_id} style={S.col(isOver)}
+            <div key={col.column_id}
+              className={`k-bcol${isOver ? ' is-over' : ''}`}
               onDragOver={e => { e.preventDefault(); setOver(col.column_id); }}
               onDragLeave={() => setOver(o => o === col.column_id ? null : o)}
               onDrop={() => handleDrop(col.column_id, null)}
             >
-              <div style={S.header}>
-                <span style={S.colName}>{col.name}</span>
-                <span style={S.badge(col)}>{colTasks.length}</span>
+              <div className="k-bcol__head">
+                <span className="k-bcol__bar" style={{ background: col.color || 'var(--k-primary)' }} />
+                <span className="k-bcol__title">{col.name}</span>
+                <span className="k-bcol__count">{colTasks.length}</span>
               </div>
-              {colTasks.map((task, idx) => (
-                <div key={task.task_id} draggable
-                  onDragStart={() => handleDragStart(task.task_id, col.column_id, idx)}
-                  onDragEnd={() => { setDragging(null); setOver(null); }}
-                  onDrop={e => { e.stopPropagation(); handleDrop(col.column_id, idx); }}
-                  onDragOver={e => e.preventDefault()}
-                >
-                  <KanbanCard task={task} fieldDefs={fieldDefs||[]} fieldValues={fieldValueMap?.[task.task_id]||{}}
-                    dragging={dragging?.taskId===task.task_id} onClick={() => setDrawerTaskId(task.task_id)} />
-                </div>
-              ))}
-              {isOver && dragging && colTasks.length===0 && <div style={S.drop}>Drop here</div>}
-              <button style={S.addBtn} onClick={() => onColumnChange?.('new_task', col.column_id)}>+ Add task</button>
+              <div className="k-bcol__body">
+                {colTasks.map((task, idx) => (
+                  <div key={task.task_id} draggable
+                    onDragStart={() => handleDragStart(task.task_id, col.column_id, idx)}
+                    onDragEnd={() => { setDragging(null); setOver(null); }}
+                    onDrop={e => { e.stopPropagation(); handleDrop(col.column_id, idx); }}
+                    onDragOver={e => e.preventDefault()}
+                  >
+                    <KanbanCard task={task} fieldDefs={fieldDefs || []} fieldValues={fieldValueMap?.[task.task_id] || {}}
+                      dragging={dragging?.taskId === task.task_id} onClick={() => setDrawerTaskId(task.task_id)} />
+                  </div>
+                ))}
+                {isOver && dragging && colTasks.length === 0 && (
+                  <div style={{ height: 60, border: '2px dashed var(--k-primary)', borderRadius: 'var(--r-md)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--k-primary)', fontSize: 13 }}>
+                    Drop here
+                  </div>
+                )}
+                <button
+                  style={{ width: '100%', background: 'transparent', border: '1px dashed var(--rule)', borderRadius: 'var(--r-md)', padding: '7px 0', cursor: 'pointer', color: 'var(--ink-3)', fontSize: 13, fontFamily: 'inherit', marginTop: 4 }}
+                  onClick={() => onColumnChange?.('new_task', col.column_id)}
+                >+ Add task</button>
+              </div>
             </div>
           );
         })}
       </div>
       <TaskDrawer taskId={drawerTaskId} open={!!drawerTaskId} onClose={() => setDrawerTaskId(null)}
-        teamMembers={teamMembers} onSaved={u => onTasksChange?.(p => p.map(t => t.task_id===u.task_id?u:t))} />
+        teamMembers={teamMembers} onSaved={u => onTasksChange?.(p => p.map(t => t.task_id === u.task_id ? u : t))} />
     </>
   );
 }
-
