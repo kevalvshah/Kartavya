@@ -28,6 +28,7 @@ import { CustomizeProvider, CustomizePanel, CustomizeFAB } from './components/Cu
 // ── Auth pages (lazy — no reason to block the bundle for these) ────────────────
 const LoginPage         = lazy(() => import('./pages/LoginPage').then(m => ({ default: m.LoginPage })));
 const AcceptInvitePage  = lazy(() => import('./pages/LoginPage').then(m => ({ default: m.AcceptInvitePage })));
+const ApprovePage       = lazy(() => import('./pages/ApprovePage'));
 
 // ── App pages ─────────────────────────────────────────────────────────────────
 const DashboardPage         = lazy(() => import('./pages/DashboardPage'));
@@ -72,6 +73,7 @@ function AppRouter() {
         {/* Public */}
         <Route path="/login"         element={<LoginPage />} />
         <Route path="/accept-invite" element={<AcceptInvitePage />} />
+        <Route path="/approve"       element={<ApprovePage />} />
 
         {/* Protected shell — all child routes inherit auth + layout */}
         <Route path="/" element={<Protected><AppShell /></Protected>}>

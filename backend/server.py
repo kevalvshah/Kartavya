@@ -44,6 +44,7 @@ from routers.dashboards  import router as dashboards_router
 from routers.templates   import router as templates_router
 from routers.time_entries import router as time_router
 from routers.uploads     import router as uploads_router   # R2-backed upload
+from services.gita       import get_verse_of_the_day
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env")
@@ -838,6 +839,13 @@ app.include_router(dashboards_router)
 app.include_router(templates_router)
 app.include_router(time_router)
 app.include_router(uploads_router)   # R2-backed file upload (replaces old base64 /api/upload)
+
+
+# ── Verse of the day (public) ────────────────────────────────────────────────
+@app.get("/api/verse-of-the-day")
+async def verse_of_the_day():
+    """Return today's Bhagavad Gita verse — same verse for all users all day."""
+    return await get_verse_of_the_day()
 
 
 @app.on_event("startup")
