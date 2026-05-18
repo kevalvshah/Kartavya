@@ -116,8 +116,10 @@ export default function DashboardPage({ teams = [] }) {
   }, [tasks]);
 
   // Date line for Hero
+  const DAYS_HI = ['रविवार','सोमवार','मंगलवार','बुधवार','गुरुवार','शुक्रवार','शनिवार'];
   const dateLine = [
-    { label: now.toLocaleDateString('en-IN', { weekday: 'long' }) },
+    { label: now.toLocaleDateString('en-IN', { weekday: 'long' }).toUpperCase() },
+    { label: DAYS_HI[now.getDay()], hindi: true },
     { label: now.toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' }) },
     { label: `विक्रम संवत् ${vikYear}`, hindi: true },
   ];
