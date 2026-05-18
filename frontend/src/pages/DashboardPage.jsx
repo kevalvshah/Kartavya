@@ -78,7 +78,7 @@ export default function DashboardPage({ teams = [] }) {
 
   const myId = user?.user_id;
   const {
-    myPlate, openTasks, dueToday, overdue, completedWeek, inProgress, inReview, upcoming,
+    myPlate, openTasks, openProjectCount, dueToday, overdue, completedWeek, inProgress, inReview, upcoming,
   } = useMemo(() => {
     const myTasks   = tasks.filter(t => t.user_id === myId || t.assignee_user_ids?.includes(myId));
     const open      = tasks.filter(t => t.status !== 'done');
