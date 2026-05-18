@@ -511,10 +511,24 @@ async def create_team(payload:TeamCreate,pool=Depends(get_db),user=Depends(requi
     await ensure_default_columns(pool,team_id)
     return TeamOut(**dict(row))
 
+@api_router.get("/users")
+async def list_users(pool=Depends(get_db),user=Depends(require_user)):
+    """Return all registered users — for admin member picker."""
+    if user.get("role") not in ("admin","owner"):
+        raise HTTPException(403,"Admins only")
+    rows=await pool.fetch(
+        "SELECT user_id,COALESCE(full_name,name,email) AS display_name,email,role,company_name FROM users ORDER BY display_name ASC"
+    )
+    return [dict(r) for r in rows]
+
 @api_router.get("/teams/{team_id}")
 async def get_team(team_id:str,pool=Depends(get_db),user=Depends(require_user)):
-    mem=await pool.fetchrow("SELECT * FROM project_assignments WHERE team_id=$1 AND user_id=$2",team_id,user["user_id"])
-    if not mem: raise HTTPException(403,"Not a team member")
+    # Check project_assignments first, fall back to team_members
+    mem=await pool.fetchrow("SELECT role FROM project_assignments WHERE team_id=$1 AND user_id=$2",team_id,user["user_id"])
+    if not mem:
+        tm=await pool.fetchrow("SELECT role FROM team_members WHERE team_id=$1 AND user_id=$2 AND status='active'",team_id,user["user_id"])
+        if not tm: raise HTTPException(403,"Not a team member")
+        mem=tm
     team=await pool.fetchrow("SELECT * FROM teams WHERE team_id=$1",team_id)
     members=await pool.fetch("""
         SELECT tm.*,COALESCE(u.full_name,u.name,u.email) AS display_name,
