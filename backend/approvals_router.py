@@ -199,9 +199,8 @@ async def get_pending_approvals(pool=Depends(get_pool), user=Depends(require_use
             FROM tasks t
             JOIN users u ON u.user_id = t.created_by_user_id
             LEFT JOIN teams tm ON tm.team_id = t.team_id
-            JOIN team_members tmem ON tmem.team_id = t.team_id
+            JOIN team_members tmem ON tmem.team_id = t.team_id AND tmem.user_id = $1
             WHERE t.approval_status = 'pending'
-              AND tmem.user_id = $1
               AND tmem.role IN ('owner', 'admin')
               AND tmem.status = 'active'
             ORDER BY t.approval_requested_at DESC
