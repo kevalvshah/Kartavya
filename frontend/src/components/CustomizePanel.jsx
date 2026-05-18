@@ -1,18 +1,4 @@
-/**
- * CustomizePanel.jsx — "Make it yours" slide-over.
- *
- * Persists to localStorage under key 'k_prefs'.
- * Applies changes immediately via CSS custom properties on :root / data-* attrs on <html>.
- *
- * Usage:
- *   import { CustomizePanel, useCustomize } from './CustomizePanel';
- *   const { open, setOpen } = useCustomize();
- *   <CustomizePanel open={open} onClose={() => setOpen(false)} />
- *   <button onClick={() => setOpen(true)}>Customize</button>
- */
 import React, { useEffect, useState, createContext, useContext, useCallback } from 'react';
-
-// ── Constants ─────────────────────────────────────────────────────────────────
 
 const STORAGE_KEY = 'k_prefs';
 
@@ -24,22 +10,20 @@ const ACCENTS = [
 ];
 
 const FONTS = [
-  { id: 'newsreader',       label: 'Newsreader',       sub: 'editorial', value: "'Newsreader', 'Georgia', serif" },
-  { id: 'spectral',         label: 'Spectral',          sub: 'literary',  value: "'Spectral', 'Georgia', serif" },
-  { id: 'instrument-serif', label: 'Instrument Serif',  sub: 'modern',    value: "'Instrument Serif', 'Georgia', serif" },
-  { id: 'inter',            label: 'Inter',             sub: 'sans only', value: "'Inter', system-ui, sans-serif" },
+  { id: 'newsreader',       label: 'Newsreader',      sub: 'editorial', value: "'Newsreader', 'Georgia', serif" },
+  { id: 'spectral',         label: 'Spectral',         sub: 'literary',  value: "'Spectral', 'Georgia', serif" },
+  { id: 'instrument-serif', label: 'Instrument Serif', sub: 'modern',    value: "'Instrument Serif', 'Georgia', serif" },
+  { id: 'inter',            label: 'Inter',            sub: 'sans only', value: "'Inter', system-ui, sans-serif" },
 ];
 
 const DEFAULTS = {
-  mode:     'light',   // 'light' | 'dark'
+  mode:     'light',
   accent:   'teal',
-  sidebar:  'wide',    // 'wide' | 'rail'
-  density:  'comfy',   // 'compact' | 'comfy'
+  sidebar:  'wide',
+  density:  'comfy',
   font:     'newsreader',
-  language: 'en+sa',   // 'en' | 'en+sa' | 'hi'
+  language: 'en+sa',
 };
-
-// ── Load & Apply ──────────────────────────────────────────────────────────────
 
 function loadPrefs() {
   try { return { ...DEFAULTS, ...JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}') }; }
@@ -51,7 +35,6 @@ function applyPrefs(prefs) {
   const acc  = ACCENTS.find(a => a.id === prefs.accent) || ACCENTS[0];
   const fnt  = FONTS.find(f => f.id === prefs.font)     || FONTS[0];
 
-  // Accent
   root.style.setProperty('--k-primary', acc.color);
   root.style.setProperty('--k-mid',     acc.mid);
   root.style.setProperty('--k-deep',    acc.deep);
@@ -59,10 +42,7 @@ function applyPrefs(prefs) {
   root.style.setProperty('--k-gradD',   `linear-gradient(135deg, ${acc.deep}cc, ${acc.mid}cc 55%, ${acc.color}cc)`);
   root.style.setProperty('--side-active', `${acc.color}29`);
 
-  // Font — change both display AND ui so body text visibly changes too
   root.style.setProperty('--font-display', fnt.value);
-  // When "Inter · sans only" is chosen, body stays Inter (already default).
-  // For serif fonts, also shift body to that font family for a full editorial feel.
   if (prefs.font === 'inter') {
     root.style.setProperty('--font-ui', "'Inter', system-ui, sans-serif");
     document.body.style.fontFamily = "'Inter', system-ui, sans-serif";
@@ -71,7 +51,6 @@ function applyPrefs(prefs) {
     document.body.style.fontFamily = fnt.value;
   }
 
-  // Mode
   root.setAttribute('data-theme', prefs.mode);
   if (prefs.mode === 'dark') {
     root.style.setProperty('--bg',         '#0f1117');
@@ -99,18 +78,11 @@ function applyPrefs(prefs) {
     root.style.setProperty('--rule-strong','#C8C0AA');
   }
 
-  // Density
   root.setAttribute('data-density', prefs.density);
   root.style.setProperty('--page-pad', prefs.density === 'compact' ? '16px' : '28px');
-
-  // Sidebar
   root.setAttribute('data-sidebar', prefs.sidebar);
-
-  // Language
   root.setAttribute('data-language', prefs.language);
 }
-
-// ── Context ───────────────────────────────────────────────────────────────────
 
 const CustomizeCtx = createContext(null);
 
@@ -127,7 +99,6 @@ export function CustomizeProvider({ children }) {
     });
   }, []);
 
-  // Apply on mount
   useEffect(() => { applyPrefs(prefs); }, []); // eslint-disable-line
 
   return (
@@ -143,31 +114,38 @@ export function useCustomize() {
   return ctx;
 }
 
-// ── Sub-components ────────────────────────────────────────────────────────────
+// ── Seg control — subtle active state ────────────────────────────────────────
 
 function Seg({ options, value, onChange }) {
   return (
-    <div style={{ display: 'flex', border: '1px solid var(--rule)', borderRadius: 8, overflow: 'hidden', width: 'fit-content' }}>
-      {options.map(o => (
-        <button key={o.value} onClick={() => onChange(o.value)}
-          style={{
-            padding: '5px 14px', border: 'none', cursor: 'pointer',
-            fontSize: 12, fontFamily: 'var(--font-ui)', fontWeight: value === o.value ? 600 : 400,
-            background: value === o.value ? 'var(--k-primary)' : 'var(--surface)',
-            color: value === o.value ? '#fff' : 'var(--ink-2)',
-            transition: 'all .15s',
+    <div style={{
+      display: 'flex', background: 'var(--bg-soft)',
+      borderRadius: 8, padding: 3, gap: 2, width: 'fit-content',
+    }}>
+      {options.map(o => {
+        const active = value === o.value;
+        return (
+          <button key={o.value} onClick={() => onChange(o.value)} style={{
+            padding: '4px 13px', borderRadius: 6, border: 'none', cursor: 'pointer',
+            fontSize: 12, fontFamily: 'var(--font-ui)',
+            fontWeight: active ? 600 : 400,
+            background: active ? 'var(--surface-2)' : 'transparent',
+            color: active ? 'var(--ink)' : 'var(--ink-3)',
+            boxShadow: active ? '0 1px 3px rgba(0,0,0,.08)' : 'none',
+            transition: 'all .12s',
           }}>
-          {o.label}
-        </button>
-      ))}
+            {o.label}
+          </button>
+        );
+      })}
     </div>
   );
 }
 
 function SectionHead({ en, hi }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 12, marginTop: 4 }}>
-      <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--k-primary)' }}>{en}</span>
+    <div style={{ display: 'flex', alignItems: 'baseline', gap: 7, marginBottom: 10, marginTop: 2 }}>
+      <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--k-primary)' }}>{en}</span>
       <span style={{ fontSize: 10, color: 'var(--ink-3)', fontFamily: 'var(--font-hindi)' }}>{hi}</span>
     </div>
   );
@@ -175,7 +153,7 @@ function SectionHead({ en, hi }) {
 
 function Row({ label, children }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
       <span style={{ fontSize: 13, color: 'var(--ink-2)' }}>{label}</span>
       {children}
     </div>
@@ -193,175 +171,145 @@ export function CustomizePanel() {
 
   return (
     <>
-      {/* Backdrop */}
+      {/* Invisible click-away */}
       <div onClick={() => setOpen(false)}
-        style={{ position: 'fixed', inset: 0, zIndex: 9998, background: 'rgba(0,0,0,0.18)' }} />
+        style={{ position: 'fixed', inset: 0, zIndex: 9990 }} />
 
-      {/* Panel */}
+      {/* Floating card */}
       <div style={{
-        position: 'fixed', top: 0, right: 0, bottom: 0, width: 320, zIndex: 9999,
-        background: 'var(--surface)', borderLeft: '1px solid var(--rule)',
-        boxShadow: 'var(--shadow-lg)', display: 'flex', flexDirection: 'column',
-        overflowY: 'auto',
+        position: 'fixed', bottom: 72, right: 24, zIndex: 9999,
+        width: 340, borderRadius: 16,
+        background: 'var(--bg)',
+        border: '1px solid var(--rule)',
+        boxShadow: '0 8px 40px rgba(0,0,0,.18)',
+        overflow: 'hidden',
       }}>
         {/* Header */}
-        <div style={{ padding: '20px 22px 16px', borderBottom: '1px solid var(--rule-soft)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <div>
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-                <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--k-primary)' }}>CUSTOMIZE</span>
-                <span style={{ fontSize: 10, color: 'var(--ink-3)', fontFamily: 'var(--font-hindi)' }}>· सजावट</span>
-              </div>
-              <div style={{ fontSize: 18, fontFamily: 'var(--font-display)', fontWeight: 500, color: 'var(--ink)', marginTop: 2 }}>Make it yours</div>
+        <div style={{ padding: '16px 18px 12px', borderBottom: '1px solid var(--rule-soft)', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+              <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--k-primary)' }}>CUSTOMIZE</span>
+              <span style={{ fontSize: 10, color: 'var(--ink-3)', fontFamily: 'var(--font-hindi)' }}>· सजावट</span>
             </div>
-            <button onClick={() => setOpen(false)}
-              style={{ width: 28, height: 28, borderRadius: 6, border: '1px solid var(--rule)', background: 'transparent', cursor: 'pointer', fontSize: 16, color: 'var(--ink-3)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              ×
-            </button>
+            <div style={{ fontSize: 17, fontFamily: 'var(--font-display)', fontWeight: 500, color: 'var(--ink)', marginTop: 1 }}>Make it yours</div>
           </div>
+          <button onClick={() => setOpen(false)} style={{
+            width: 26, height: 26, borderRadius: 6, border: '1px solid var(--rule)',
+            background: 'transparent', cursor: 'pointer', fontSize: 15, color: 'var(--ink-3)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: 2,
+          }}>×</button>
         </div>
 
         {/* Body */}
-        <div style={{ padding: '20px 22px', flex: 1 }}>
+        <div style={{ padding: '16px 18px' }}>
 
-          {/* ── Theme ── */}
+          {/* Theme */}
           <SectionHead en="THEME" hi="रंग" />
-
           <Row label="Mode">
-            <Seg
-              value={prefs.mode}
-              onChange={v => setPrefs({ mode: v })}
-              options={[{ label: '☀ Light', value: 'light' }, { label: '◗ Dark', value: 'dark' }]}
-            />
+            <Seg value={prefs.mode} onChange={v => setPrefs({ mode: v })}
+              options={[{ label: '☀ Light', value: 'light' }, { label: '◗ Dark', value: 'dark' }]} />
           </Row>
 
-          <div style={{ marginBottom: 20 }}>
-            <div style={{ fontSize: 13, color: 'var(--ink-2)', marginBottom: 8 }}>Accent</div>
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 13, color: 'var(--ink-2)', marginBottom: 7 }}>Accent</div>
             <div style={{ display: 'flex', gap: 6 }}>
               {ACCENTS.map(a => (
-                <button key={a.id} onClick={() => setPrefs({ accent: a.id })}
-                  title={a.label}
-                  style={{
-                    flex: 1, height: 36, borderRadius: 8, border: prefs.accent === a.id ? '3px solid var(--ink)' : '2px solid transparent',
-                    background: a.color, cursor: 'pointer', position: 'relative',
-                    display: 'flex', alignItems: 'flex-end', justifyContent: 'center', paddingBottom: 4,
-                    transition: 'border .15s',
-                  }}>
-                  <span style={{ fontSize: 8, fontWeight: 800, letterSpacing: '0.06em', color: '#fff', textShadow: '0 1px 2px rgba(0,0,0,.4)' }}>{a.label}</span>
+                <button key={a.id} onClick={() => setPrefs({ accent: a.id })} title={a.label} style={{
+                  flex: 1, height: 34, borderRadius: 8, cursor: 'pointer',
+                  background: a.color,
+                  border: prefs.accent === a.id ? '2px solid var(--ink)' : '2px solid transparent',
+                  outline: prefs.accent === a.id ? `2px solid ${a.color}` : 'none',
+                  outlineOffset: 1,
+                  display: 'flex', alignItems: 'flex-end', justifyContent: 'center', paddingBottom: 3,
+                  transition: 'border .12s, outline .12s',
+                }}>
+                  <span style={{ fontSize: 7, fontWeight: 800, letterSpacing: '0.06em', color: '#fff', textShadow: '0 1px 2px rgba(0,0,0,.4)' }}>{a.label}</span>
                 </button>
               ))}
             </div>
           </div>
 
-          <div style={{ height: 1, background: 'var(--rule-soft)', margin: '16px 0' }} />
+          <div style={{ height: 1, background: 'var(--rule-soft)', margin: '12px 0' }} />
 
-          {/* ── Layout ── */}
+          {/* Layout */}
           <SectionHead en="LAYOUT" hi="विन्यास" />
-
           <Row label="Sidebar">
-            <Seg
-              value={prefs.sidebar}
-              onChange={v => setPrefs({ sidebar: v })}
-              options={[{ label: 'Wide', value: 'wide' }, { label: 'Rail', value: 'rail' }]}
-            />
+            <Seg value={prefs.sidebar} onChange={v => setPrefs({ sidebar: v })}
+              options={[{ label: 'Wide', value: 'wide' }, { label: 'Rail', value: 'rail' }]} />
           </Row>
-
           <Row label="Density">
-            <Seg
-              value={prefs.density}
-              onChange={v => setPrefs({ density: v })}
-              options={[{ label: 'Compact', value: 'compact' }, { label: 'Comfy', value: 'comfy' }]}
-            />
+            <Seg value={prefs.density} onChange={v => setPrefs({ density: v })}
+              options={[{ label: 'Compact', value: 'compact' }, { label: 'Comfy', value: 'comfy' }]} />
           </Row>
 
-          <div style={{ height: 1, background: 'var(--rule-soft)', margin: '16px 0' }} />
+          <div style={{ height: 1, background: 'var(--rule-soft)', margin: '12px 0' }} />
 
-          {/* ── Type & Language ── */}
+          {/* Type & Language */}
           <SectionHead en="TYPE & LANGUAGE" hi="भाषा" />
 
-          <div style={{ marginBottom: 14 }}>
+          <div style={{ marginBottom: 12 }}>
             <div style={{ fontSize: 13, color: 'var(--ink-2)', marginBottom: 6 }}>Display font</div>
-            <select
-              value={prefs.font}
-              onChange={e => setPrefs({ font: e.target.value })}
-              style={{
-                width: '100%', padding: '7px 10px', borderRadius: 8, fontSize: 13,
-                border: '1px solid var(--rule)', background: 'var(--surface-2)',
-                color: 'var(--ink)', fontFamily: 'var(--font-ui)', cursor: 'pointer',
-                appearance: 'none', backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236E7B91' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")`,
-                backgroundRepeat: 'no-repeat', backgroundPosition: 'right 10px center',
-              }}>
-              {FONTS.map(f => (
-                <option key={f.id} value={f.id}>{f.label} · {f.sub}</option>
-              ))}
+            <select value={prefs.font} onChange={e => setPrefs({ font: e.target.value })} style={{
+              width: '100%', padding: '6px 10px', borderRadius: 8, fontSize: 13,
+              border: '1px solid var(--rule)', background: 'var(--surface)',
+              color: 'var(--ink)', fontFamily: 'var(--font-ui)', cursor: 'pointer',
+              appearance: 'none',
+              backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236E7B91' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")`,
+              backgroundRepeat: 'no-repeat', backgroundPosition: 'right 10px center',
+            }}>
+              {FONTS.map(f => <option key={f.id} value={f.id}>{f.label} · {f.sub}</option>)}
             </select>
           </div>
 
           <Row label="Language">
-            <Seg
-              value={prefs.language}
-              onChange={v => setPrefs({ language: v })}
+            <Seg value={prefs.language} onChange={v => setPrefs({ language: v })}
               options={[
-                { label: 'EN',    value: 'en' },
+                { label: 'EN',      value: 'en' },
                 { label: 'EN + सं', value: 'en+sa' },
                 { label: 'हिन्दी', value: 'hi' },
-              ]}
-            />
+              ]} />
           </Row>
 
           {/* Tagline */}
           <div style={{
-            marginTop: 24, padding: '12px 14px', borderRadius: 10,
-            border: '1px solid var(--k-primary)', borderLeftWidth: 3,
-            background: `${acc.color}0d`, fontSize: 12, lineHeight: 1.6,
+            marginTop: 12, padding: '10px 12px', borderRadius: 10,
+            border: `1px solid ${acc.color}44`, borderLeftWidth: 3,
+            background: `${acc.color}0d`, fontSize: 12, lineHeight: 1.6, color: 'var(--ink-3)',
           }}>
             <span style={{ fontFamily: 'var(--font-hindi)', color: 'var(--ink-2)' }}>यथारुचि</span>
-            <span style={{ color: 'var(--ink-3)' }}> — </span>
+            {' — '}
             <em style={{ color: 'var(--k-primary)', fontFamily: 'var(--font-display)' }}>"as you wish."</em>
-            <span style={{ color: 'var(--ink-3)' }}> Your choices persist as you click around.</span>
+            {' Your choices persist as you click around.'}
           </div>
-        </div>
-
-        {/* Reset footer */}
-        <div style={{ padding: '14px 22px', borderTop: '1px solid var(--rule-soft)' }}>
-          <button
-            onClick={() => setPrefs({ ...DEFAULTS })}
-            style={{
-              width: '100%', padding: '8px', borderRadius: 8, border: '1px solid var(--rule)',
-              background: 'transparent', cursor: 'pointer', fontSize: 12, color: 'var(--ink-3)',
-              fontFamily: 'var(--font-ui)',
-            }}>
-            Reset to defaults
-          </button>
         </div>
       </div>
     </>
   );
 }
 
-// ── Floating trigger button ───────────────────────────────────────────────────
+// ── FAB ───────────────────────────────────────────────────────────────────────
 
 export function CustomizeFAB() {
-  const { setOpen } = useCustomize();
+  const { open, setOpen } = useCustomize();
   return (
-    <button
-      onClick={() => setOpen(true)}
-      style={{
-        position: 'fixed', bottom: 24, right: 24, zIndex: 9990,
-        display: 'flex', alignItems: 'center', gap: 8,
-        padding: '10px 18px', borderRadius: 99,
-        background: 'var(--side-bg)', color: '#fff',
-        border: 'none', cursor: 'pointer',
-        fontFamily: 'var(--font-ui)', fontSize: 13, fontWeight: 600,
-        boxShadow: '0 4px 20px rgba(0,0,0,.3)',
-        transition: 'transform .15s, box-shadow .15s',
-      }}
-      onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.04)'}
+    <button onClick={() => setOpen(o => !o)} style={{
+      position: 'fixed', bottom: 20, right: 24, zIndex: 9991,
+      display: 'flex', alignItems: 'center', gap: 8,
+      padding: '9px 18px', borderRadius: 99,
+      background: 'var(--side-bg, #1A2230)', color: '#fff',
+      border: 'none', cursor: 'pointer',
+      fontFamily: 'var(--font-ui)', fontSize: 13, fontWeight: 600,
+      boxShadow: '0 4px 20px rgba(0,0,0,.28)',
+      transition: 'transform .15s',
+    }}
+      onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.03)'}
       onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
     >
-      <span style={{ fontSize: 15 }}>✦</span>
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6">
+        <circle cx="8" cy="8" r="3"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.05 3.05l1.41 1.41M11.54 11.54l1.41 1.41M3.05 12.95l1.41-1.41M11.54 4.46l1.41-1.41"/>
+      </svg>
       <span>Customize</span>
-      <span style={{ fontFamily: 'var(--font-hindi)', fontWeight: 400, fontSize: 12, opacity: 0.7 }}>सजावट</span>
+      <span style={{ fontFamily: 'var(--font-hindi)', fontWeight: 400, fontSize: 11, opacity: 0.65 }}>सजावट</span>
     </button>
   );
 }
