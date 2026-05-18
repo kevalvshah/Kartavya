@@ -13,17 +13,6 @@ import { createClient } from '@supabase/supabase-js';
 const supabaseUrl  = process.env.REACT_APP_SUPABASE_URL;
 const supabaseAnon = process.env.REACT_APP_SUPABASE_ANON_KEY;
 
-if (!supabaseUrl || !supabaseAnon) {
-  console.warn(
-    '[Kartavya] Supabase env vars missing. '
-    + 'Set REACT_APP_SUPABASE_URL and REACT_APP_SUPABASE_ANON_KEY in Vercel.'
-  );
-}
-
-export const supabase = createClient(supabaseUrl || '', supabaseAnon || '', {
-  realtime: {
-    params: {
-      eventsPerSecond: 10,
-    },
-  },
-});
+export const supabase = (supabaseUrl && supabaseAnon)
+  ? createClient(supabaseUrl, supabaseAnon, { realtime: { params: { eventsPerSecond: 10 } } })
+  : null;

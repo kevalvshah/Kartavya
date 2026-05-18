@@ -41,13 +41,13 @@ export function usePresence(projectId, user) {
   const channelRef = useRef(null);
 
   useEffect(() => {
-    if (!projectId || !user?.user_id) return;
+    if (!supabase || !projectId || !user?.user_id) return;
 
     if (channelRef.current) {
       supabase.removeChannel(channelRef.current);
     }
 
-    const room = supabase.channel(`presence:board:${projectId}`, {
+    const room = supabase.channel(`presence:board:${projectId}`, {  // supabase non-null checked above
       config: { presence: { key: user.user_id } },
     });
 

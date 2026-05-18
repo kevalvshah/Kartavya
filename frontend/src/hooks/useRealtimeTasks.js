@@ -30,9 +30,8 @@ export function useRealtimeTasks(projectId, initialTasks = []) {
   }, [JSON.stringify(initialTasks.map(t => t.task_id))]);
 
   useEffect(() => {
-    if (!projectId) return;
+    if (!supabase || !projectId) return;
 
-    // Clean up any previous subscription for this project
     if (channelRef.current) {
       supabase.removeChannel(channelRef.current);
     }
