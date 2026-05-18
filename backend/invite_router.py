@@ -166,7 +166,8 @@ async def create_invite(body: InviteCreate, pool=Depends(get_pool), admin=Depend
     try:
         from email_service import send_invite_email
         inviter_name = admin.get("full_name") or admin.get("name") or admin.get("email", "An admin")
-        send_invite_email(body.email.lower(), inviter_name, body.role, token)
+        send_invite_email(body.email.lower(), inviter_name, body.role, token,
+                          recipient_name=body.full_name or "")
     except Exception as exc:
         import logging
         logging.getLogger(__name__).warning(f"invite email failed: {exc}")

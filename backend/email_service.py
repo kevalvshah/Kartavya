@@ -141,9 +141,23 @@ def _base(preheader: str, kicker: str, headline: str, sanskrit: str,
             You are receiving this because you are a member or invitee of a Kartavya workspace.
             If you did not expect this email, you can safely ignore it.
           </td></tr>
-          <tr><td style="padding:8px 0 32px;font-family:{_FONT_UI};font-size:11px;color:{_INK3};">
-            Kartavya by <a href="https://aekam.in" style="color:{_TEAL};text-decoration:none;">Aekam Inc</a>
+          <!-- bottom bar -->
+          <tr><td style="padding:16px 0 0;">
+            <table width="100%" cellpadding="0" cellspacing="0" border="0">
+              <tr>
+                <td style="font-family:{_FONT_UI};font-size:11px;color:{_INK3};">
+                  Kartavya &mdash; <em>do what must be done.</em><br>
+                  <span style="color:{_INK3};">Aekam Inc &middot; Ahmedabad, IN</span>
+                </td>
+                <td align="right" style="font-family:{_FONT_UI};font-size:11px;color:{_TEAL};white-space:nowrap;vertical-align:top;">
+                  <a href="{FRONTEND_URL}/dashboard" style="color:{_TEAL};text-decoration:none;">Open app</a>
+                  &nbsp;&middot;&nbsp;
+                  <a href="{FRONTEND_URL}/settings/notifications" style="color:{_TEAL};text-decoration:none;">Settings</a>
+                </td>
+              </tr>
+            </table>
           </td></tr>
+          <tr><td style="padding:16px 0 32px;"></td></tr>
         </table>
       </td></tr>
     </table>
@@ -232,25 +246,64 @@ def send_email(to_email: str, subject: str, html_content: str,
 # ── 1. Invite email ────────────────────────────────────────────────────────────
 def send_invite_email(to_email: str, inviter_name: str, role: str,
                       invite_token: str, workspace_name: str = "Kartavya",
-                      expires_label: str = "7 days"):
-    invite_url  = f"{FRONTEND_URL}/accept-invite?token={invite_token}"
-    role_label  = _h(role.capitalize())
-    first_name  = inviter_name.split()[0] if inviter_name else "Someone"
-    preheader   = f"{inviter_name} invited you to {workspace_name} on Kartavya — accept within {expires_label}."
+                      expires_label: str = "7 days", recipient_name: str = ""):
+    invite_url     = f"{FRONTEND_URL}/accept-invite?token={invite_token}"
+    workspace_url  = f"{FRONTEND_URL}/dashboard"
+    role_label     = _h(role.capitalize())
+    inviter_first  = _h(inviter_name.split()[0] if inviter_name else "Someone")
+    recip_first    = _h(recipient_name.split()[0] if recipient_name else "")
+    greeting       = f'Hi <strong>{recip_first}</strong>, ' if recip_first else ''
+    preheader      = f"{inviter_name} invited you to {workspace_name} on Kartavya — accept within {expires_label}."
+
+    info_table = (
+        f'<tr><td style="padding:0 36px 28px;">'
+        f'<table width="100%" cellpadding="0" cellspacing="0" border="0" class="em__card"'
+        f' style="background:{_BG};border:1px solid {_RULE};border-radius:10px;overflow:hidden;">'
+        f'<tr>'
+        f'<td style="padding:14px 18px 14px 18px;font-family:{_FONT_UI};font-size:12px;'
+        f'letter-spacing:0.12em;text-transform:uppercase;color:{_INK3};font-weight:700;'
+        f'border-bottom:1px solid {_RULE_SOFT};width:38%;">WORKSPACE</td>'
+        f'<td style="padding:14px 18px;font-family:{_FONT_UI};font-size:14px;color:{_INK};'
+        f'border-bottom:1px solid {_RULE_SOFT};">{_h(workspace_name)}</td>'
+        f'</tr>'
+        f'<tr>'
+        f'<td style="padding:14px 18px;font-family:{_FONT_UI};font-size:12px;'
+        f'letter-spacing:0.12em;text-transform:uppercase;color:{_INK3};font-weight:700;'
+        f'border-bottom:1px solid {_RULE_SOFT};">INVITED BY</td>'
+        f'<td style="padding:14px 18px;font-family:{_FONT_UI};font-size:14px;color:{_INK};'
+        f'border-bottom:1px solid {_RULE_SOFT};">{_h(inviter_name)}</td>'
+        f'</tr>'
+        f'<tr>'
+        f'<td style="padding:14px 18px;font-family:{_FONT_UI};font-size:12px;'
+        f'letter-spacing:0.12em;text-transform:uppercase;color:{_INK3};font-weight:700;'
+        f'border-bottom:1px solid {_RULE_SOFT};">YOUR ROLE</td>'
+        f'<td style="padding:14px 18px;font-family:{_FONT_UI};font-size:14px;color:{_INK};'
+        f'border-bottom:1px solid {_RULE_SOFT};">{role_label}</td>'
+        f'</tr>'
+        f'<tr>'
+        f'<td style="padding:14px 18px;font-family:{_FONT_UI};font-size:12px;'
+        f'letter-spacing:0.12em;text-transform:uppercase;color:{_INK3};font-weight:700;">EXPIRES</td>'
+        f'<td style="padding:14px 18px;font-family:{_FONT_UI};font-size:14px;color:{_INK};">'
+        f'{_h(expires_label)}</td>'
+        f'</tr>'
+        f'</table></td></tr>'
+    )
+
     body = (
-        _body_text(f'<strong>{_h(inviter_name)}</strong> has invited you to join '
-                   f'<strong>{_h(workspace_name)}</strong> as a <strong>{role_label}</strong>. '
-                   f'Click below to accept your invitation and set up your account. '
-                   f'This link expires in {_h(expires_label)}.')
-        + _cta_row(invite_url, "Accept Invitation", _DEEP,
-                   f"{FRONTEND_URL}", "View workspace")
-        + _body_text(f'<span style="font-size:12px;color:{_INK3};">Or paste: '
-                     f'<a href="{invite_url}" style="color:{_TEAL};">{invite_url}</a></span>')
+        _body_text(f'{greeting}<strong>{_h(inviter_name)}</strong> has invited you to collaborate '
+                   f'on <strong>{_h(workspace_name)}</strong> using Kartavya. '
+                   f'Accept below to get started.')
+        + info_table
+        + _cta_row(invite_url, "Accept invite", _TEAL, workspace_url, "View workspace")
+        + _body_text(f'<span style="font-size:12px;color:{_INK3};">The invite link expires in '
+                     f'{_h(expires_label)}. If you weren\'t expecting this email, you can safely ignore it.</span>')
     )
     return send_email(
         to_email,
         f"{inviter_name} invited you to {workspace_name} on Kartavya",
-        _base(preheader, "INVITATION · आमंत्रण", "You're invited", "स्वागत है", body, ""),
+        _base(preheader, "YOU'RE INVITED · आपका स्वागत है",
+              f"{inviter_first} invited you to {_h(workspace_name)} Workspace.",
+              "आपका स्वागत है", "", body),
         reply_to=None,
     )
 
