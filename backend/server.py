@@ -113,6 +113,15 @@ async def get_visible_team_ids(pool, user_id, role=None):
     )
     return [r["team_id"] for r in rows]
 
+async def is_project_member(pool, team_id: str, user: dict) -> dict | None:
+    """Return membership record (or a synthetic one for admins) or None."""
+    if user.get("role") in ("admin", "owner"):
+        return {"role": "admin"}
+    return await pool.fetchrow(
+        "SELECT role FROM project_assignments WHERE team_id=$1 AND user_id=$2",
+        team_id, user["user_id"]
+    )
+
 async def normalize_orders(pool, scope_col, scope_val, column_id):
     rows = await pool.fetch(
         f"SELECT task_id FROM tasks WHERE {scope_col}=$1 AND column_id=$2 ORDER BY sort_order ASC, updated_at ASC",
@@ -277,7 +286,7 @@ async def logout(): return {"ok":True}
 
 @api_router.get("/projects/{team_id}/columns",response_model=List[ProjectColumnOut])
 async def list_columns(team_id:str,pool=Depends(get_db),user=Depends(require_user)):
-    mem=await pool.fetchrow("SELECT 1 FROM project_assignments WHERE team_id=$1 AND user_id=$2",team_id,user["user_id"])
+    mem=await is_project_member(pool,team_id,user)
     if not mem: raise HTTPException(403,"Not a project member")
     await ensure_default_columns(pool,team_id)
     rows=await pool.fetch("SELECT * FROM project_columns WHERE team_id=$1 ORDER BY sort_order ASC",team_id)
@@ -285,7 +294,7 @@ async def list_columns(team_id:str,pool=Depends(get_db),user=Depends(require_use
 
 @api_router.post("/projects/{team_id}/columns",response_model=ProjectColumnOut)
 async def create_column(team_id:str,payload:ProjectColumnCreate,pool=Depends(get_db),user=Depends(require_user)):
-    mem=await pool.fetchrow("SELECT role FROM project_assignments WHERE team_id=$1 AND user_id=$2",team_id,user["user_id"])
+    mem=await is_project_member(pool,team_id,user)
     if not mem or mem["role"] not in ("owner","admin"): raise HTTPException(403,"Owner or admin required")
     max_order=await pool.fetchval("SELECT COALESCE(MAX(sort_order),-1) FROM project_columns WHERE team_id=$1",team_id)
     column_id=f"col_{uuid.uuid4().hex[:12]}"
@@ -295,7 +304,7 @@ async def create_column(team_id:str,payload:ProjectColumnCreate,pool=Depends(get
 
 @api_router.put("/projects/{team_id}/columns/{column_id}",response_model=ProjectColumnOut)
 async def update_column(team_id:str,column_id:str,payload:ProjectColumnUpdate,pool=Depends(get_db),user=Depends(require_user)):
-    mem=await pool.fetchrow("SELECT role FROM project_assignments WHERE team_id=$1 AND user_id=$2",team_id,user["user_id"])
+    mem=await is_project_member(pool,team_id,user)
     if not mem or mem["role"] not in ("owner","admin"): raise HTTPException(403)
     updates,vals=[],[]
     if payload.name is not None:       updates.append(f"name=${len(vals)+1}");       vals.append(payload.name.strip())
@@ -310,7 +319,7 @@ async def update_column(team_id:str,column_id:str,payload:ProjectColumnUpdate,po
 
 @api_router.delete("/projects/{team_id}/columns/{column_id}")
 async def delete_column(team_id:str,column_id:str,pool=Depends(get_db),user=Depends(require_user)):
-    mem=await pool.fetchrow("SELECT role FROM project_assignments WHERE team_id=$1 AND user_id=$2",team_id,user["user_id"])
+    mem=await is_project_member(pool,team_id,user)
     if not mem or mem["role"] not in ("owner","admin"): raise HTTPException(403)
     remaining=await pool.fetchval("SELECT COUNT(*) FROM project_columns WHERE team_id=$1",team_id)
     if remaining<=1: raise HTTPException(400,"Cannot delete the last column")
@@ -321,7 +330,7 @@ async def delete_column(team_id:str,column_id:str,pool=Depends(get_db),user=Depe
 
 @api_router.post("/projects/{team_id}/columns/reorder")
 async def reorder_columns(team_id:str,body:dict,pool=Depends(get_db),user=Depends(require_user)):
-    mem=await pool.fetchrow("SELECT role FROM project_assignments WHERE team_id=$1 AND user_id=$2",team_id,user["user_id"])
+    mem=await is_project_member(pool,team_id,user)
     if not mem or mem["role"] not in ("owner","admin"): raise HTTPException(403)
     for idx,cid in enumerate(body.get("ordered_ids",[])):
         await pool.execute("UPDATE project_columns SET sort_order=$1 WHERE column_id=$2 AND team_id=$3",idx,cid,team_id)
@@ -540,7 +549,7 @@ async def get_team(team_id:str,pool=Depends(get_db),user=Depends(require_user)):
 @api_router.get("/teams/{team_id}/members")
 async def list_team_members(team_id:str,pool=Depends(get_db),user=Depends(require_user)):
     """Returns member list for @mention autocomplete. Accessible to all project members incl. clients."""
-    mem=await pool.fetchrow("SELECT 1 FROM project_assignments WHERE team_id=$1 AND user_id=$2",team_id,user["user_id"])
+    mem=await is_project_member(pool,team_id,user)
     if not mem: raise HTTPException(403,"Not a team member")
     rows=await pool.fetch("""
         SELECT tm.user_id, COALESCE(u.full_name,u.name,u.email) AS display_name, u.email
@@ -631,7 +640,7 @@ async def list_tasks(status:Optional[str]=None,category_id:Optional[str]=None,q:
 @api_router.post("/tasks",response_model=TaskOut)
 async def create_task(payload:TaskCreate,pool=Depends(get_db),user=Depends(require_user)):
     if payload.team_id:
-        mem=await pool.fetchrow("SELECT 1 FROM project_assignments WHERE team_id=$1 AND user_id=$2",payload.team_id,user["user_id"])
+        mem=await is_project_member(pool,payload.team_id,user)
         if not mem: raise HTTPException(403)
         user_id_field,scope_col,scope_val=None,"team_id",payload.team_id
     else:

@@ -26,16 +26,19 @@ export default function NewTaskModal({ open, onClose, onCreated }) {
   const [estimate,    setEstimate]    = useState('');
   const [description, setDescription] = useState('');
   const [assignees,   setAssignees]   = useState([]);
+  const [files,       setFiles]       = useState([]); // [{name, url}]
+  const [uploading,   setUploading]   = useState(false);
   const [projects,    setProjects]    = useState([]);
   const [members,     setMembers]     = useState([]);
   const [saving,      setSaving]      = useState(false);
+  const fileRef = useRef(null);
 
   const titleRef = useRef(null);
 
   useEffect(() => {
     if (!open) return;
     setTitle(''); setProjectId(''); setStatus('todo'); setPriority('medium');
-    setDueAt(''); setEstimate(''); setDescription(''); setAssignees([]);
+    setDueAt(''); setEstimate(''); setDescription(''); setAssignees([]); setFiles([]);
     api.get('/teams').then(r => setProjects(r.data)).catch(() => {});
     api.get('/teams').then(r => {
       const allMembers = [];
@@ -57,6 +60,21 @@ export default function NewTaskModal({ open, onClose, onCreated }) {
     setAssignees(prev => prev.includes(uid) ? prev.filter(x => x !== uid) : [...prev, uid]);
   };
 
+  const handleFileChange = async (e) => {
+    const picked = Array.from(e.target.files);
+    if (!picked.length) return;
+    setUploading(true);
+    try {
+      for (const file of picked) {
+        const fd = new FormData();
+        fd.append('file', file);
+        const res = await api.post('/upload', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+        setFiles(prev => [...prev, { name: file.name, url: res.data.url }]);
+      }
+    } catch (_) {}
+    finally { setUploading(false); e.target.value = ''; }
+  };
+
   const handleSubmit = async () => {
     if (!title.trim() || saving) return;
     setSaving(true);
@@ -71,6 +89,7 @@ export default function NewTaskModal({ open, onClose, onCreated }) {
       if (dueAt)                 payload.due_at              = new Date(dueAt).toISOString();
       if (estimate)              payload.estimate_hours      = parseFloat(estimate);
       if (assignees.length)      payload.assignee_user_ids   = assignees;
+      if (files.length)          payload.attachments         = files.map(f => f.url);
       await api.post('/tasks', payload);
       onCreated?.();
       onClose();
@@ -204,7 +223,7 @@ export default function NewTaskModal({ open, onClose, onCreated }) {
           )}
 
           {/* DESCRIPTION */}
-          <div>
+          <div style={{ marginBottom: 16 }}>
             <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--ink-3)', marginBottom: 6 }}>
               DESCRIPTION · <span className="k-hi" style={{ fontFamily: 'var(--font-hindi)', textTransform: 'none', letterSpacing: 0 }}>विवरण</span>
             </div>
@@ -216,6 +235,34 @@ export default function NewTaskModal({ open, onClose, onCreated }) {
               onChange={e => setDescription(e.target.value)}
               placeholder="Acceptance criteria, context, links…"
             />
+          </div>
+
+          {/* FILES */}
+          <div>
+            <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--ink-3)', marginBottom: 8 }}>
+              ATTACHMENTS · <span className="k-hi" style={{ fontFamily: 'var(--font-hindi)', textTransform: 'none', letterSpacing: 0 }}>संलग्नक</span>
+            </div>
+            <input ref={fileRef} type="file" multiple style={{ display: 'none' }} onChange={handleFileChange} />
+            {files.length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 10 }}>
+                {files.map((f, i) => (
+                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', borderRadius: 8, background: 'var(--bg)', border: '1px solid var(--rule)', fontSize: 13 }}>
+                    <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="var(--ink-3)" strokeWidth="1.5"><path d="M9 1H4a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V5L9 1z"/><path d="M9 1v4h4"/></svg>
+                    <a href={f.url} target="_blank" rel="noreferrer" style={{ flex: 1, color: 'var(--k-primary)', textDecoration: 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.name}</a>
+                    <button onClick={() => setFiles(p => p.filter((_, j) => j !== i))} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-faint)', fontSize: 16, lineHeight: 1, padding: 0 }}>×</button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <button
+              type="button"
+              onClick={() => fileRef.current?.click()}
+              disabled={uploading}
+              style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '7px 14px', borderRadius: 8, border: '1.5px dashed var(--rule-strong)', background: 'transparent', color: 'var(--ink-3)', cursor: 'pointer', fontSize: 13, fontFamily: 'var(--font-ui)' }}
+            >
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M8 12V4M4 8l4-4 4 4"/><path d="M2 14h12"/></svg>
+              {uploading ? 'Uploading…' : 'Attach files'}
+            </button>
           </div>
         </div>
 
