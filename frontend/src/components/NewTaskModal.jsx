@@ -31,6 +31,7 @@ export default function NewTaskModal({ open, onClose, onCreated }) {
   const [projects,    setProjects]    = useState([]);
   const [members,     setMembers]     = useState([]);
   const [saving,      setSaving]      = useState(false);
+  const [titleError,  setTitleError]  = useState(false);
   const fileRef = useRef(null);
 
   const titleRef = useRef(null);
@@ -76,7 +77,8 @@ export default function NewTaskModal({ open, onClose, onCreated }) {
   };
 
   const handleSubmit = async () => {
-    if (!title.trim() || saving) return;
+    if (!title.trim()) { setTitleError(true); titleRef.current?.focus(); return; }
+    if (saving) return;
     setSaving(true);
     try {
       const payload = {
@@ -133,13 +135,18 @@ export default function NewTaskModal({ open, onClose, onCreated }) {
         <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
 
           {/* Title */}
-          <input
-            ref={titleRef}
-            value={title}
-            onChange={e => setTitle(e.target.value)}
-            placeholder="Write a clear, action-first title…"
-            style={{ width: '100%', border: 'none', borderBottom: '2px solid var(--rule)', outline: 'none', fontSize: 20, fontFamily: 'var(--font-display)', color: 'var(--ink)', background: 'transparent', paddingBottom: 10, marginBottom: 20, fontWeight: 400 }}
-          />
+          <div style={{ marginBottom: 20 }}>
+            <input
+              ref={titleRef}
+              value={title}
+              onChange={e => { setTitle(e.target.value); if (e.target.value.trim()) setTitleError(false); }}
+              placeholder="Write a clear, action-first title…"
+              style={{ width: '100%', border: 'none', borderBottom: `2px solid ${titleError ? '#dc2626' : 'var(--rule)'}`, outline: 'none', fontSize: 20, fontFamily: 'var(--font-display)', color: 'var(--ink)', background: 'transparent', paddingBottom: 10, fontWeight: 400, transition: 'border-color .15s' }}
+            />
+            {titleError && (
+              <div style={{ fontSize: 11, color: '#dc2626', marginTop: 5 }}>Title is required to create a task.</div>
+            )}
+          </div>
 
           {/* PROJECT + STATUS row */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
@@ -273,7 +280,7 @@ export default function NewTaskModal({ open, onClose, onCreated }) {
           <button
             className="k-btn k-btn--primary k-btn--sm"
             onClick={handleSubmit}
-            disabled={!title.trim() || saving}
+            disabled={saving}
           >
             {saving ? 'Creating…' : 'Create task'}
           </button>

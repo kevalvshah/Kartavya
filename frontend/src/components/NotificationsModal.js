@@ -1,126 +1,113 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { Modal } from "../components/ui/modal";
-import { Button } from "../components/ui/button";
-import { Badge } from "../components/ui/badge";
-import { cn } from "../lib/utils";
-import { api } from "../lib/api";
-
-function timeAgo(iso) {
-  const d = new Date(iso);
-  const diff = Date.now() - d.getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "just now";
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  const days = Math.floor(hrs / 24);
-  return `${days}d ago`;
-}
+import React, { useEffect, useMemo, useState } from 'react';
+import { api } from '../lib/api';
+import { relTime } from '../lib/utils';
 
 export function NotificationsModal({ open, onOpenChange }) {
-  const [items, setItems] = useState([]);
+  const [items,   setItems]   = useState([]);
   const [loading, setLoading] = useState(false);
 
-  const unreadCount = useMemo(() => items.filter((i) => !i.read_at).length, [items]);
-
-  const load = async () => {
-    setLoading(true);
-    try {
-      const res = await api.get("/notifications");
-      setItems(res.data);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const unreadCount = useMemo(() => items.filter(i => !i.read_at).length, [items]);
 
   useEffect(() => {
     if (!open) return;
-    load().catch(() => {});
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    setLoading(true);
+    api.get('/notifications')
+      .then(r => setItems(r.data))
+      .catch(() => {})
+      .finally(() => setLoading(false));
   }, [open]);
 
   const markAll = async () => {
-    await api.post("/notifications/mark-read", { mark_all: true, notification_ids: [] });
-    setItems((prev) => prev.map((n) => ({ ...n, read_at: n.read_at || new Date().toISOString() })));
+    await api.post('/notifications/mark-read', { mark_all: true, notification_ids: [] });
+    setItems(prev => prev.map(n => ({ ...n, read_at: n.read_at || new Date().toISOString() })));
   };
 
   const markOne = async (id) => {
-    await api.post("/notifications/mark-read", { mark_all: false, notification_ids: [id] });
-    setItems((prev) => prev.map((n) => (n.notification_id === id ? { ...n, read_at: new Date().toISOString() } : n)));
+    await api.post('/notifications/mark-read', { mark_all: false, notification_ids: [id] });
+    setItems(prev => prev.map(n => n.notification_id === id ? { ...n, read_at: new Date().toISOString() } : n));
   };
 
+  if (!open) return null;
+
   return (
-    <Modal
-      open={open}
-      onOpenChange={onOpenChange}
-      title="Notifications"
-      dataTestId="notifications-modal"
-      footer={
-        <div className="flex items-center justify-between gap-2">
-          <div data-testid="notifications-unread-count" className="text-xs text-muted-foreground">
-            Unread: {unreadCount}
-          </div>
-          <Button data-testid="notifications-mark-all" variant="ghost" onClick={markAll} disabled={items.length === 0}>
-            Mark all read
-          </Button>
-        </div>
-      }
+    <div
+      style={{ position: 'fixed', inset: 0, zIndex: 400, background: 'rgba(0,0,0,.45)', backdropFilter: 'blur(3px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+      onClick={() => onOpenChange(false)}
     >
-      <div className="space-y-3">
-        {loading ? (
-          <div data-testid="notifications-loading" className="text-sm text-muted-foreground">
-            Loading…
-          </div>
-        ) : null}
-
-        {!loading && items.length === 0 ? (
-          <div data-testid="notifications-empty" className="text-sm text-muted-foreground">
-            No notifications yet.
-          </div>
-        ) : null}
-
-        {items.map((n) => (
-          <div
-            key={n.notification_id}
-            data-testid={`notification-item-${n.notification_id}`}
-            className={cn(
-              "rounded-2xl border border-border/60 bg-background/30 p-4",
-              !n.read_at ? "ring-1 ring-violet-500/20" : "opacity-80",
-            )}
-          >
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <div data-testid={`notification-title-${n.notification_id}`} className="text-sm font-semibold">
-                    {n.title}
-                  </div>
-                  {!n.read_at ? (
-                    <Badge data-testid={`notification-unread-badge-${n.notification_id}`} tone="info">
-                      New
-                    </Badge>
-                  ) : null}
-                </div>
-                <div data-testid={`notification-message-${n.notification_id}`} className="mt-1 text-sm text-muted-foreground">
-                  {n.message}
-                </div>
-                <div data-testid={`notification-time-${n.notification_id}`} className="mt-2 text-xs text-muted-foreground">
-                  {timeAgo(n.created_at)}
-                </div>
-              </div>
-
-              {!n.read_at ? (
-                <Button
-                  data-testid={`notification-mark-read-${n.notification_id}`}
-                  variant="ghost"
-                  onClick={() => markOne(n.notification_id)}
-                >
-                  Mark read
-                </Button>
-              ) : null}
+      <div
+        style={{ background: 'var(--surface)', border: '1px solid var(--rule)', borderRadius: 16, boxShadow: '0 24px 64px rgba(0,0,0,.3)', width: 480, maxWidth: '92vw', maxHeight: '80vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div style={{ padding: '18px 20px 14px', borderBottom: '1px solid var(--rule-soft)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
+          <div>
+            <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--k-primary)', marginBottom: 2 }}>
+              NOTIFICATIONS · <span style={{ fontFamily: 'var(--font-hindi)' }}>सूचनाएं</span>
+            </div>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 400, color: 'var(--ink)' }}>
+              What's new
             </div>
           </div>
-        ))}
+          <button onClick={() => onOpenChange(false)} style={{ background: 'none', border: '1px solid var(--rule)', borderRadius: 7, cursor: 'pointer', fontSize: 18, color: 'var(--ink-3)', width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
+        </div>
+
+        {/* Body */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {loading && (
+            <div style={{ padding: '24px 0', textAlign: 'center', color: 'var(--ink-3)', fontStyle: 'italic', fontFamily: 'var(--font-display)' }}>Loading…</div>
+          )}
+          {!loading && items.length === 0 && (
+            <div style={{ padding: '32px 0', textAlign: 'center', color: 'var(--ink-3)' }}>
+              <div style={{ fontSize: 28, marginBottom: 8 }}>🔔</div>
+              <div style={{ fontFamily: 'var(--font-display)', fontSize: 16 }}>No notifications yet</div>
+            </div>
+          )}
+          {items.map(n => (
+            <div key={n.notification_id} style={{
+              padding: '12px 14px', borderRadius: 10,
+              border: `1px solid ${!n.read_at ? 'var(--k-primary)40' : 'var(--rule-soft)'}`,
+              background: !n.read_at ? 'var(--side-active)' : 'var(--bg)',
+              opacity: n.read_at ? 0.7 : 1,
+              transition: 'opacity .15s',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 3 }}>
+                    {!n.read_at && (
+                      <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--k-primary)', flexShrink: 0, display: 'inline-block' }} />
+                    )}
+                    <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink)' }}>{n.title}</span>
+                  </div>
+                  <div style={{ fontSize: 13, color: 'var(--ink-2)', lineHeight: 1.5 }}>{n.message}</div>
+                  <div style={{ fontSize: 11, color: 'var(--ink-3)', marginTop: 5 }}>{relTime(n.created_at)}</div>
+                </div>
+                {!n.read_at && (
+                  <button
+                    onClick={() => markOne(n.notification_id)}
+                    style={{ flexShrink: 0, fontSize: 11, color: 'var(--k-primary)', background: 'none', border: '1px solid var(--k-primary)50', borderRadius: 6, padding: '3px 9px', cursor: 'pointer', fontFamily: 'var(--font-ui)', whiteSpace: 'nowrap' }}
+                  >
+                    Mark read
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Footer */}
+        <div style={{ padding: '12px 20px', borderTop: '1px solid var(--rule-soft)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
+          <span style={{ fontSize: 12, color: 'var(--ink-3)' }}>
+            {unreadCount > 0 ? `${unreadCount} unread` : 'All caught up'}
+          </span>
+          <button
+            onClick={markAll}
+            disabled={unreadCount === 0}
+            className="k-btn k-btn--ghost k-btn--sm"
+          >
+            Mark all read
+          </button>
+        </div>
       </div>
-    </Modal>
+    </div>
   );
 }
