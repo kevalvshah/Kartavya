@@ -1,7 +1,3 @@
-/**
- * FieldRenderer.jsx — dispatches to the right field component by type.
- * Used in TaskDrawer (edit mode) and KanbanCard (read mode).
- */
 import React from 'react';
 import StatusField   from './StatusField';
 import PersonField   from './PersonField';
@@ -22,6 +18,6 @@ export default function FieldRenderer({ field, value, onChange, readOnly = false
     case 'text':     return <TextField     {...props} />;
     case 'files':    return <FilesField    {...props} />;
     default:
-      return <span style={{ color: 'var(--text-subtle)', fontSize: 'var(--text-xs)' }}>Unknown field type: {field.type}</span>;
+      return <span style={{ color: 'var(--ink-faint)', fontSize: 11 }}>Unknown: {field.type}</span>;
   }
 }

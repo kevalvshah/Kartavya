@@ -1,69 +1,23 @@
 /**
- * DashboardPage.jsx — real-data dashboard matching the design handoff.
- * Greeting · week strip · stat cards · On your plate · Upcoming · Status · Team pulse
+ * DashboardPage.jsx — editorial Today screen.
+ * Layout: Hero → StatRow (4 tiles) → k-twocol (main + side columns)
+ * Data: existing /tasks + /activity/team/:id + /api/verse-of-the-day
  */
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
 import { currentUser } from '../lib/auth';
+import {
+  Hero, StatTile, Card, DueChip, PriorityDot, ProjectTag, AvatarStack, Citation,
+} from '../components/editorial';
+import { AVATAR_COLORS, relTime, userInitials } from '../lib/utils';
 
-// ── Constants ─────────────────────────────────────────────────────────────────
-const WEEK_EN  = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
-const WEEK_HI  = ['सोम','मंगल','बुध','गुरु','शुक्र','शनि','रवि'];
-const VIKRAM_MONTHS = ['Chaitra','Vaishākha','Jyēṣṭha','Āṣāḍha','Śrāvaṇa','Bhādra','Āśvina','Kārtika','Mārgaśīrṣa','Pauṣa','Māgha','Phālguna'];
+const VIKRAM_MONTHS = ['Chaitra','Vaishākha','Jyēṣṭha','Āṣāḍha','Śrāvaṇa','Bhādra',
+  'Āśvina','Kārtika','Mārgaśīrṣa','Pauṣa','Māgha','Phālguna'];
+const STATUS_COLOR  = { todo:'#94a3b8', in_progress:'#0082c6', in_review:'#a78bfa', done:'#05b7aa', requested:'#f59e0b' };
+const STATUS_LABEL  = { todo:'To Do', in_progress:'In Progress', in_review:'In Review', done:'Done', requested:'Requested' };
+const STATUS_HI     = { todo:'कार्य', in_progress:'चालू', in_review:'समीक्षा', done:'सम्पन्न', requested:'अनुरोध' };
 
-const PRI_DOT  = { urgent: '#dc2626', high: '#ef4444', medium: '#f59e0b', low: '#22c55e' };
-const STATUS_COLOR = { todo: '#60a5fa', in_progress: '#f59e0b', in_review: '#a78bfa', done: '#34d399' };
-const STATUS_HI    = { todo: 'कार्य', in_progress: 'चालू', in_review: 'समीक्षा', done: 'सम्पन्न' };
-const AVATAR_COLORS = ['#0082c6','#05b7aa','#8b5cf6','#ec4899','#f59e0b','#10b981','#6366f1'];
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-function relDate(iso) {
-  if (!iso) return null;
-  const diff  = new Date(iso) - new Date();
-  const days  = Math.floor(diff / 86_400_000);
-  if (diff < 0) return { label: 'Overdue',  color: 'var(--danger)' };
-  if (days === 0) return { label: 'Today',   color: '#f59e0b' };
-  if (days === 1) return { label: 'Tomorrow',color: '#f59e0b' };
-  return { label: `In ${days}d`, color: 'var(--ink-3)' };
-}
-
-function timeAgo(iso) {
-  if (!iso) return '';
-  const s = Math.floor((Date.now() - new Date(iso)) / 1000);
-  if (s < 60)   return `${s}s ago`;
-  if (s < 3600) return `${Math.floor(s/60)}m ago`;
-  if (s < 86400)return `${Math.floor(s/3600)}h ago`;
-  return `${Math.floor(s/86400)}d ago`;
-}
-
-function initials(name) {
-  if (!name) return '?';
-  return name.split(' ').map(w => w[0]).join('').slice(0,2).toUpperCase();
-}
-
-function MiniAvatar({ name, index, size = 24 }) {
-  return (
-    <div style={{ width: size, height: size, borderRadius: '50%', background: AVATAR_COLORS[(index||0) % AVATAR_COLORS.length],
-      display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: size * 0.38,
-      fontWeight: 700, color: '#fff', flexShrink: 0, fontFamily: 'var(--font-display)' }}>
-      {initials(name)}
-    </div>
-  );
-}
-
-function RelBadge({ iso }) {
-  const r = relDate(iso);
-  if (!r) return null;
-  return (
-    <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 99,
-      background: r.color + '18', color: r.color, whiteSpace: 'nowrap' }}>
-      {r.label}
-    </span>
-  );
-}
-
-// ── Vikram Samvat approximate ─────────────────────────────────────────────────
 function vikramDate(now) {
   const year  = now.getFullYear() + 56 + (now.getMonth() >= 3 ? 1 : 0);
   const month = VIKRAM_MONTHS[(now.getMonth() + 1) % 12];
@@ -72,12 +26,12 @@ function vikramDate(now) {
 
 // ── Main component ────────────────────────────────────────────────────────────
 export default function DashboardPage({ teams = [] }) {
-  const navigate = useNavigate();
-  const user     = currentUser();
+  const navigate  = useNavigate();
+  const user      = currentUser();
   const firstName = (user?.full_name || user?.name || 'there').split(' ')[0];
 
-  const now     = new Date();
-  const dayIdx  = (now.getDay() + 6) % 7;
+  const now    = new Date();
+  const dayIdx = (now.getDay() + 6) % 7;
   const { year: vikYear, month: vikMonth } = vikramDate(now);
 
   const weekDates = useMemo(() => Array.from({ length: 7 }, (_, i) => {
@@ -85,381 +39,259 @@ export default function DashboardPage({ teams = [] }) {
   }), []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── State ──────────────────────────────────────────────────────────────────
-  const [loading,   setLoading]   = useState(true);
-  const [tasks,     setTasks]     = useState([]);
-  const [activity,  setActivity]  = useState([]);
-  const [teamId,    setTeamId]    = useState('');
+  const [loading,  setLoading]  = useState(true);
+  const [tasks,    setTasks]    = useState([]);
+  const [activity, setActivity] = useState([]);
+  const [verse,    setVerse]    = useState(null);
+  const [teamId,   setTeamId]   = useState('');
 
-  // ── Fetch ──────────────────────────────────────────────────────────────────
+  // ── Fetch tasks ────────────────────────────────────────────────────────────
   useEffect(() => {
-    const fetchAll = async () => {
-      setLoading(true);
-      try {
-        const [tRes] = await Promise.all([
-          api.get('/tasks'),
-        ]);
-        setTasks(tRes.data || []);
-      } catch (e) { console.error(e); }
-      finally { setLoading(false); }
-    };
-    fetchAll();
+    setLoading(true);
+    Promise.all([
+      api.get('/tasks'),
+      api.get('/verse-of-the-day').catch(() => null),
+    ]).then(([tRes, vRes]) => {
+      setTasks(tRes.data || []);
+      if (vRes) setVerse(vRes.data);
+    }).catch(console.error).finally(() => setLoading(false));
   }, []);
 
-  // Fetch activity when we have a teamId
+  // ── Fetch activity when team resolves ─────────────────────────────────────
   useEffect(() => {
-    const tid = teamId || teams?.[0]?.team_id;
+    const tid = teams?.[0]?.team_id;
     if (!tid) return;
-    api.get(`/activity/team/${tid}`, { params: { limit: 12 } })
+    setTeamId(tid);
+    api.get(`/activity/team/${tid}`, { params: { limit: 6 } })
        .then(r => setActivity(r.data || []))
        .catch(() => {});
-  }, [teamId, teams]);
-
-  // Auto-select first team
-  useEffect(() => {
-    if (!teamId && teams.length) setTeamId(teams[0].team_id);
   }, [teams]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Derived stats ──────────────────────────────────────────────────────────
-  const today    = new Date(); today.setHours(0,0,0,0);
-  const tomorrow = new Date(today); tomorrow.setDate(today.getDate()+1);
-  const weekEnd  = new Date(today); weekEnd.setDate(today.getDate()+7);
-  const weekStart= new Date(today); weekStart.setDate(today.getDate()-7);
+  // ── Derived ────────────────────────────────────────────────────────────────
+  const { today, tomorrow, weekEnd, weekAgo } = useMemo(() => {
+    const t = new Date(); t.setHours(0,0,0,0);
+    const tom = new Date(t); tom.setDate(t.getDate()+1);
+    const we  = new Date(t); we.setDate(t.getDate()+7);
+    const wa  = new Date(t); wa.setDate(t.getDate()-7);
+    return { today: t, tomorrow: tom, weekEnd: we, weekAgo: wa };
+  }, []);
 
-  const myId    = user?.user_id;
-  const myTasks = tasks.filter(t => t.user_id === myId || t.assignee_user_ids?.includes(myId));
-
-  const openTasks      = tasks.filter(t => t.status !== 'done');
-  const dueTodayTasks  = tasks.filter(t => t.due_at && new Date(t.due_at) >= today && new Date(t.due_at) < tomorrow);
-  const overdueTasks   = tasks.filter(t => t.due_at && new Date(t.due_at) < today && t.status !== 'done');
-  const completedWeek  = tasks.filter(t => t.status === 'done' && t.updated_at && new Date(t.updated_at) >= weekStart);
-
-  const myPlate = myTasks.filter(t => t.status !== 'done').slice(0, 6);
-  const upcoming = tasks
-    .filter(t => t.due_at && new Date(t.due_at) >= today && new Date(t.due_at) <= weekEnd && t.status !== 'done')
-    .sort((a, b) => new Date(a.due_at) - new Date(b.due_at))
-    .slice(0, 8);
+  const myId = user?.user_id;
+  const {
+    myPlate, openTasks, dueToday, overdue, completedWeek, inProgress, inReview, upcoming,
+  } = useMemo(() => {
+    const myTasks   = tasks.filter(t => t.user_id === myId || t.assignee_user_ids?.includes(myId));
+    const open      = tasks.filter(t => t.status !== 'done');
+    return {
+      myPlate:       myTasks.filter(t => t.status !== 'done').slice(0, 6),
+      openTasks:     open,
+      openProjectCount: new Set(open.map(t => t.team_id).filter(Boolean)).size || 1,
+      dueToday:      tasks.filter(t => t.due_at && new Date(t.due_at) >= today && new Date(t.due_at) < tomorrow),
+      overdue:       tasks.filter(t => t.due_at && new Date(t.due_at) < today && t.status !== 'done'),
+      completedWeek: tasks.filter(t => t.status === 'done' && t.updated_at && new Date(t.updated_at) >= weekAgo),
+      inProgress:    tasks.filter(t => t.status === 'in_progress'),
+      inReview:      tasks.filter(t => t.status === 'in_review'),
+      upcoming:      tasks
+        .filter(t => t.due_at && new Date(t.due_at) >= today && new Date(t.due_at) <= weekEnd && t.status !== 'done')
+        .sort((a,b) => new Date(a.due_at) - new Date(b.due_at)).slice(0, 6),
+    };
+  }, [tasks, myId, today, tomorrow, weekEnd, weekAgo]);
 
   // Status breakdown
-  const statusCounts = tasks.reduce((acc, t) => { acc[t.status] = (acc[t.status]||0)+1; return acc; }, {});
-  const statusOrder  = ['todo','in_progress','in_review','done'];
+  const statusOrder = ['todo','in_progress','in_review','done'];
+  const statusCounts = tasks.reduce((a, t) => { a[t.status] = (a[t.status]||0)+1; return a; }, {});
   const totalTasks   = tasks.length || 1;
-  const doneCount    = statusCounts['done'] || 0;
+  const doneCount    = statusCounts.done || 0;
   const donePct      = Math.round((doneCount / totalTasks) * 100);
 
-  // Task dots on week strip (tasks due on each weekday)
+  // Task dots on week strip
   const dotsByDay = useMemo(() => {
     const map = {};
     tasks.forEach(t => {
       if (!t.due_at) return;
-      const d = new Date(t.due_at);
-      const key = d.toDateString();
+      const key = new Date(t.due_at).toDateString();
       map[key] = (map[key]||0)+1;
     });
     return map;
   }, [tasks]);
 
-  // ── Render ─────────────────────────────────────────────────────────────────
-  const statCards = [
-    { en: 'OPEN',  hi: 'कार्य', value: openTasks.length,
-      sub: openTasks.length === 1 ? 'task open' : 'tasks open',
-      color: 'var(--ink)' },
-    { en: 'DUE TODAY', hi: 'आज', value: dueTodayTasks.length,
-      sub: dueTodayTasks.filter(t=>t.priority==='high'||t.priority==='urgent').length + ' high priority',
-      color: dueTodayTasks.length > 0 ? '#f59e0b' : 'var(--ink)' },
-    { en: 'OVERDUE', hi: 'विलंबित', value: overdueTasks.length,
-      sub: overdueTasks.length > 0 ? 'needs attention' : 'all on track',
-      color: overdueTasks.length > 0 ? 'var(--danger)' : 'var(--ink)' },
-    { en: 'COMPLETED THIS WEEK', hi: 'सम्पन्न', value: completedWeek.length,
-      sub: completedWeek.length > 0 ? `↑ great progress` : 'keep going',
-      color: completedWeek.length > 0 ? '#10b981' : 'var(--ink)' },
+  // Date line for Hero
+  const dateLine = [
+    { label: now.toLocaleDateString('en-IN', { weekday: 'long' }) },
+    { label: now.toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' }) },
+    { label: `विक्रम संवत् ${vikYear}`, hindi: true },
   ];
 
+  const ledeCopy = loading ? null : (
+    <>
+      You have <b>{myPlate.length} open task{myPlate.length !== 1 ? 's' : ''}</b>
+      {dueToday.length > 0 && <>, <b>{dueToday.length} due today</b></>}
+      {overdue.length > 0   && <>, <b style={{ color: 'var(--danger)' }}>{overdue.length} running late</b></>}.
+      {' '}<span className="hi-mute">करणीयं कुरु —</span> <em>Do what must be done.</em>
+    </>
+  );
+
   return (
-    <div>
-      {/* ── Hero ─────────────────────────────────────────────────────────── */}
-      <div className="k-hero">
-        <div className="k-hero__wm">आज</div>
+    <div className="k-screen">
+      {/* Hero */}
+      <Hero
+        name={firstName}
+        dateLine={dateLine}
+        lede={ledeCopy}
+        weekDates={weekDates}
+        dotsByDay={dotsByDay}
+        todayIdx={dayIdx}
+      />
 
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 20, flexWrap: 'wrap' }}>
-          <div>
-            {/* Date line */}
-            <div style={{ fontSize: 12, fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--ink-3)', marginBottom: 6, display: 'flex', gap: 10, alignItems: 'center' }}>
-              <span>{now.toLocaleDateString('en-IN', { weekday: 'long' }).toUpperCase()}</span>
-              <span style={{ color: 'var(--rule-strong)' }}>·</span>
-              <span>{now.toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
-              <span style={{ color: 'var(--rule-strong)' }}>·</span>
-              <span className="k-hi" style={{ color: 'var(--k-primary)', fontFamily: 'var(--font-hindi)' }}>विक्रम संवत् {vikYear}</span>
-            </div>
+      {/* Stat row */}
+      <div className="k-stats">
+        <StatTile variant="blue"  label="OPEN"                sanskrit="खुला"      value={openTasks.length}     sub={`across ${openProjectCount} project${openProjectCount !== 1 ? 's' : ''}`} />
+        <StatTile variant="teal"  label="DUE TODAY"           sanskrit="आज"        value={dueToday.length}      sub={`${dueToday.filter(t=>t.priority==='high'||t.priority==='urgent').length} high priority`} />
+        <StatTile variant="amber" label="OVERDUE"             sanskrit="विलंबित"   value={overdue.length}       sub={overdue.length > 0 ? 'needs attention' : 'all on track'} />
+        <StatTile variant="red"   label="COMPLETED THIS WEEK" sanskrit="इस सप्ताह" value={completedWeek.length} sub={completedWeek.length > 0 ? `↑ ${Math.round((completedWeek.length/(tasks.length||1))*100)}% on last week` : 'keep going'} />
+      </div>
 
-            {/* Greeting */}
-            <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(28px,4vw,48px)', fontWeight: 400, color: 'var(--ink)', margin: 0, lineHeight: 1.1 }}>
-              <span className="k-hi" style={{ fontFamily: 'var(--font-hindi)', color: 'var(--k-primary)' }}>नमस्ते,</span>{' '}
-              {firstName}.
-            </h1>
+      {/* Two-column body */}
+      {!loading && (
+        <section className="k-twocol">
+          {/* LEFT column */}
+          <div className="k-col k-col--main">
+            {/* On your plate */}
+            <Card
+              title="On your plate"
+              sanskrit="आपके हाथ में"
+              right={<button className="k-link" onClick={() => navigate('/tasks')}>View all →</button>}
+              noPad
+            >
+              {myPlate.length === 0 ? (
+                <div style={{ padding: '20px 24px', color: 'var(--ink-3)', fontStyle: 'italic', fontFamily: 'var(--font-display)' }}>
+                  Nothing assigned to you right now.
+                </div>
+              ) : myPlate.map((t, i) => {
+                const assignees = (t.assignee_names || []).map((name, j) => ({
+                  name, color: AVATAR_COLORS[j % AVATAR_COLORS.length],
+                }));
+                return (
+                  <button key={t.task_id} className="k-taskrow" onClick={() => navigate('/tasks')}>
+                    <PriorityDot priority={t.priority} />
+                    <span className="k-taskrow__id">KAR-{String(i+100)}</span>
+                    <span className="k-taskrow__title">{t.title}</span>
+                    {t.team_name && <ProjectTag name={t.team_name} dense />}
+                    <DueChip date={t.due_at} />
+                    <AvatarStack users={assignees} size={20} max={3} />
+                  </button>
+                );
+              })}
+            </Card>
 
-            {/* Summary line */}
-            {!loading && (
-              <p style={{ marginTop: 10, fontSize: 14, color: 'var(--ink-3)', margin: '10px 0 0' }}>
-                You have <strong style={{ color: 'var(--ink)' }}>{openTasks.length} open task{openTasks.length !== 1 ? 's' : ''}</strong>
-                {dueTodayTasks.length > 0 && <>, <strong style={{ color: '#f59e0b' }}>{dueTodayTasks.length} due today</strong></>}
-                {overdueTasks.length > 0 && <>, <strong style={{ color: 'var(--danger)' }}>{overdueTasks.length} running late</strong></>}
-                {overdueTasks.length === 0 && <>, 0 running late</>}.
-                {' '}<span className="k-hi" style={{ fontFamily: 'var(--font-hindi)', color: 'var(--ink-3)' }}>करणीय कुरु</span>
-                {' '}<em style={{ color: 'var(--ink-faint)' }}>— Do what must be done.</em>
-              </p>
+            {/* Status breakdown */}
+            <Card title="Project status" sanskrit="स्थिति विवरण" right={<button className="k-link" onClick={() => navigate('/projects')}>Open projects →</button>}>
+              <div className="k-stackbar">
+                {statusOrder.map(s => {
+                  const count = statusCounts[s] || 0;
+                  if (!count) return null;
+                  return (
+                    <div key={s} className="k-stackbar__seg"
+                      style={{ flex: count, background: STATUS_COLOR[s] }}
+                      title={`${STATUS_LABEL[s]}: ${count}`}
+                    />
+                  );
+                })}
+              </div>
+              <div className="k-statuslegend">
+                {statusOrder.map(s => (
+                  <div key={s} className="k-statuslegend__row">
+                    <span className="k-statuslegend__dot" style={{ background: STATUS_COLOR[s] }} />
+                    <span className="k-statuslegend__lbl">{STATUS_LABEL[s]}</span>
+                    <span className="k-statuslegend__hi">{STATUS_HI[s]}</span>
+                    <span className="k-statuslegend__count">{statusCounts[s] || 0}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="k-meter">
+                <div className="k-meter__bar">
+                  <div className="k-meter__fill" style={{ width: donePct + '%' }} />
+                </div>
+                <div className="k-meter__lbl">
+                  {donePct}% complete · <span className="hi-mute">{donePct}% सम्पन्न</span>
+                </div>
+              </div>
+            </Card>
+          </div>
+
+          {/* RIGHT column */}
+          <div className="k-col k-col--side">
+            {/* Upcoming */}
+            <Card title="Upcoming this week" sanskrit="आगामी सप्ताह">
+              <div className="k-upcoming">
+                {upcoming.length === 0 ? (
+                  <div style={{ color: 'var(--ink-3)', fontStyle: 'italic', fontSize: 13 }}>Nothing due this week.</div>
+                ) : upcoming.map(t => {
+                  const assignees = (t.assignee_names || []).map((name, j) => ({ name, color: AVATAR_COLORS[j % AVATAR_COLORS.length] }));
+                  return (
+                    <button key={t.task_id} className="k-upcoming__row" onClick={() => navigate('/tasks')}>
+                      <DueChip date={t.due_at} flush />
+                      <div className="k-upcoming__body">
+                        <div className="k-upcoming__title">{t.title}</div>
+                        {t.team_name && <div className="k-upcoming__meta"><ProjectTag name={t.team_name} dense /></div>}
+                      </div>
+                      <AvatarStack users={assignees} size={18} max={2} />
+                    </button>
+                  );
+                })}
+              </div>
+            </Card>
+
+            {/* Recent activity */}
+            <Card title="Team pulse" sanskrit="दल की गतिविधि" right={<button className="k-link" onClick={() => navigate('/activity')}>All activity →</button>}>
+              <div className="k-activity">
+                {activity.length === 0 ? (
+                  <div style={{ color: 'var(--ink-3)', fontStyle: 'italic', fontSize: 13 }}>No recent activity.</div>
+                ) : activity.slice(0,6).map((a, i) => {
+                  const initials = userInitials(a.actor_name || a.actor || '');
+                  const color    = AVATAR_COLORS[i % AVATAR_COLORS.length];
+                  return (
+                    <div key={a.activity_id || i} className="k-activity__row">
+                      <span className="k-avatar" style={{ width: 22, height: 22, fontSize: 9, background: color, flexShrink: 0 }}>
+                        {initials}
+                      </span>
+                      <div className="k-activity__body">
+                        <div className="k-activity__line">
+                          <b>{(a.actor_name || a.actor || 'Someone').split(' ')[0]}</b>{' '}
+                          <span className="k-mute">{a.verb || a.event_type || 'updated'}</span>{' '}
+                          <span className="k-activity__what">{a.subject_title || a.task_title || ''}</span>
+                        </div>
+                        <div className="k-activity__when">{relTime(a.created_at || a.at)}</div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </Card>
+
+            {/* Verse of the day */}
+            {verse ? (
+              <Citation
+                sanskrit={verse.sanskrit}
+                english={verse.english}
+                source={verse.ref || 'Bhagavad Gītā'}
+              />
+            ) : (
+              <Citation
+                sanskrit="कर्मण्येवाधिकारस्ते मा फलेषु कदाचन"
+                english="You have a right to action alone, never to its fruits."
+                source="Bhagavad Gītā 2.47"
+              />
             )}
           </div>
+        </section>
+      )}
 
-          {/* Vikram date block */}
-          <div style={{ textAlign: 'right', flexShrink: 0 }}>
-            <div className="k-hi" style={{ fontSize: 11, color: 'var(--ink-3)', fontFamily: 'var(--font-hindi)' }}>विक्रम संवत् {vikYear}</div>
-            <div style={{ fontSize: 12, color: 'var(--ink-faint)' }}>
-              {now.toLocaleDateString('en-IN', { weekday: 'long' }).slice(0,3)} · {vikMonth}
-            </div>
-          </div>
+      {loading && (
+        <div style={{ padding: '48px 0', textAlign: 'center', color: 'var(--ink-3)', fontFamily: 'var(--font-display)', fontStyle: 'italic' }}>
+          Loading…
         </div>
-
-        {/* Week strip */}
-        <div className="k-week" style={{ marginTop: 20 }}>
-          {weekDates.map((d, i) => {
-            const dots = dotsByDay[d.toDateString()] || 0;
-            return (
-              <div key={i} className={'k-wday' + (i === dayIdx ? ' is-today' : '')}>
-                <div className="k-wday__en">{WEEK_EN[i]}</div>
-                <div className="k-wday__hi">{WEEK_HI[i]}</div>
-                <div className="k-wday__num">{d.getDate()}</div>
-                {/* Task dots */}
-                <div style={{ display: 'flex', gap: 2, justifyContent: 'center', marginTop: 4, minHeight: 6 }}>
-                  {Array.from({ length: Math.min(dots, 3) }, (_, k) => (
-                    <div key={k} style={{ width: 4, height: 4, borderRadius: '50%', background: i === dayIdx ? '#fff' : 'var(--k-primary)', opacity: 0.8 }} />
-                  ))}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* ── Page body ────────────────────────────────────────────────────── */}
-      <div className="k-page">
-        {loading ? (
-          <div style={{ padding: '48px 0', textAlign: 'center', color: 'var(--ink-3)', fontFamily: 'var(--font-display)', fontStyle: 'italic' }}>
-            Loading…
-          </div>
-        ) : (
-          <>
-            {/* ── Stat cards ── */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'var(--sp-4)', marginBottom: 'var(--sp-5)' }}>
-              {statCards.map(s => (
-                <div key={s.en} className="k-card" style={{ padding: '18px 20px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
-                    <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--ink-3)' }}>{s.en}</span>
-                    <span className="k-hi" style={{ fontFamily: 'var(--font-hindi)', fontSize: 11, color: 'var(--ink-faint)' }}>{s.hi}</span>
-                  </div>
-                  <div style={{ fontFamily: 'var(--font-display)', fontSize: 44, fontWeight: 400, color: s.color, lineHeight: 1 }}>{s.value}</div>
-                  <div style={{ fontSize: 11, color: 'var(--ink-3)', marginTop: 6 }}>{s.sub}</div>
-                </div>
-              ))}
-            </div>
-
-            {/* ── Main 2-col grid ── */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 360px', gap: 'var(--sp-5)', alignItems: 'start' }}>
-
-              {/* LEFT column */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-5)' }}>
-
-                {/* On your plate */}
-                <div className="k-card" style={{ padding: 0, overflow: 'hidden' }}>
-                  <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--rule-soft)', display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
-                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-                      <span style={{ fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 600, color: 'var(--ink)' }}>On your plate</span>
-                      <span className="k-hi" style={{ fontFamily: 'var(--font-hindi)', fontSize: 12, color: 'var(--ink-3)' }}>आपके हाथ में</span>
-                    </div>
-                    <button onClick={() => navigate('/tasks')}
-                      style={{ fontSize: 12, color: 'var(--k-primary)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>
-                      View all →
-                    </button>
-                  </div>
-
-                  {myPlate.length === 0 ? (
-                    <div style={{ padding: '24px 20px', color: 'var(--ink-3)', fontSize: 13, fontStyle: 'italic', fontFamily: 'var(--font-display)' }}>
-                      No tasks assigned to you right now.
-                    </div>
-                  ) : myPlate.map((t, i) => {
-                    const rel = relDate(t.due_at);
-                    const team = teams.find(tm => tm.team_id === t.team_id);
-                    return (
-                      <div key={t.task_id} onClick={() => navigate('/tasks')}
-                        style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 20px',
-                          borderBottom: '1px dashed var(--rule-soft)', cursor: 'pointer',
-                          transition: 'background .1s' }}
-                        onMouseEnter={e => e.currentTarget.style.background='var(--bg-soft)'}
-                        onMouseLeave={e => e.currentTarget.style.background='transparent'}>
-                        {/* Priority dot */}
-                        <div style={{ width: 8, height: 8, borderRadius: '50%', background: PRI_DOT[t.priority]||'var(--ink-faint)', flexShrink: 0 }} />
-                        {/* ID */}
-                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--ink-faint)', flexShrink: 0, minWidth: 56 }}>
-                          KAR-{t.task_id?.slice(-3) || String(i+100)}
-                        </span>
-                        {/* Title */}
-                        <span style={{ flex: 1, fontSize: 13.5, fontWeight: 500, color: 'var(--ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {t.title}
-                        </span>
-                        {/* Team chip */}
-                        {team && (
-                          <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 99, background: 'var(--bg-soft)', color: 'var(--ink-3)', whiteSpace: 'nowrap', flexShrink: 0 }}>
-                            {team.name}
-                          </span>
-                        )}
-                        {/* Due badge */}
-                        {rel && <RelBadge iso={t.due_at} />}
-                        {/* Assignee avatar */}
-                        <MiniAvatar name={user?.full_name || user?.name} index={i} size={22} />
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* Status breakdown */}
-                <div className="k-card">
-                  <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 16 }}>
-                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-                      <span style={{ fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 600, color: 'var(--ink)' }}>Status breakdown</span>
-                      <span className="k-hi" style={{ fontFamily: 'var(--font-hindi)', fontSize: 12, color: 'var(--ink-3)' }}>स्थिति विश्लेषण</span>
-                    </div>
-                    <button onClick={() => navigate('/projects')}
-                      style={{ fontSize: 12, color: 'var(--k-primary)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>
-                      Open board →
-                    </button>
-                  </div>
-
-                  {/* Stacked bar */}
-                  <div style={{ display: 'flex', height: 10, borderRadius: 5, overflow: 'hidden', marginBottom: 16, gap: 1 }}>
-                    {statusOrder.map(s => {
-                      const count = statusCounts[s] || 0;
-                      const pct   = (count / totalTasks) * 100;
-                      return pct > 0 ? (
-                        <div key={s} style={{ width: `${pct}%`, background: STATUS_COLOR[s], transition: 'width .4s' }} />
-                      ) : null;
-                    })}
-                  </div>
-
-                  {/* Status rows */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    {statusOrder.map(s => {
-                      const count = statusCounts[s] || 0;
-                      return (
-                        <div key={s} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                          <div style={{ width: 8, height: 8, borderRadius: 2, background: STATUS_COLOR[s], flexShrink: 0 }} />
-                          <span style={{ flex: 1, fontSize: 13, color: 'var(--ink-2)', textTransform: 'capitalize' }}>
-                            {s.replace('_',' ')}
-                          </span>
-                          <span className="k-hi" style={{ fontFamily: 'var(--font-hindi)', fontSize: 11, color: 'var(--ink-faint)' }}>
-                            {STATUS_HI[s]}
-                          </span>
-                          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 700, color: 'var(--ink)', minWidth: 20, textAlign: 'right' }}>
-                            {count}
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  <div style={{ marginTop: 14, fontSize: 12, color: 'var(--ink-3)', display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <div style={{ flex: 1, height: 3, borderRadius: 2, background: 'var(--bg-soft)', overflow: 'hidden' }}>
-                      <div style={{ height: '100%', width: `${donePct}%`, background: STATUS_COLOR['done'], borderRadius: 2, transition: 'width .4s' }} />
-                    </div>
-                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--ink-3)', flexShrink: 0 }}>
-                      {donePct}% complete
-                    </span>
-                    <span className="k-hi" style={{ fontFamily: 'var(--font-hindi)', fontSize: 11, color: 'var(--ink-faint)', flexShrink: 0 }}>सम्पन्न</span>
-                  </div>
-                </div>
-
-              </div>
-
-              {/* RIGHT column */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-5)' }}>
-
-                {/* Upcoming */}
-                <div className="k-card" style={{ padding: 0, overflow: 'hidden' }}>
-                  <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--rule-soft)', display: 'flex', alignItems: 'baseline', gap: 8 }}>
-                    <span style={{ fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 600, color: 'var(--ink)' }}>Upcoming</span>
-                    <span className="k-hi" style={{ fontFamily: 'var(--font-hindi)', fontSize: 12, color: 'var(--ink-3)' }}>आगामी</span>
-                  </div>
-
-                  {upcoming.length === 0 ? (
-                    <div style={{ padding: '20px', color: 'var(--ink-3)', fontSize: 13, fontStyle: 'italic', fontFamily: 'var(--font-display)', textAlign: 'center' }}>
-                      No deadlines this week.
-                    </div>
-                  ) : upcoming.map((t, i) => {
-                    const team = teams.find(tm => tm.team_id === t.team_id);
-                    const rel  = relDate(t.due_at);
-                    return (
-                      <div key={t.task_id} style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '11px 20px', borderBottom: '1px dashed var(--rule-soft)' }}>
-                        <div style={{ width: 28, textAlign: 'center', flexShrink: 0 }}>
-                          <div style={{ fontSize: 10, fontWeight: 700, color: rel?.color || 'var(--ink-3)' }}>{rel?.label}</div>
-                        </div>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.title}</div>
-                          {team && <div style={{ fontSize: 11, color: 'var(--ink-3)', marginTop: 1 }}>{team.name}</div>}
-                        </div>
-                        <MiniAvatar name={user?.full_name||user?.name} index={i} size={20} />
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* Team pulse */}
-                {activity.length > 0 && (
-                  <div className="k-card" style={{ padding: 0, overflow: 'hidden' }}>
-                    <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--rule-soft)', display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
-                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-                        <span style={{ fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 600, color: 'var(--ink)' }}>Team pulse</span>
-                        <span className="k-hi" style={{ fontFamily: 'var(--font-hindi)', fontSize: 12, color: 'var(--ink-3)' }}>दल की गतिविधि</span>
-                      </div>
-                      <button onClick={() => navigate('/activity')}
-                        style={{ fontSize: 12, color: 'var(--k-primary)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>
-                        All activity →
-                      </button>
-                    </div>
-
-                    {activity.slice(0,8).map((ev, i) => {
-                      const actor = ev.data?.actor_name || ev.actor_id?.slice(0,8) || '?';
-                      const action = ev.type?.replace(/_/g,' ') || 'updated';
-                      const task   = ev.data?.task_title || '';
-                      return (
-                        <div key={ev.event_id} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '10px 20px', borderBottom: '1px dashed var(--rule-soft)' }}>
-                          <MiniAvatar name={actor} index={i} size={26} />
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontSize: 12, color: 'var(--ink-2)', lineHeight: 1.4 }}>
-                              <strong style={{ color: 'var(--ink)', fontWeight: 600 }}>{actor.split(' ')[0]}</strong>
-                              {' '}{action}
-                              {task && <> <em style={{ color: 'var(--ink-3)' }}>"{task}"</em></>}
-                            </div>
-                            <div style={{ fontSize: 10, color: 'var(--ink-faint)', marginTop: 2 }}>{timeAgo(ev.created_at)}</div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-
-                {/* Bhagavad Gita quote */}
-                <div style={{ padding: '16px 20px', background: 'rgba(5,183,170,.06)', borderRadius: 12, border: '1px solid rgba(5,183,170,.15)' }}>
-                  <p className="k-hi" style={{ fontFamily: 'var(--font-hindi)', fontSize: 14, color: 'var(--ink-2)', margin: '0 0 6px', lineHeight: 1.6 }}>
-                    कर्मण्येवाधिकारस्ते मा फलेषु कदाचन।
-                  </p>
-                  <p style={{ fontSize: 11, color: 'var(--ink-faint)', margin: 0, fontStyle: 'italic' }}>
-                    Bhagavad Gītā 2.47 · You have a right to action alone, never to its fruits.
-                  </p>
-                </div>
-
-              </div>
-            </div>
-          </>
-        )}
-      </div>
+      )}
     </div>
   );
 }

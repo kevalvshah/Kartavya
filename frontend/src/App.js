@@ -33,6 +33,7 @@ const ApprovePage       = lazy(() => import('./pages/ApprovePage'));
 // ── App pages ─────────────────────────────────────────────────────────────────
 const DashboardPage         = lazy(() => import('./pages/DashboardPage'));
 const ProjectsPage          = lazy(() => import('./pages/ProjectsPage'));
+const BoardsPage            = lazy(() => import('./pages/BoardsPage'));
 const ProjectBoardPage      = lazy(() => import('./pages/ProjectBoardPage'));
 const TasksListPage         = lazy(() => import('./pages/TasksListPage'));
 const TeamsPage             = lazy(() => import('./pages/TeamsPage'));
@@ -81,6 +82,7 @@ function AppRouter() {
 
           {/* Core */}
           <Route path="dashboard"              element={<DashboardWithContext />} />
+          <Route path="boards"                 element={<BoardsPage />} />
           <Route path="projects"               element={<ProjectsPage />} />
           <Route path="projects/:projectId"    element={<ProjectBoardPage />} />
           <Route path="tasks"                  element={<TasksListPage />} />

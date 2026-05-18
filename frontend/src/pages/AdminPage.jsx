@@ -6,6 +6,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../lib/api';
 import { useToast } from '../components/ui/toast';
+import { PageHeader, StatTile } from '../components/editorial';
 
 const ROLE_COLORS = { admin: '#0082c6', member: '#6E7B91', client: '#ec4899', owner: '#8b5cf6' };
 const AVATARS     = ['#0082c6','#05b7aa','#8b5cf6','#ec4899','#f59e0b','#10b981'];
@@ -255,7 +256,7 @@ export default function AdminPage() {
   const labelSt = { fontSize: 11, fontWeight: 700, color: 'var(--ink-3)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 5, display: 'block' };
 
   return (
-    <div className="k-page">
+    <div className="k-screen">
       {/* Edit slide-over */}
       {editUser && (
         <EditSlideOver
@@ -266,26 +267,14 @@ export default function AdminPage() {
         />
       )}
 
-      <div className="k-pageh">
-        <h1 className="k-pageh__title">Admin</h1>
-        <span className="k-pageh__sans">प्रशासन</span>
-      </div>
+      <PageHeader kicker="SETTINGS · ADMIN" title="Admin" sanskrit="प्रशासन" lede="Workspace members, invites, and account settings." />
 
       {/* Stats strip */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 12, marginBottom: 'var(--sp-5)' }}>
-        {[
-          { label: 'Total users',      value: users.length },
-          { label: 'Admins',           value: roleCounts['admin']  || 0 },
-          { label: 'Members',          value: roleCounts['member'] || 0 },
-          { label: 'Clients',          value: roleCounts['client'] || 0 },
-          { label: 'Pending invites',  value: pendingInvites.length },
-          { label: 'Accepted invites', value: acceptedInvites.length },
-        ].map(s => (
-          <div key={s.label} className="k-stat">
-            <div className="k-stat__label">{s.label}</div>
-            <div className="k-stat__value">{s.value}</div>
-          </div>
-        ))}
+      <div className="k-stats">
+        <StatTile variant="blue"  label="TOTAL"   sanskrit="सदस्य"   value={users.length}            sub="workspace users" />
+        <StatTile variant="teal"  label="MEMBERS"  sanskrit="सहयोगी"  value={roleCounts['member'] || 0} sub="active" />
+        <StatTile variant="amber" label="PENDING"  sanskrit="लंबित"   value={pendingInvites.length}    sub="invites" />
+        <StatTile variant="red"   label="CLIENTS"  sanskrit="ग्राहक"  value={roleCounts['client'] || 0} sub="portal access" />
       </div>
 
       {/* ── Invite form ── */}

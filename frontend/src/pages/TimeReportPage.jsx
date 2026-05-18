@@ -1,70 +1,145 @@
 /**
- * TimeReportPage.jsx — k-* design system.
+ * TimeReportPage.jsx — editorial Time Report.
+ * Layout: filters card → two-col (daily distribution chart + by member) → entries table → quote
  */
 import React, { useState, useEffect, useMemo } from 'react';
 import { api } from '../lib/api';
+import { PageHeader } from '../components/editorial';
+import { AVATAR_COLORS, userInitials } from '../lib/utils';
 
-function fmt(mins) {
+function fmtHours(mins) {
+  if (!mins) return '0h';
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return m > 0 ? `${h}.${Math.round(m / 6)}h` : `${h}h`;
+}
+
+function fmtFull(mins) {
   if (!mins) return '—';
   const h = Math.floor(mins / 60);
   const m = mins % 60;
-  return h > 0 ? `${h}h ${m}m` : `${m}m`;
+  return h > 0 ? `${h}h ${m > 0 ? m + 'm' : ''}`.trim() : `${m}m`;
 }
 
-function BarChart({ data }) {
-  const max = Math.max(...data.map(d => d.minutes), 1);
+
+function exportCSV(entries) {
+  const rows = [
+    ['Date', 'Member', 'Task', 'Note', 'Hours'],
+    ...entries.map(e => [
+      e.started_at ? new Date(e.started_at).toLocaleDateString() : '',
+      e.user_name || '',
+      e.task_title || '',
+      e.description || '',
+      ((e.minutes || 0) / 60).toFixed(2),
+    ]),
+  ];
+  const csv  = rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = 'kartavya-time-report.csv'; a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ── Vertical bar chart for daily distribution ─────────────────────────────
+function DailyChart({ entries, from, to }) {
+  const days = useMemo(() => {
+    const arr = [];
+    const s = new Date(from); const e = new Date(to);
+    for (let d = new Date(s); d <= e; d.setDate(d.getDate() + 1)) {
+      arr.push(new Date(d));
+    }
+    return arr.slice(-10); // max 10 days
+  }, [from, to]);
+
+  const dayMins = useMemo(() => {
+    const m = {};
+    entries.forEach(e => {
+      if (!e.started_at) return;
+      const k = new Date(e.started_at).toDateString();
+      m[k] = (m[k] || 0) + (e.minutes || 0);
+    });
+    return m;
+  }, [entries]);
+
+  const max = Math.max(...days.map(d => dayMins[d.toDateString()] || 0), 1);
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      {data.map(d => (
-        <div key={d.label} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{ width: 110, fontSize: 12, color: 'var(--ink-3)', textAlign: 'right', flexShrink: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.label}</div>
-          <div style={{ flex: 1, height: 20, background: 'var(--bg-soft)', borderRadius: 4, overflow: 'hidden' }}>
-            <div style={{ height: '100%', width: `${(d.minutes / max) * 100}%`, background: 'var(--k-primary)', borderRadius: 4, transition: 'width 0.4s', minWidth: d.minutes > 0 ? 4 : 0 }} />
+    <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8, height: 160, paddingBottom: 24, position: 'relative' }}>
+      {days.map((d) => {
+        const mins   = dayMins[d.toDateString()] || 0;
+        const pct    = (mins / max) * 100;
+        const isToday = d.toDateString() === new Date().toDateString();
+        return (
+          <div key={d.toISOString()} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 1, height: '100%', justifyContent: 'flex-end', gap: 4 }}>
+            {mins > 0 && (
+              <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--k-primary)', fontFamily: 'var(--font-mono)', letterSpacing: '-0.02em' }}>
+                {fmtHours(mins)}
+              </div>
+            )}
+            <div style={{
+              width: '100%', background: mins > 0
+                ? (isToday ? 'linear-gradient(180deg, var(--k-primary) 0%, var(--k-mid) 100%)' : 'color-mix(in srgb, var(--k-primary) 60%, var(--k-mid))')
+                : 'var(--bg-soft)',
+              borderRadius: '4px 4px 0 0',
+              height: `${Math.max(pct, mins > 0 ? 6 : 2)}%`,
+              transition: 'height 0.4s ease',
+              minHeight: 4,
+            }} />
+            <div style={{ fontSize: 10, color: isToday ? 'var(--k-primary)' : 'var(--ink-3)', fontWeight: isToday ? 700 : 400, position: 'absolute', bottom: 0 }}>
+              {d.getDate()}
+            </div>
           </div>
-          <div style={{ width: 56, fontSize: 12, fontWeight: 700, color: 'var(--k-primary)', flexShrink: 0, fontFamily: 'var(--font-display)' }}>{fmt(d.minutes)}</div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
 
-function exportCSV(entries) {
-  const rows = [
-    ['Task','Description','Started','Ended','Minutes','Hours','Who'],
-    ...entries.map(e => [
-      e.task_title || '',
-      e.description || '',
-      e.started_at ? new Date(e.started_at).toLocaleString() : '',
-      e.ended_at   ? new Date(e.ended_at).toLocaleString()   : '',
-      e.minutes || 0,
-      ((e.minutes || 0) / 60).toFixed(2),
-      e.user_name || '',
-    ])
-  ];
-  const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
-  const blob = new Blob([csv], { type: 'text/csv' });
-  const url  = URL.createObjectURL(blob);
-  const a    = document.createElement('a'); a.href = url; a.download = 'kartavya-time-report.csv'; a.click();
-  URL.revokeObjectURL(url);
+// ── Horizontal bar chart for by-member ───────────────────────────────────
+function MemberChart({ byMember }) {
+  const max = Math.max(...byMember.map(m => m.minutes), 1);
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      {byMember.map((m, i) => {
+        const color    = AVATAR_COLORS[i % AVATAR_COLORS.length];
+        const initials = userInitials(m.label);
+        return (
+          <div key={m.label} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ width: 26, height: 26, borderRadius: '50%', background: color, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 10, fontWeight: 700, flexShrink: 0 }}>
+              {initials}
+            </span>
+            <span style={{ width: 56, fontSize: 13, fontWeight: 500, color: 'var(--ink-2)', flexShrink: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {m.label.split(' ')[0]}
+            </span>
+            <div style={{ flex: 1, height: 6, background: 'var(--bg-soft)', borderRadius: 3, overflow: 'hidden' }}>
+              <div style={{ height: '100%', width: `${(m.minutes / max) * 100}%`, background: `linear-gradient(90deg, ${color} 0%, color-mix(in srgb, ${color} 60%, var(--k-mid)) 100%)`, borderRadius: 3, transition: 'width 0.4s ease' }} />
+            </div>
+            <span style={{ width: 36, fontSize: 13, fontWeight: 700, color: 'var(--ink-2)', textAlign: 'right', flexShrink: 0, fontFamily: 'var(--font-display)' }}>
+              {fmtHours(m.minutes)}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
+const TODAY_ISO    = new Date().toISOString().slice(0, 10);
+const WEEK_AGO_ISO = new Date(Date.now() - 9 * 864e5).toISOString().slice(0, 10);
+
 export default function TimeReportPage({ teamId }) {
-  const todayISO   = new Date().toISOString().slice(0, 10);
-  const weekAgoISO = new Date(Date.now() - 6 * 864e5).toISOString().slice(0, 10);
 
   const [data,    setData]    = useState({ entries: [], total_minutes: 0 });
   const [loading, setLoading] = useState(true);
-  const [from,    setFrom]    = useState(weekAgoISO);
-  const [to,      setTo]      = useState(todayISO);
+  const [from,    setFrom]    = useState(WEEK_AGO_ISO);
+  const [to,      setTo]      = useState(TODAY_ISO);
   const [memberF, setMemberF] = useState('');
   const [members, setMembers] = useState([]);
-  const [tab,     setTab]     = useState('table');
 
   useEffect(() => {
     if (!teamId) return;
-    api.get(`/teams/${teamId}`)
-       .then(r => setMembers(r.data.members || []))
-       .catch(() => {});
+    api.get(`/teams/${teamId}`).then(r => setMembers(r.data.members || [])).catch(() => {});
   }, [teamId]);
 
   useEffect(() => {
@@ -79,144 +154,176 @@ export default function TimeReportPage({ teamId }) {
 
   const byMember = useMemo(() => {
     const m = {};
-    (data.entries || []).forEach(e => { const n = e.user_name || 'Unknown'; m[n] = (m[n] || 0) + (e.minutes || 0); });
+    (data.entries || []).forEach(e => {
+      const n = e.user_name || 'Unknown';
+      m[n] = (m[n] || 0) + (e.minutes || 0);
+    });
     return Object.entries(m).map(([label, minutes]) => ({ label, minutes })).sort((a, b) => b.minutes - a.minutes);
   }, [data.entries]);
 
-  const byTask = useMemo(() => {
-    const m = {};
-    (data.entries || []).forEach(e => { const t = e.task_title || 'Unknown task'; m[t] = (m[t] || 0) + (e.minutes || 0); });
-    return Object.entries(m).map(([label, minutes]) => ({ label, minutes })).sort((a, b) => b.minutes - a.minutes).slice(0, 10);
-  }, [data.entries]);
+  const memberColorMap = useMemo(() =>
+    Object.fromEntries(byMember.map((m, i) => [m.label, AVATAR_COLORS[i % AVATAR_COLORS.length]])),
+  [byMember]);
+
+  const totalHours = data.total_minutes ? (data.total_minutes / 60).toFixed(1) : '0';
 
   return (
-    <div className="k-page">
-      <div className="k-pageh">
-        <h1 className="k-pageh__title">Time Report</h1>
-        <span className="k-pageh__sans">समय</span>
-        <div className="k-pageh__actions">
-          <span style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700, color: 'var(--k-primary)' }}>
-            {fmt(data.total_minutes)}
-          </span>
-          <button className="k-btn k-btn--ghost k-btn--sm" onClick={() => exportCSV(data.entries)} disabled={!data.entries?.length}>
-            ⬇ CSV
-          </button>
-        </div>
-      </div>
+    <div className="k-screen">
+      <PageHeader
+        kicker="OPERATIONS"
+        title="Time Report"
+        sanskrit="काल"
+        lede="Hours logged across tasks and members. Filter to investigate."
+        right={
+          <div className="k-time-total">
+            <div className="k-time-total__num">{totalHours}<span className="k-time-total__unit">h</span></div>
+            <div className="k-time-total__lbl">TOTAL · कुल</div>
+          </div>
+        }
+      />
 
-      {/* Filters */}
-      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 'var(--sp-5)', alignItems: 'flex-end' }}>
-        <div>
-          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--ink-3)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.08em' }}>From</div>
-          <input type="date" className="k-input" style={{ width: 'auto' }} value={from} onChange={e => setFrom(e.target.value)} />
-        </div>
-        <div>
-          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--ink-3)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.08em' }}>To</div>
-          <input type="date" className="k-input" style={{ width: 'auto' }} value={to} onChange={e => setTo(e.target.value)} />
-        </div>
-        {members.length > 0 && (
+      {/* Filter card */}
+      <section className="k-card">
+        <div className="k-tfilters">
           <div>
-            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--ink-3)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Member</div>
-            <select className="k-select" value={memberF} onChange={e => setMemberF(e.target.value)}>
+            <div className="k-fld-label">FROM · आरंभ</div>
+            <input type="date" className="k-input" value={from} onChange={e => setFrom(e.target.value)} />
+          </div>
+          <div>
+            <div className="k-fld-label">TO · अंत</div>
+            <input type="date" className="k-input" value={to} onChange={e => setTo(e.target.value)} />
+          </div>
+          <div>
+            <div className="k-fld-label">MEMBER · सहयोगी</div>
+            <select className="k-input" style={{ cursor: 'pointer' }} value={memberF} onChange={e => setMemberF(e.target.value)}>
               <option value=''>All members</option>
               {members.map(m => <option key={m.user_id} value={m.user_id}>{m.display_name || m.full_name || m.email}</option>)}
             </select>
           </div>
-        )}
-        <button className="k-btn k-btn--ghost k-btn--sm" style={{ alignSelf: 'flex-end' }}
-          onClick={() => { setFrom(weekAgoISO); setTo(todayISO); setMemberF(''); }}>Reset</button>
-      </div>
+          <div style={{ display: 'flex', gap: 8, alignSelf: 'flex-end' }}>
+            <button className="k-btn k-btn--ghost k-btn--sm" onClick={() => { setFrom(weekAgoISO); setTo(todayISO); setMemberF(''); }}>
+              Reset
+            </button>
+            <button className="k-btn k-btn--ghost k-btn--sm" onClick={() => exportCSV(data.entries)} disabled={!data.entries?.length}>
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M8 3v8M5 8l3 3 3-3M3 13h10"/></svg>
+              CSV
+            </button>
+          </div>
+        </div>
+      </section>
 
-      {/* Stats */}
-      {!loading && data.entries?.length > 0 && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(150px,1fr))', gap: 12, marginBottom: 'var(--sp-5)' }}>
-          {[
-            { label: 'Total entries', value: data.entries.length },
-            { label: 'Total time',    value: fmt(data.total_minutes) },
-            { label: 'Avg per entry', value: fmt(Math.round(data.total_minutes / data.entries.length)) },
-            { label: 'Members',       value: new Set(data.entries.map(e => e.user_name)).size },
-            { label: 'Tasks covered', value: new Set(data.entries.map(e => e.task_id)).size },
-          ].map(s => (
-            <div key={s.label} className="k-stat">
-              <div className="k-stat__label">{s.label}</div>
-              <div className="k-stat__value">{s.value}</div>
-            </div>
-          ))}
+      {loading && (
+        <div style={{ padding: '40px 0', textAlign: 'center', color: 'var(--ink-3)', fontFamily: 'var(--font-display)', fontStyle: 'italic' }}>
+          Loading…
         </div>
       )}
 
-      {/* Tab switcher */}
-      <div style={{ display: 'flex', borderBottom: '1px solid var(--rule-soft)', marginBottom: 'var(--sp-4)' }}>
-        {['table','chart'].map(t => (
-          <button key={t} onClick={() => setTab(t)}
-            style={{ padding: '8px 16px', border: 'none', background: 'transparent', cursor: 'pointer',
-              fontFamily: 'var(--font-ui)', fontSize: 13, fontWeight: tab === t ? 600 : 400,
-              color: tab === t ? 'var(--k-primary)' : 'var(--ink-3)',
-              borderBottom: tab === t ? '2px solid var(--k-primary)' : '2px solid transparent',
-              marginBottom: -1 }}>
-            {t.charAt(0).toUpperCase() + t.slice(1)}
-          </button>
-        ))}
-      </div>
+      {!loading && (
+        <>
+          {/* Charts row */}
+          {data.entries.length > 0 && (
+            <div className="k-twocol">
+              {/* Daily distribution */}
+              <div className="k-card">
+                <div className="k-card__head">
+                  <div className="k-card__titles">
+                    <h3 className="k-card__title">Daily distribution</h3>
+                    <span className="k-card__sans">दैनिक भार</span>
+                  </div>
+                </div>
+                <div className="k-card__body">
+                  <DailyChart entries={data.entries} from={from} to={to} />
+                </div>
+              </div>
 
-      {loading && <div style={{ color: 'var(--ink-3)', padding: 24, fontFamily: 'var(--font-display)', fontStyle: 'italic' }}>Loading…</div>}
+              {/* By member */}
+              <div className="k-card">
+                <div className="k-card__head">
+                  <div className="k-card__titles">
+                    <h3 className="k-card__title">By member</h3>
+                    <span className="k-card__sans">सहयोगी-वार</span>
+                  </div>
+                </div>
+                <div className="k-card__body">
+                  <MemberChart byMember={byMember} />
+                </div>
+              </div>
+            </div>
+          )}
 
-      {/* Table view */}
-      {!loading && tab === 'table' && (
-        data.entries.length === 0
-          ? <div className="k-empty"><div className="k-empty__sub">No time entries for this period.</div></div>
-          : (
-            <div className="k-card" style={{ padding: 0, overflow: 'hidden' }}>
+          {/* Entries table */}
+          {data.entries.length === 0 ? (
+            <div className="k-empty">
+              <div className="k-empty__icon">⏱</div>
+              <div className="k-empty__title">No entries for this period</div>
+              <div className="k-empty__sub">Adjust the date range or member filter.</div>
+            </div>
+          ) : (
+            <section className="k-card" style={{ padding: 0, overflow: 'hidden' }}>
+              <div className="k-card__head" style={{ padding: '16px 24px' }}>
+                <div className="k-card__titles">
+                  <h3 className="k-card__title">Entries</h3>
+                  <span className="k-card__sans">विवरण</span>
+                </div>
+              </div>
               <div style={{ overflowX: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                   <thead>
                     <tr style={{ background: 'var(--bg-soft)' }}>
-                      {['Task','Description','Started','Ended','Duration','Who'].map(h => (
-                        <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontWeight: 700, color: 'var(--ink-3)', borderBottom: '1px solid var(--rule-soft)', whiteSpace: 'nowrap', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.08em' }}>{h}</th>
+                      {[['DATE','तारीख'], ['MEMBER','सदस्य'], ['TASK','कार्य'], ['NOTE','टिप्पणी'], ['HOURS','घंटे']].map(([en, hi]) => (
+                        <th key={en} style={{ padding: '10px 16px', textAlign: 'left', fontWeight: 700, color: 'var(--ink-3)', borderBottom: '1px solid var(--rule-soft)', whiteSpace: 'nowrap', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+                          {en} <span style={{ fontFamily: 'var(--font-hindi)', fontWeight: 400, fontSize: 10, color: 'var(--ink-faint)', textTransform: 'none', letterSpacing: 0 }}>{hi}</span>
+                        </th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
-                    {data.entries.map(e => (
-                      <tr key={e.entry_id} style={{ borderBottom: '1px dashed var(--rule-soft)' }}>
-                        <td style={{ padding: '10px 14px', fontWeight: 500, maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.task_title || '—'}</td>
-                        <td style={{ padding: '10px 14px', color: 'var(--ink-3)', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.description || '—'}</td>
-                        <td style={{ padding: '10px 14px', color: 'var(--ink-3)', whiteSpace: 'nowrap', fontSize: 12 }}>{e.started_at ? new Date(e.started_at).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}</td>
-                        <td style={{ padding: '10px 14px', color: 'var(--ink-3)', whiteSpace: 'nowrap', fontSize: 12 }}>{e.ended_at ? new Date(e.ended_at).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : <span style={{ color: 'var(--k-primary)', fontWeight: 600 }}>Active</span>}</td>
-                        <td style={{ padding: '10px 14px', fontWeight: 700, color: 'var(--k-primary)', whiteSpace: 'nowrap', fontFamily: 'var(--font-display)' }}>{fmt(e.minutes)}</td>
-                        <td style={{ padding: '10px 14px', whiteSpace: 'nowrap' }}>{e.user_name || '—'}</td>
-                      </tr>
-                    ))}
+                    {data.entries.map((e, i) => {
+                      const color    = memberColorMap[e.user_name] || '#0082c6';
+                      const initials = userInitials(e.user_name || '');
+                      const dateStr  = e.started_at ? new Date(e.started_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : '—';
+                      return (
+                        <tr key={e.entry_id || i} style={{ borderBottom: '1px solid var(--rule-soft)' }}>
+                          <td style={{ padding: '11px 16px', color: 'var(--ink-3)', fontSize: 12, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
+                            {dateStr}
+                          </td>
+                          <td style={{ padding: '11px 16px', whiteSpace: 'nowrap' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <span style={{ width: 24, height: 24, borderRadius: '50%', background: color, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 9, fontWeight: 700, flexShrink: 0 }}>
+                                {initials}
+                              </span>
+                              <span style={{ fontWeight: 500, color: 'var(--ink)' }}>{(e.user_name || '—').split(' ')[0]}</span>
+                            </div>
+                          </td>
+                          <td style={{ padding: '11px 16px', fontWeight: 500, color: 'var(--k-primary)', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {e.task_title ? <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, background: 'color-mix(in srgb, var(--k-primary) 10%, transparent)', padding: '2px 6px', borderRadius: 4, marginRight: 6, color: 'var(--k-primary)', fontWeight: 700 }}>
+                              {e.task_ref || 'KAR'}
+                            </span> : null}
+                            {e.task_title || '—'}
+                          </td>
+                          <td style={{ padding: '11px 16px', color: 'var(--ink-3)', maxWidth: 240, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {e.description || e.note || '—'}
+                          </td>
+                          <td style={{ padding: '11px 16px', fontWeight: 700, color: 'var(--ink)', fontFamily: 'var(--font-display)', whiteSpace: 'nowrap' }}>
+                            {fmtFull(e.minutes)}
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
-                  <tfoot>
-                    <tr style={{ background: 'var(--bg-soft)', borderTop: '1px solid var(--rule-soft)' }}>
-                      <td colSpan={4} style={{ padding: '10px 14px', fontWeight: 700, fontSize: 12, color: 'var(--ink-3)' }}>Total</td>
-                      <td style={{ padding: '10px 14px', fontWeight: 700, color: 'var(--k-primary)', fontFamily: 'var(--font-display)' }}>{fmt(data.total_minutes)}</td>
-                      <td />
-                    </tr>
-                  </tfoot>
                 </table>
               </div>
-            </div>
-          )
-      )}
+            </section>
+          )}
 
-      {/* Chart view */}
-      {!loading && tab === 'chart' && (
-        data.entries.length === 0
-          ? <div className="k-empty"><div className="k-empty__sub">No data to chart.</div></div>
-          : (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--sp-5)' }}>
-              <div className="k-card">
-                <div className="k-card__head"><span className="k-card__title">By Member</span></div>
-                <BarChart data={byMember} />
-              </div>
-              <div className="k-card">
-                <div className="k-card__head"><span className="k-card__title">Top Tasks</span></div>
-                <BarChart data={byTask} />
-              </div>
+          {/* Sanskrit quote */}
+          {data.entries.length > 0 && (
+            <div className="k-citation">
+              <div className="k-citation__sans">कालः सृजति भूतानि</div>
+              <div className="k-citation__src">— "Time creates all things." Account for it carefully.</div>
             </div>
-          )
+          )}
+        </>
       )}
     </div>
   );

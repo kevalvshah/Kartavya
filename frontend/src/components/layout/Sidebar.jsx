@@ -29,17 +29,18 @@ const NAV_FULL = [
   {
     section: 'workspace', sans: 'कार्यक्षेत्र',
     items: [
-      { to: '/dashboard', icon: 'dashboard', en: 'Dashboard',  hi: 'अद्य' },
-      { to: '/projects',  icon: 'projects',  en: 'Projects',   hi: 'योजना' },
-      { to: '/tasks',     icon: 'tasks',     en: 'All Tasks',  hi: 'कर्तव्य' },
+      { to: '/dashboard', icon: 'dashboard', en: 'Today',    hi: 'आज' },
+      { to: '/tasks',     icon: 'tasks',     en: 'Tasks',    hi: 'कर्तव्य' },
+      { to: '/boards',    icon: 'projects',  en: 'Boards',   hi: 'फ़लक' },
+      { to: '/projects',  icon: 'projects',  en: 'Projects', hi: 'योजना' },
     ],
   },
   {
-    section: 'operations', sans: 'संचालन',
+    section: 'operations', sans: 'प्रचालन',
     items: [
-      { to: '/approvals',   icon: 'approvals',   en: 'Approvals',   hi: 'सम्मति' },
+      { to: '/approvals',   icon: 'approvals',   en: 'Approvals',   hi: 'सम्मति', badge: 'approvals' },
       { to: '/activity',    icon: 'activity',    en: 'Activity',    hi: 'क्रिया' },
-      { to: '/automations', icon: 'automations', en: 'Automations', hi: 'स्वतंत्र' },
+      { to: '/automations', icon: 'automations', en: 'Automations', hi: 'स्वचालन' },
       { to: '/time',        icon: 'time',        en: 'Time Report', hi: 'काल' },
       { to: '/templates',   icon: 'templates',   en: 'Templates',   hi: 'साँचा' },
     ],
@@ -47,15 +48,14 @@ const NAV_FULL = [
   {
     section: 'team', sans: 'दल',
     items: [
-      { to: '/teams',  icon: 'teams', en: 'Teams', hi: 'सहयोगी' },
+      { to: '/teams',  icon: 'teams', en: 'Team',  hi: 'सहयोगी' },
       { to: '/inbox',  icon: 'inbox', en: 'Inbox', hi: 'सन्देश', badge: 'unread' },
     ],
   },
   {
     section: 'settings', sans: 'व्यवस्था',
     items: [
-      { to: '/settings/categories',    icon: 'categories',    en: 'Categories',   hi: 'वर्ग' },
-      { to: '/settings/notifications', icon: 'notifications', en: 'Notifications',hi: 'सूचना' },
+      { to: '/settings/categories', icon: 'categories', en: 'Categories', hi: 'वर्ग' },
     ],
   },
 ];
@@ -137,7 +137,7 @@ export default function Sidebar({ inboxCount = 0 }) {
               const badgeCount = badge === 'unread' ? inboxCount : 0;
               return (
                 <button
-                  key={to}
+                  key={en}
                   className={'k-sidebar__item' + (isActive(to) ? ' is-active' : '')}
                   onClick={() => navigate(to)}
                 >

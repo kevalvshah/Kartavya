@@ -1,10 +1,21 @@
 /**
- * TemplatesPage.jsx — k-* design system.
+ * TemplatesPage.jsx — editorial Templates screen.
+ * Layout: tabs (Project / Task) → template card grid → Save as template form
  */
 import React, { useState, useEffect, useCallback } from 'react';
 import { api } from '../lib/api';
 import { useToast } from '../components/ui/toast';
 import { useNavigate } from 'react-router-dom';
+import { PageHeader } from '../components/editorial';
+
+const KICKER_COLORS = ['#0082c6','#05b7aa','#8b5cf6','#ec4899','#f59e0b','#10b981','#6366f1'];
+const KICKER_SANS   = ['राज्यस्व', 'स्वागत', 'विपणन', 'कार्यालय', 'विधि', 'सेवा', 'परियोजना'];
+
+function getKicker(t, idx) {
+  // Use description first word, or template name's first word uppercased
+  const word = (t.description || t.name || '').split(/\s+/)[0];
+  return word.slice(0, 10).toUpperCase();
+}
 
 export default function TemplatesPage() {
   const { pushToast } = useToast();
@@ -14,6 +25,7 @@ export default function TemplatesPage() {
   const [taskTemplates, setTaskTemplates] = useState([]);
   const [projects,      setProjects]      = useState([]);
   const [loading,       setLoading]       = useState(true);
+  const [tab,           setTab]           = useState('project');
 
   const [saveFrom,  setSaveFrom]  = useState('');
   const [ptName,    setPtName]    = useState('');
@@ -24,16 +36,7 @@ export default function TemplatesPage() {
   const [applyToProject, setApplyToProject] = useState('');
   const [applying,       setApplying]       = useState(false);
 
-  const [ttName,    setTtName]    = useState('');
-  const [ttTitle,   setTtTitle]   = useState('');
-  const [ttDesc,    setTtDesc]    = useState('');
-  const [ttPrio,    setTtPrio]    = useState('medium');
-  const [ttProject, setTtProject] = useState('');
-  const [ttSaving,  setTtSaving]  = useState(false);
-
-  const [quickTmpl,    setQuickTmpl]    = useState('');
-  const [quickProject, setQuickProject] = useState('');
-  const [creating,     setCreating]     = useState(false);
+  const [showSaveForm, setShowSaveForm] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -50,8 +53,7 @@ export default function TemplatesPage() {
     finally { setLoading(false); }
   }, [pushToast]);
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [load]);
 
   const saveProjectAsTemplate = async () => {
     if (!ptName.trim() || !saveFrom) { pushToast({ type: 'error', title: 'Choose a project and enter a name' }); return; }
@@ -68,50 +70,20 @@ export default function TemplatesPage() {
       };
       await api.post('/templates/projects', { name: ptName.trim(), description: ptDesc.trim() || null, config });
       pushToast({ type: 'success', title: `Template "${ptName}" saved` });
-      setPtName(''); setPtDesc(''); setSaveFrom(''); load();
+      setPtName(''); setPtDesc(''); setSaveFrom(''); setShowSaveForm(false); load();
     } catch (_) { pushToast({ type: 'error', title: 'Could not save template' }); }
     finally { setSaving(false); }
   };
 
-  const applyProjectTemplate = async () => {
-    if (!applyTmpl || !applyToProject) { pushToast({ type: 'error', title: 'Choose a template and target project' }); return; }
+  const applyProjectTemplate = async (tmplId) => {
+    if (!applyToProject) { pushToast({ type: 'error', title: 'Choose a target project' }); return; }
     setApplying(true);
     try {
-      const res = await api.post(`/templates/projects/${applyTmpl}/apply?team_id=${applyToProject}`);
-      pushToast({ type: 'success', title: `Applied — ${res.data.created.columns} columns, ${res.data.created.tasks} tasks created` });
-      setApplyTmpl(''); setApplyToProject('');
+      const res = await api.post(`/templates/projects/${tmplId}/apply?team_id=${applyToProject}`);
+      pushToast({ type: 'success', title: `Applied — ${res.data.created.columns} columns created` });
       navigate(`/projects/${applyToProject}`);
     } catch (_) { pushToast({ type: 'error', title: 'Could not apply template' }); }
     finally { setApplying(false); }
-  };
-
-  const createTaskTemplate = async () => {
-    if (!ttName.trim() || !ttTitle.trim()) { pushToast({ type: 'error', title: 'Template name and task title are required' }); return; }
-    setTtSaving(true);
-    try {
-      await api.post('/templates/tasks', {
-        name: ttName.trim(), team_id: ttProject || null,
-        config: { title_pattern: ttTitle.trim(), description: ttDesc.trim() || null, priority: ttPrio },
-      });
-      pushToast({ type: 'success', title: `Task template "${ttName}" created` });
-      setTtName(''); setTtTitle(''); setTtDesc(''); setTtPrio('medium'); setTtProject(''); load();
-    } catch (_) { pushToast({ type: 'error', title: 'Could not create task template' }); }
-    finally { setTtSaving(false); }
-  };
-
-  const quickCreateFromTemplate = async () => {
-    if (!quickTmpl || !quickProject) { pushToast({ type: 'error', title: 'Choose a template and target project' }); return; }
-    setCreating(true);
-    try {
-      const tmpl = taskTemplates.find(t => t.template_id === quickTmpl);
-      if (!tmpl) throw new Error('Template not found');
-      const cfg = typeof tmpl.config === 'string' ? JSON.parse(tmpl.config) : tmpl.config;
-      await api.post('/tasks', { title: cfg.title_pattern || tmpl.name, description: cfg.description || null, priority: cfg.priority || 'medium', team_id: quickProject });
-      pushToast({ type: 'success', title: 'Task created from template' });
-      setQuickTmpl(''); setQuickProject('');
-      navigate(`/projects/${quickProject}`);
-    } catch (_) { pushToast({ type: 'error', title: 'Could not create task' }); }
-    finally { setCreating(false); }
   };
 
   const deleteProjTmpl = async (id, name) => {
@@ -119,209 +91,189 @@ export default function TemplatesPage() {
     try { await api.delete(`/templates/projects/${id}`); load(); pushToast({ type: 'success', title: 'Template deleted' }); }
     catch (_) { pushToast({ type: 'error', title: 'Could not delete' }); }
   };
-  const deleteTaskTmpl = async (id, name) => {
-    if (!window.confirm(`Delete template "${name}"?`)) return;
-    try { await api.delete(`/templates/tasks/${id}`); load(); pushToast({ type: 'success', title: 'Template deleted' }); }
-    catch (_) { pushToast({ type: 'error', title: 'Could not delete' }); }
-  };
 
-  if (loading) return (
-    <div className="k-page">
-      <div style={{ padding: '32px 0', textAlign: 'center', color: 'var(--ink-3)', fontFamily: 'var(--font-display)', fontStyle: 'italic' }}>Loading templates…</div>
-    </div>
-  );
-
-  const labelStyle = { fontSize: 11, fontWeight: 700, color: 'var(--ink-3)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 5, display: 'block' };
+  const currentTemplates = tab === 'project' ? projTemplates : taskTemplates;
 
   return (
-    <div className="k-page">
-      <div className="k-pageh">
-        <h1 className="k-pageh__title">Templates</h1>
-        <span className="k-pageh__sans">साँचा</span>
+    <div className="k-screen">
+      <PageHeader
+        kicker="OPERATIONS"
+        title="Templates"
+        sanskrit="साँचा"
+        lede="Bootstrap a new project or task from something that worked before."
+      />
+
+      {/* Tabs */}
+      <div className="k-tmpl-tabs">
+        <button
+          className={'k-tmpl-tab' + (tab === 'project' ? ' is-active' : '')}
+          onClick={() => setTab('project')}
+        >
+          Project templates
+          <span className="k-tmpl-tab__sans">परियोजना</span>
+          <span className="k-tmpl-tab__count">{projTemplates.length}</span>
+        </button>
+        <button
+          className={'k-tmpl-tab' + (tab === 'task' ? ' is-active' : '')}
+          onClick={() => setTab('task')}
+        >
+          Task templates
+          <span className="k-tmpl-tab__sans">कार्य</span>
+          <span className="k-tmpl-tab__count">{taskTemplates.length}</span>
+        </button>
       </div>
 
-      {/* ── Project Templates ── */}
-      <div style={{ marginBottom: 'var(--sp-6)' }}>
-        <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 600, color: 'var(--ink)', marginBottom: 'var(--sp-4)', paddingBottom: 'var(--sp-3)', borderBottom: '1px solid var(--rule-soft)' }}>
-          Project Templates
+      {loading ? (
+        <div style={{ padding: '40px 0', textAlign: 'center', color: 'var(--ink-3)', fontFamily: 'var(--font-display)', fontStyle: 'italic' }}>
+          Loading templates…
         </div>
-
-        <div className="k-card" style={{ marginBottom: 'var(--sp-4)' }}>
-          <div className="k-card__head"><span className="k-card__title">Save project as template</span></div>
-          <div style={{ display: 'grid', gap: 10, gridTemplateColumns: '1fr 1fr' }}>
-            <div>
-              <label style={labelStyle}>Source project</label>
-              <select className="k-select" style={{ width: '100%' }} value={saveFrom} onChange={e => setSaveFrom(e.target.value)}>
-                <option value=''>Choose project…</option>
-                {projects.map(p => <option key={p.team_id} value={p.team_id}>{p.name}</option>)}
-              </select>
-            </div>
-            <div>
-              <label style={labelStyle}>Template name</label>
-              <input className="k-input" value={ptName} onChange={e => setPtName(e.target.value)} placeholder="e.g. Client onboarding" />
-            </div>
-            <div style={{ gridColumn: '1/-1' }}>
-              <label style={labelStyle}>Description (optional)</label>
-              <input className="k-input" value={ptDesc} onChange={e => setPtDesc(e.target.value)} placeholder="What is this template for?" />
-            </div>
-          </div>
-          <div style={{ marginTop: 'var(--sp-4)', display: 'flex', alignItems: 'center', gap: 12 }}>
-            <button className="k-btn k-btn--primary" disabled={saving || !saveFrom || !ptName.trim()} onClick={saveProjectAsTemplate}>
-              {saving ? 'Saving…' : 'Save as Template'}
-            </button>
-            <span style={{ fontSize: 11, color: 'var(--ink-faint)' }}>Snapshots columns and field definitions. Tasks are not copied.</span>
-          </div>
-        </div>
-
-        {projTemplates.length > 0 && (
-          <div className="k-card" style={{ marginBottom: 'var(--sp-4)' }}>
-            <div className="k-card__head"><span className="k-card__title">Apply template to project</span></div>
-            <div style={{ display: 'grid', gap: 10, gridTemplateColumns: '1fr 1fr' }}>
-              <div>
-                <label style={labelStyle}>Template</label>
-                <select className="k-select" style={{ width: '100%' }} value={applyTmpl} onChange={e => setApplyTmpl(e.target.value)}>
-                  <option value=''>Choose template…</option>
-                  {projTemplates.map(t => <option key={t.template_id} value={t.template_id}>{t.name}</option>)}
-                </select>
-              </div>
-              <div>
-                <label style={labelStyle}>Target project</label>
-                <select className="k-select" style={{ width: '100%' }} value={applyToProject} onChange={e => setApplyToProject(e.target.value)}>
-                  <option value=''>Choose project…</option>
-                  {projects.map(p => <option key={p.team_id} value={p.team_id}>{p.name}</option>)}
-                </select>
-              </div>
-            </div>
-            <div style={{ marginTop: 'var(--sp-4)' }}>
-              <button className="k-btn k-btn--primary" disabled={applying || !applyTmpl || !applyToProject} onClick={applyProjectTemplate}>
-                {applying ? 'Applying…' : 'Apply Template'}
-              </button>
-            </div>
-          </div>
-        )}
-
-        {projTemplates.length === 0 ? (
-          <div className="k-empty__sub" style={{ textAlign: 'center', padding: 'var(--sp-5)' }}>No project templates yet. Save your first one above.</div>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {projTemplates.map(t => {
-              const cfg = typeof t.config === 'string' ? JSON.parse(t.config) : t.config;
+      ) : (
+        <>
+          {/* Template cards grid */}
+          <div className="k-tmpl-grid">
+            {currentTemplates.map((t, idx) => {
+              const cfg     = typeof t.config === 'string' ? JSON.parse(t.config) : (t.config || {});
+              const color   = KICKER_COLORS[idx % KICKER_COLORS.length];
+              const sans    = KICKER_SANS[idx % KICKER_SANS.length];
+              const kicker  = getKicker(t, idx);
+              const cols    = (cfg.columns || []).length;
+              const fields  = (cfg.fields  || []).length;
+              const used    = t.use_count || 0;
               return (
-                <div key={t.template_id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', background: 'var(--surface)', border: '1px solid var(--rule-soft)', borderRadius: 10 }}>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--ink)' }}>{t.name}</div>
-                    {t.description && <div style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 2 }}>{t.description}</div>}
-                    <div style={{ fontSize: 11, color: 'var(--ink-faint)', marginTop: 4, display: 'flex', gap: 12 }}>
-                      <span>{(cfg?.columns||[]).length} columns</span>
-                      <span>{(cfg?.fields||[]).length} fields</span>
-                      <span>{new Date(t.created_at).toLocaleDateString()}</span>
+                <div key={t.template_id} className="k-tmpl-card">
+                  <div className="k-tmpl-card__head">
+                    <div className="k-tmpl-card__body">
+                      <div className="k-tmpl-card__kicker" style={{ color }}>{kicker}</div>
+                      <div className="k-tmpl-card__name">{t.name}</div>
+                      {t.description && <div className="k-tmpl-card__desc">{t.description}</div>}
                     </div>
+                    <div className="k-tmpl-card__sans" style={{ color }}>{sans}</div>
                   </div>
-                  <button className="k-iconbtn" style={{ color: 'var(--danger)' }} onClick={() => deleteProjTmpl(t.template_id, t.name)} title="Delete">
-                    <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4"><path d="M3 4h10M5 4V3h6v1M6 7v5M10 7v5M4 4l1 9h6l1-9"/></svg>
-                  </button>
+
+                  {tab === 'project' && (
+                    <div className="k-tmpl-card__stats">
+                      <div className="k-tmpl-card__stat"><b>{cols}</b><span>COLUMNS</span></div>
+                      <div className="k-tmpl-card__stat"><b>{fields}</b><span>FIELDS</span></div>
+                      <div className="k-tmpl-card__stat"><b>{used}</b><span>USED</span></div>
+                    </div>
+                  )}
+
+                  <div className="k-tmpl-card__foot">
+                    {tab === 'project' ? (
+                      <>
+                        <button
+                          className="k-btn k-btn--primary k-btn--sm"
+                          onClick={() => {
+                            setApplyTmpl(t.template_id);
+                            if (projects.length === 1) { applyProjectTemplate(t.template_id); }
+                            else {
+                              const target = window.prompt(`Apply "${t.name}" to which project?\n${projects.map((p,i) => `${i+1}. ${p.name}`).join('\n')}\n\nEnter number:`);
+                              const p = projects[parseInt(target, 10) - 1];
+                              if (p) { setApplyToProject(p.team_id); applyProjectTemplate(t.template_id); }
+                            }
+                          }}
+                          disabled={applying}
+                        >
+                          Use template
+                        </button>
+                        <button
+                          className="k-btn k-btn--ghost k-btn--sm"
+                          onClick={() => pushToast({ type: 'info', title: `"${t.name}" — ${cols} columns, ${fields} fields` })}
+                        >
+                          Preview
+                        </button>
+                        <button
+                          className="k-iconbtn"
+                          style={{ marginLeft: 'auto', color: 'var(--ink-faint)' }}
+                          title="Delete"
+                          onClick={() => deleteProjTmpl(t.template_id, t.name)}
+                        >
+                          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4">
+                            <path d="M3 4h10M5 4V3h6v1M6 7v5M10 7v5M4 4l1 9h6l1-9"/>
+                          </svg>
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <span style={{ fontSize: 12, color: 'var(--ink-3)' }}>
+                          {cfg?.priority || 'medium'}{' priority'}
+                        </span>
+                        <button
+                          className="k-iconbtn"
+                          style={{ marginLeft: 'auto', color: 'var(--ink-faint)' }}
+                          title="Delete"
+                          onClick={async () => {
+                            if (!window.confirm(`Delete template "${t.name}"?`)) return;
+                            try { await api.delete(`/templates/tasks/${t.template_id}`); load(); } catch (_) {}
+                          }}
+                        >
+                          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4">
+                            <path d="M3 4h10M5 4V3h6v1M6 7v5M10 7v5M4 4l1 9h6l1-9"/>
+                          </svg>
+                        </button>
+                      </>
+                    )}
+                  </div>
                 </div>
               );
             })}
-          </div>
-        )}
-      </div>
 
-      {/* ── Task Templates ── */}
-      <div>
-        <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 600, color: 'var(--ink)', marginBottom: 'var(--sp-4)', paddingBottom: 'var(--sp-3)', borderBottom: '1px solid var(--rule-soft)' }}>
-          Task Templates
-        </div>
-
-        <div className="k-card" style={{ marginBottom: 'var(--sp-4)' }}>
-          <div className="k-card__head"><span className="k-card__title">New task template</span></div>
-          <div style={{ display: 'grid', gap: 10, gridTemplateColumns: '1fr 1fr' }}>
-            <div>
-              <label style={labelStyle}>Template name</label>
-              <input className="k-input" value={ttName} onChange={e => setTtName(e.target.value)} placeholder="e.g. Bug report" />
-            </div>
-            <div>
-              <label style={labelStyle}>Default title</label>
-              <input className="k-input" value={ttTitle} onChange={e => setTtTitle(e.target.value)} placeholder="e.g. Bug: [describe issue]" />
-            </div>
-            <div style={{ gridColumn: '1/-1' }}>
-              <label style={labelStyle}>Default description</label>
-              <textarea className="k-input" style={{ resize: 'vertical' }} rows={2} value={ttDesc} onChange={e => setTtDesc(e.target.value)} placeholder="Template description / instructions…" />
-            </div>
-            <div>
-              <label style={labelStyle}>Default priority</label>
-              <select className="k-select" style={{ width: '100%' }} value={ttPrio} onChange={e => setTtPrio(e.target.value)}>
-                {['low','medium','high','urgent'].map(p => <option key={p} value={p}>{p}</option>)}
-              </select>
-            </div>
-            <div>
-              <label style={labelStyle}>Scope to project (optional)</label>
-              <select className="k-select" style={{ width: '100%' }} value={ttProject} onChange={e => setTtProject(e.target.value)}>
-                <option value=''>All projects (global)</option>
-                {projects.map(p => <option key={p.team_id} value={p.team_id}>{p.name}</option>)}
-              </select>
-            </div>
-          </div>
-          <div style={{ marginTop: 'var(--sp-4)' }}>
-            <button className="k-btn k-btn--primary" disabled={ttSaving || !ttName.trim() || !ttTitle.trim()} onClick={createTaskTemplate}>
-              {ttSaving ? 'Saving…' : 'Create Template'}
-            </button>
-          </div>
-        </div>
-
-        {taskTemplates.length > 0 && (
-          <div className="k-card" style={{ marginBottom: 'var(--sp-4)' }}>
-            <div className="k-card__head"><span className="k-card__title">Quick-create from template</span></div>
-            <div style={{ display: 'grid', gap: 10, gridTemplateColumns: '1fr 1fr' }}>
-              <div>
-                <label style={labelStyle}>Template</label>
-                <select className="k-select" style={{ width: '100%' }} value={quickTmpl} onChange={e => setQuickTmpl(e.target.value)}>
-                  <option value=''>Choose template…</option>
-                  {taskTemplates.map(t => <option key={t.template_id} value={t.template_id}>{t.name}</option>)}
-                </select>
-              </div>
-              <div>
-                <label style={labelStyle}>Target project</label>
-                <select className="k-select" style={{ width: '100%' }} value={quickProject} onChange={e => setQuickProject(e.target.value)}>
-                  <option value=''>Choose project…</option>
-                  {projects.map(p => <option key={p.team_id} value={p.team_id}>{p.name}</option>)}
-                </select>
-              </div>
-            </div>
-            <div style={{ marginTop: 'var(--sp-4)' }}>
-              <button className="k-btn k-btn--primary" disabled={creating || !quickTmpl || !quickProject} onClick={quickCreateFromTemplate}>
-                {creating ? 'Creating…' : 'Create Task'}
+            {/* Save as template card (project tab) */}
+            {tab === 'project' && (
+              <button className="k-tmpl-card k-tmpl-card--new" onClick={() => setShowSaveForm(v => !v)}>
+                <div className="k-tmpl-card__plus">+</div>
+                <div className="k-tmpl-card__new-title">Save current project as template</div>
+                <div className="k-tmpl-card__new-sub">Captures columns and custom fields. Tasks are not copied.</div>
               </button>
-            </div>
+            )}
           </div>
-        )}
 
-        {taskTemplates.length === 0 ? (
-          <div className="k-empty__sub" style={{ textAlign: 'center', padding: 'var(--sp-5)' }}>No task templates yet. Create your first one above.</div>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {taskTemplates.map(t => {
-              const cfg = typeof t.config === 'string' ? JSON.parse(t.config) : t.config;
-              const scope = t.team_id ? projects.find(p => p.team_id === t.team_id)?.name || t.team_id : 'Global';
-              return (
-                <div key={t.template_id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', background: 'var(--surface)', border: '1px solid var(--rule-soft)', borderRadius: 10 }}>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--ink)' }}>{t.name}</div>
-                    <div style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 2 }}>Title: "{cfg?.title_pattern}"</div>
-                    <div style={{ fontSize: 11, color: 'var(--ink-faint)', marginTop: 2, display: 'flex', gap: 10 }}>
-                      <span>Priority: {cfg?.priority || 'medium'}</span>
-                      <span>Scope: {scope}</span>
-                    </div>
-                  </div>
-                  <button className="k-iconbtn" style={{ color: 'var(--danger)' }} onClick={() => deleteTaskTmpl(t.template_id, t.name)} title="Delete">
-                    <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4"><path d="M3 4h10M5 4V3h6v1M6 7v5M10 7v5M4 4l1 9h6l1-9"/></svg>
-                  </button>
+          {/* Save as template form */}
+          {tab === 'project' && showSaveForm && (
+            <section className="k-card">
+              <div className="k-card__head">
+                <div className="k-card__titles">
+                  <h3 className="k-card__title">Save as template</h3>
+                  <span className="k-card__sans">संरक्षित</span>
                 </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
+              </div>
+              <div className="k-card__body">
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+                  <div>
+                    <label className="k-label">Source project</label>
+                    <select className="k-input" style={{ width: '100%', cursor: 'pointer' }} value={saveFrom} onChange={e => setSaveFrom(e.target.value)}>
+                      <option value=''>Choose project…</option>
+                      {projects.map(p => <option key={p.team_id} value={p.team_id}>{p.name}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="k-label">Template name</label>
+                    <input className="k-input" value={ptName} onChange={e => setPtName(e.target.value)} placeholder="e.g. Quarterly client review" />
+                  </div>
+                </div>
+                <div style={{ marginBottom: 20 }}>
+                  <label className="k-label">Description (optional)</label>
+                  <input className="k-input" style={{ width: '100%' }} value={ptDesc} onChange={e => setPtDesc(e.target.value)} placeholder="What is this template for?" />
+                </div>
+                <div style={{ display: 'flex', gap: 10 }}>
+                  <button className="k-btn k-btn--primary" disabled={saving || !saveFrom || !ptName.trim()} onClick={saveProjectAsTemplate}>
+                    {saving ? 'Saving…' : 'Save template'}
+                  </button>
+                  <button className="k-btn k-btn--ghost" onClick={() => setShowSaveForm(false)}>Cancel</button>
+                </div>
+              </div>
+            </section>
+          )}
+
+          {currentTemplates.length === 0 && tab !== 'project' && (
+            <div className="k-empty">
+              <div className="k-empty__icon">📋</div>
+              <div className="k-empty__title">No task templates yet</div>
+              <div className="k-empty__sub">Create task templates from the API or TaskEditor.</div>
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }

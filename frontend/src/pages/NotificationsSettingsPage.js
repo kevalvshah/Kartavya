@@ -1,25 +1,23 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { api } from "../lib/api";
-import { ensureServiceWorkerRegistered, urlBase64ToUint8Array } from "../lib/push";
-import { Button } from "../components/ui/button";
-import { Badge } from "../components/ui/badge";
+import React, { useEffect, useMemo, useState } from 'react';
+import { api } from '../lib/api';
+import { ensureServiceWorkerRegistered, urlBase64ToUint8Array } from '../lib/push';
+import { PageHeader } from '../components/editorial';
 
 export default function NotificationsSettingsPage() {
-  const [supported, setSupported] = useState(false);
-  const [permission, setPermission] = useState("default");
-  const [enabled, setEnabled] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [supported,  setSupported]  = useState(false);
+  const [permission, setPermission] = useState('default');
+  const [enabled,    setEnabled]    = useState(false);
+  const [loading,    setLoading]    = useState(false);
 
   useEffect(() => {
-    setSupported("serviceWorker" in navigator && "PushManager" in window);
+    setSupported('serviceWorker' in navigator && 'PushManager' in window);
     setPermission(Notification.permission);
   }, []);
 
-  const statusTone = useMemo(() => {
-    if (!supported) return "danger";
-    if (permission === "denied") return "danger";
-    if (enabled) return "info";
-    return "neutral";
+  const statusColor = useMemo(() => {
+    if (!supported || permission === 'denied') return 'var(--danger)';
+    if (enabled) return 'var(--ok)';
+    return 'var(--ink-3)';
   }, [supported, permission, enabled]);
 
   const refreshEnabled = async () => {
@@ -30,10 +28,7 @@ export default function NotificationsSettingsPage() {
     setEnabled(!!sub);
   };
 
-  useEffect(() => {
-    refreshEnabled().catch(() => {});
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [supported]);
+  useEffect(() => { refreshEnabled().catch(() => {}); }, [supported]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const enablePush = async () => {
     if (!supported) return;
@@ -41,21 +36,16 @@ export default function NotificationsSettingsPage() {
     try {
       const perm = await Notification.requestPermission();
       setPermission(perm);
-      if (perm !== "granted") return;
-
+      if (perm !== 'granted') return;
       const reg = await ensureServiceWorkerRegistered();
-      const keyRes = await api.get("/push/vapid-public-key");
-      const publicKey = keyRes.data.public_key;
+      const keyRes = await api.get('/push/vapid-public-key');
       const subscription = await reg.pushManager.subscribe({
         userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(publicKey),
+        applicationServerKey: urlBase64ToUint8Array(keyRes.data.public_key),
       });
-
-      await api.post("/push/subscribe", subscription);
+      await api.post('/push/subscribe', subscription);
       await refreshEnabled();
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   };
 
   const disablePush = async () => {
@@ -64,60 +54,66 @@ export default function NotificationsSettingsPage() {
       const reg = await navigator.serviceWorker.getRegistration();
       if (!reg) return;
       const sub = await reg.pushManager.getSubscription();
-      if (sub) {
-        await api.post("/push/unsubscribe", sub);
-        await sub.unsubscribe();
-      }
+      if (sub) { await api.post('/push/unsubscribe', sub); await sub.unsubscribe(); }
       await refreshEnabled();
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   };
 
   return (
-    <div data-testid="notifications-settings-page" className="space-y-6">
-      <div>
-        <div data-testid="notifications-settings-title" className="text-sm font-semibold">Notifications</div>
-        <div data-testid="notifications-settings-subtitle" className="mt-1 text-sm text-muted-foreground">
-          Enable browser push notifications (works on desktop + mobile browsers). A native app can be added later.
-        </div>
-      </div>
+    <div className="k-screen">
+      <PageHeader
+        kicker="SETTINGS"
+        title="Notifications"
+        sanskrit="सूचना"
+        lede="Enable browser push notifications. Works on desktop and mobile."
+      />
 
-      <div data-testid="push-status-card" className="rounded-3xl border border-border/70 bg-card/50 p-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <div data-testid="push-status-label" className="text-sm font-semibold">Browser push</div>
-            <div data-testid="push-status-meta" className="mt-1 text-sm text-muted-foreground">
-              Supported: {supported ? "Yes" : "No"} • Permission: {permission}
-            </div>
+      {/* Push subscription card */}
+      <section className="k-card">
+        <div className="k-card__head">
+          <div className="k-card__titles">
+            <h3 className="k-card__title">Browser push</h3>
+            <span className="k-card__sans">ब्राउज़र</span>
           </div>
-          <Badge data-testid="push-status-badge" tone={statusTone}>
-            {enabled ? "Enabled" : "Disabled"}
-          </Badge>
+          <span className="k-statuschip" style={{ '--c': statusColor, marginLeft: 'auto' }}>
+            <span className="k-statuschip__dot" />
+            {enabled ? 'Enabled' : 'Disabled'}
+          </span>
         </div>
-
-        <div className="mt-5 flex flex-wrap gap-2">
-          <Button data-testid="push-enable-button" onClick={enablePush} disabled={loading || !supported || enabled}>
-            Enable
-          </Button>
-          <Button data-testid="push-disable-button" variant="ghost" onClick={disablePush} disabled={loading || !supported || !enabled}>
-            Disable
-          </Button>
-        </div>
-
-        {permission === "denied" ? (
-          <div data-testid="push-permission-denied" className="mt-4 text-sm text-muted-foreground">
-            Notifications are blocked in your browser settings. Please allow notifications for this site.
+        <div className="k-card__body">
+          <p style={{ fontSize: 13, color: 'var(--ink-3)', marginBottom: 16 }}>
+            Supported: <strong>{supported ? 'Yes' : 'No'}</strong> · Permission: <strong>{permission}</strong>
+          </p>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="k-btn k-btn--primary" onClick={enablePush} disabled={loading || !supported || enabled}>
+              Enable
+            </button>
+            <button className="k-btn k-btn--ghost" onClick={disablePush} disabled={loading || !supported || !enabled}>
+              Disable
+            </button>
           </div>
-        ) : null}
-      </div>
-
-      <div data-testid="reminder-policy-card" className="rounded-3xl border border-border/70 bg-card/50 p-6">
-        <div data-testid="reminder-policy-title" className="text-sm font-semibold">Reminder defaults</div>
-        <div data-testid="reminder-policy-text" className="mt-1 text-sm text-muted-foreground">
-          Default reminder is 2 hours before the due date. You can override it per task in the Task Editor.
+          {permission === 'denied' && (
+            <p style={{ marginTop: 14, fontSize: 12, color: 'var(--danger)' }}>
+              Notifications are blocked in your browser settings. Allow this site in your browser notification preferences.
+            </p>
+          )}
         </div>
-      </div>
+      </section>
+
+      {/* Reminder defaults */}
+      <section className="k-card">
+        <div className="k-card__head">
+          <div className="k-card__titles">
+            <h3 className="k-card__title">Reminder defaults</h3>
+            <span className="k-card__sans">स्मरण</span>
+          </div>
+        </div>
+        <div className="k-card__body">
+          <p style={{ fontSize: 13, color: 'var(--ink-2)' }}>
+            Default reminder fires <strong>2 hours before</strong> the due date. Override per task in the Task Editor.
+          </p>
+        </div>
+      </section>
     </div>
   );
 }

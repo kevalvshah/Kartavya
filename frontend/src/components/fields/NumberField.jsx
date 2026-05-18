@@ -1,36 +1,28 @@
-/**
- * NumberField — numeric input with optional prefix/suffix.
- * config: { prefix: '$', suffix: 'hrs', min, max, step }
- */
-import React from 'react';
+﻿import React from "react";
 
 export default function NumberField({ field, value, onChange, readOnly }) {
   const { prefix, suffix, min, max, step = 1 } = field.config || {};
 
   if (readOnly) {
-    if (value == null) return <span style={{ color: 'var(--text-subtle)', fontSize: 'var(--text-sm)' }}>—</span>;
+    if (value == null) return <span style={{ color: "var(--ink-faint)", fontSize: 12 }}>—</span>;
     return (
-      <span style={{ fontSize: 'var(--text-sm)', fontVariantNumeric: 'tabular-nums' }}>
+      <span style={{ fontSize: 13, fontVariantNumeric: "tabular-nums", color: "var(--ink-2)" }}>
         {prefix}{value}{suffix}
       </span>
     );
   }
 
   return (
-    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-      {prefix && <span style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)' }}>{prefix}</span>}
+    <div style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+      {prefix && <span style={{ color: "var(--ink-3)", fontSize: 12 }}>{prefix}</span>}
       <input
-        type="number" value={value ?? ''}
-        onChange={e => onChange(e.target.value === '' ? null : Number(e.target.value))}
+        type="number" value={value ?? ""}
+        onChange={e => onChange(e.target.value === "" ? null : Number(e.target.value))}
         min={min} max={max} step={step}
-        style={{
-          width: 90, border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)',
-          padding: '4px 8px', fontFamily: 'inherit', fontSize: 'var(--text-sm)',
-          background: 'var(--bg-default)', color: 'var(--text-default)',
-          textAlign: 'right', outline: 'none',
-        }}
+        className="k-input"
+        style={{ width: 90, textAlign: "right" }}
       />
-      {suffix && <span style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)' }}>{suffix}</span>}
+      {suffix && <span style={{ color: "var(--ink-3)", fontSize: 12 }}>{suffix}</span>}
     </div>
   );
 }

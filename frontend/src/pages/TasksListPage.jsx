@@ -1,14 +1,23 @@
 /**
- * TasksListPage.jsx — task table using k-* design system.
+ * TasksListPage.jsx — editorial Tasks screen.
+ * GroupBy: priority (default) | project | status. All data hooks unchanged.
  */
 import React, { useState, useEffect, useCallback } from 'react';
 import { api } from '../lib/api';
-import { currentUser, formatDue } from '../lib/auth';
+import { currentUser } from '../lib/auth';
 import { useToast } from '../components/ui/toast';
 import TaskEditor from '../components/TaskEditor';
+import { PageHeader, DueChip, PriorityDot, StatusChip, ProjectTag, AvatarStack } from '../components/editorial';
+import { AVATAR_COLORS } from '../lib/utils';
 
-const PRI_CLASS = { urgent: 'k-pri--urgent', high: 'k-pri--high', medium: 'k-pri--medium', low: 'k-pri--low' };
-const STATUS_SANS = { todo: 'कार्य', in_progress: 'चालू', in_review: 'समीक्षा', done: 'सम्पन्न' };
+const PRIORITY_ORDER  = ['urgent','high','medium','low'];
+const PRIORITY_LABEL  = { urgent:'Urgent', high:'High', medium:'Medium', low:'Low' };
+const PRIORITY_HI     = { urgent:'अत्यावश्यक', high:'उच्च', medium:'मध्यम', low:'न्यून' };
+const PRIORITY_COLOR  = { urgent:'#C0392B', high:'#B06A00', medium:'#0082c6', low:'#6E7B91' };
+const STATUS_ORDER    = ['todo','in_progress','in_review','done','requested'];
+const STATUS_LABEL    = { todo:'To Do', in_progress:'In Progress', in_review:'In Review', done:'Done', requested:'Requested' };
+const STATUS_HI       = { todo:'कार्य', in_progress:'चालू', in_review:'समीक्षा', done:'सम्पन्न', requested:'अनुरोध' };
+const STATUS_COLOR    = { todo:'#94a3b8', in_progress:'#0082c6', in_review:'#a78bfa', done:'#05b7aa', requested:'#f59e0b' };
 
 export default function TasksListPage() {
   const { pushToast } = useToast();
@@ -20,6 +29,7 @@ export default function TasksListPage() {
   const [loading, setLoading] = useState(true);
   const [search,  setSearch]  = useState('');
   const [filter,  setFilter]  = useState('all');
+  const [group,   setGroup]   = useState('priority');
   const [editor,  setEditor]  = useState({ open: false, task: null });
 
   const load = useCallback(async () => {
@@ -38,110 +48,171 @@ export default function TasksListPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  const deleteTask = async (task) => {
-    if (!window.confirm(`Delete "${task.title}"?`)) return;
-    try { await api.delete(`/tasks/${task.task_id}`); pushToast({ type: 'success', title: 'Task deleted' }); load(); }
-    catch (_) { pushToast({ type: 'error', title: 'Could not delete' }); }
-  };
-
-  const visible = tasks.filter(t => {
+  // ── Filter ─────────────────────────────────────────────────────────────────
+  const myId = user?.user_id;
+  const filtered = tasks.filter(t => {
     const matchSearch = !search || t.title.toLowerCase().includes(search.toLowerCase());
-    const matchFilter = filter === 'all' || (filter === 'done' ? t.status === 'done' : t.status !== 'done');
+    let matchFilter = true;
+    if (filter === 'mine')    matchFilter = (t.user_id === myId || t.assignee_user_ids?.includes(myId)) && t.status !== 'done';
+    if (filter === 'all')     matchFilter = t.status !== 'done';
+    if (filter === 'overdue') matchFilter = t.due_at && new Date(t.due_at) < new Date() && t.status !== 'done';
+    if (filter === 'done')    matchFilter = t.status === 'done';
     return matchSearch && matchFilter;
   });
 
-  return (
-    <div className="k-page">
-      <div className="k-pageh">
-        <h1 className="k-pageh__title">{isClient ? 'My Tasks' : 'All Tasks'}</h1>
-        <span className="k-pageh__sans">कर्तव्य</span>
-        <div className="k-pageh__actions">
-          <button className="k-btn k-btn--primary k-btn--sm" onClick={() => setEditor({ open: true, task: null })}>
-            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2"><path d="M8 3v10M3 8h10"/></svg>
-            New task
-          </button>
-        </div>
-      </div>
+  // ── Group ──────────────────────────────────────────────────────────────────
+  const groups = [];
+  if (group === 'priority') {
+    PRIORITY_ORDER.forEach(p => {
+      const items = filtered.filter(t => t.priority === p);
+      if (items.length) groups.push({ key: p, title: PRIORITY_LABEL[p], sans: PRIORITY_HI[p], color: PRIORITY_COLOR[p], items });
+    });
+    const rest = filtered.filter(t => !PRIORITY_ORDER.includes(t.priority));
+    if (rest.length) groups.push({ key: 'other', title: 'Other', sans: 'अन्य', color: '#94a3b8', items: rest });
+  } else if (group === 'project') {
+    teams.forEach(team => {
+      const items = filtered.filter(t => t.team_id === team.team_id);
+      if (items.length) groups.push({ key: team.team_id, title: team.name, sans: '', color: AVATAR_COLORS[groups.length % AVATAR_COLORS.length], items });
+    });
+    const orphans = filtered.filter(t => !teams.find(tm => tm.team_id === t.team_id));
+    if (orphans.length) groups.push({ key: 'none', title: 'No project', sans: 'अन्य', color: '#94a3b8', items: orphans });
+  } else {
+    STATUS_ORDER.forEach(s => {
+      const items = filtered.filter(t => t.status === s);
+      if (items.length) groups.push({ key: s, title: STATUS_LABEL[s], sans: STATUS_HI[s], color: STATUS_COLOR[s], items });
+    });
+  }
 
-      {/* Filters */}
-      <div style={{ display: 'flex', gap: 10, marginBottom: 'var(--sp-4)', flexWrap: 'wrap' }}>
-        <div className="k-topbar__search" style={{ maxWidth: 280, flex: '1 1 200px' }}>
-          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14"/></svg>
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search tasks…" />
+  const filterCounts = {
+    mine:    tasks.filter(t => (t.user_id === myId || t.assignee_user_ids?.includes(myId)) && t.status !== 'done').length,
+    all:     tasks.filter(t => t.status !== 'done').length,
+    overdue: tasks.filter(t => t.due_at && new Date(t.due_at) < new Date() && t.status !== 'done').length,
+    done:    tasks.filter(t => t.status === 'done').length,
+  };
+
+  return (
+    <div className="k-screen">
+      <PageHeader
+        kicker="WORKSPACE"
+        title={isClient ? 'My Tasks' : 'Tasks'}
+        sanskrit="कर्तव्य"
+        lede="The list of what's worth doing today."
+        right={
+          !isClient && (
+            <button className="k-btn k-btn--primary k-btn--sm" onClick={() => setEditor({ open: true, task: null })}>
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2"><path d="M8 3v10M3 8h10"/></svg>
+              New task
+            </button>
+          )
+        }
+      />
+
+      {/* Filter bar */}
+      <div className="k-filterbar">
+        <div className="k-segctrl">
+          {[
+            { key: 'mine',    label: 'Mine' },
+            { key: 'all',     label: 'All open' },
+            { key: 'overdue', label: 'Overdue' },
+            { key: 'done',    label: 'Done' },
+          ].map(f => (
+            <button
+              key={f.key}
+              className={'k-segctrl__btn' + (filter === f.key ? ' is-active' : '')}
+              onClick={() => setFilter(f.key)}
+            >
+              {f.label}
+              <span className="k-segctrl__count">{filterCounts[f.key]}</span>
+            </button>
+          ))}
         </div>
-        <select className="k-select" value={filter} onChange={e => setFilter(e.target.value)}>
-          <option value="all">All tasks</option>
-          <option value="mine">Active</option>
-          <option value="done">Done</option>
-        </select>
+        <div className="k-filterbar__right">
+          <label className="k-fld">
+            <span className="k-fld__lbl">Group by</span>
+            <select value={group} onChange={e => setGroup(e.target.value)} className="k-fld__sel">
+              <option value="priority">Priority</option>
+              <option value="project">Project</option>
+              <option value="status">Status</option>
+            </select>
+          </label>
+          <div className="k-topbar__search" style={{ maxWidth: 220 }}>
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14"/></svg>
+            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search…" />
+          </div>
+        </div>
       </div>
 
       {/* Table */}
-      <div className="k-card" style={{ padding: 0, overflow: 'hidden' }}>
-        <div className="k-tbl">
-          <div className="k-tbl__head">
-            <span />
-            <span>ID</span>
-            <span>Title</span>
-            <span>Status</span>
-            <span>Priority</span>
-            <span>Due</span>
-            <span />
+      {loading ? (
+        <div style={{ padding: '40px 0', textAlign: 'center', color: 'var(--ink-3)', fontFamily: 'var(--font-display)', fontStyle: 'italic' }}>
+          Loading tasks…
+        </div>
+      ) : (
+        <div className="k-tablewrap">
+          <div className="k-table__head">
+            <div className="k-table__hcell k-c-task">Task</div>
+            <div className="k-table__hcell k-c-project">Project</div>
+            <div className="k-table__hcell k-c-assignees">Assignees</div>
+            <div className="k-table__hcell k-c-due">Due</div>
+            <div className="k-table__hcell k-c-status">Status</div>
           </div>
 
-          {loading && (
-            <div style={{ padding: '32px 16px', textAlign: 'center', color: 'var(--ink-3)', fontFamily: 'var(--font-display)', fontStyle: 'italic' }}>
-              Loading tasks…
+          {groups.length === 0 && (
+            <div style={{ padding: '32px 0', textAlign: 'center', color: 'var(--ink-3)', fontStyle: 'italic' }}>
+              No tasks match this filter.
             </div>
           )}
 
-          {!loading && visible.length === 0 && (
-            <div className="k-empty" style={{ padding: 'var(--sp-8)' }}>
-              <div className="k-empty__icon">✓</div>
-              <div className="k-empty__title">{search ? 'No matches' : 'No tasks yet'}</div>
-              <div className="k-empty__sub">{search ? 'Try a different search.' : 'Create your first task above.'}</div>
-            </div>
-          )}
-
-          {visible.map(t => (
-            <div key={t.task_id} className="k-trow" onClick={() => setEditor({ open: true, task: t })}>
-              <div>
-                <div style={{ width: 8, height: 8, borderRadius: '50%', background: t.status === 'done' ? 'var(--ok)' : 'var(--ink-faint)' }} />
+          {groups.map(g => (
+            <div key={g.key} className="k-group">
+              <div className="k-group__head" style={{ '--group-color': g.color }}>
+                <span className="k-group__bar" />
+                <span className="k-group__title">{g.title}</span>
+                {g.sans && <span className="k-group__sans">{g.sans}</span>}
+                <span className="k-group__count">{g.items.length}</span>
               </div>
-              <div className="k-trow__id">{t.task_id?.slice(0, 8) || '—'}</div>
-              <div className="k-trow__title" style={{ textDecoration: t.status === 'done' ? 'line-through' : 'none', opacity: t.status === 'done' ? 0.55 : 1 }}>
-                {t.title}
-              </div>
-              <div>
-                <span className="k-hi" style={{ fontFamily: 'var(--font-hindi)', fontSize: 12, color: 'var(--ink-3)' }}>
-                  {STATUS_SANS[t.status] || t.status?.replace('_', ' ')}
-                </span>
-              </div>
-              <div>
-                {t.priority && <span className={`k-pri ${PRI_CLASS[t.priority] || ''}`}>{t.priority}</span>}
-              </div>
-              <div className="k-trow__due">{t.due_at ? formatDue(t.due_at) : '—'}</div>
-              <div style={{ display: 'flex', gap: 4 }}>
-                <button className="k-iconbtn" style={{ width: 26, height: 26 }} onClick={e => { e.stopPropagation(); setEditor({ open: true, task: t }); }} title="Edit">
-                  <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M11 2l3 3-9 9H2v-3L11 2z"/></svg>
-                </button>
-                <button className="k-iconbtn" style={{ width: 26, height: 26, color: 'var(--danger)' }} onClick={e => { e.stopPropagation(); deleteTask(t); }} title="Delete">
-                  <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4"><path d="M3 4h10M5 4V3h6v1M6 7v5M10 7v5M4 4l1 9h6l1-9"/></svg>
-                </button>
-              </div>
+              {g.items.map((t, idx) => {
+                const team      = teams.find(tm => tm.team_id === t.team_id);
+                const assignees = (t.assignee_names || []).map((name, j) => ({ name, color: AVATAR_COLORS[j % AVATAR_COLORS.length] }));
+                return (
+                  <button
+                    key={t.task_id}
+                    className="k-trow"
+                    onClick={() => setEditor({ open: true, task: t })}
+                  >
+                    <div className="k-trow__cell k-c-task">
+                      <PriorityDot priority={t.priority} />
+                      <span className="k-trow__id">KAR-{String(idx + 100)}</span>
+                      <span className="k-trow__title">{t.title}</span>
+                    </div>
+                    <div className="k-trow__cell k-c-project">
+                      {team && <ProjectTag name={team.name} dense />}
+                    </div>
+                    <div className="k-trow__cell k-c-assignees">
+                      <AvatarStack users={assignees} size={20} />
+                    </div>
+                    <div className="k-trow__cell k-c-due">
+                      <DueChip date={t.due_at} />
+                    </div>
+                    <div className="k-trow__cell k-c-status">
+                      <StatusChip status={t.status} />
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           ))}
         </div>
-      </div>
+      )}
 
-      <TaskEditor
-        open={editor.open}
-        onOpenChange={v => setEditor(e => ({ ...e, open: v }))}
-        editing={editor.task}
-        teams={teams}
-        categories={[]}
-        onSaved={() => { load(); setEditor({ open: false, task: null }); }}
-      />
+      {editor.open && (
+        <TaskEditor
+          task={editor.task}
+          teams={teams}
+          onClose={() => setEditor({ open: false, task: null })}
+          onSaved={() => { setEditor({ open: false, task: null }); load(); }}
+        />
+      )}
     </div>
   );
 }

@@ -5,11 +5,11 @@ import { api } from '../lib/api';
 import { K, KLogo, KWordmark } from '../lib/brand';
 import { apiLogout, formatDue } from '../lib/auth';
 import { useToast } from '../components/ui/toast';
-import { FolderKanban, ChevronRight, LogOut } from 'lucide-react';
+import { PageHeader, DueChip, StatusChip } from '../components/editorial';
 
 export function ClientProjectsPage() {
   const [projects, setProjects] = useState([]);
-  const navigate   = useNavigate();
+  const navigate     = useNavigate();
   const { pushToast } = useToast();
 
   useEffect(() => {
@@ -19,21 +19,36 @@ export function ClientProjectsPage() {
   }, [pushToast]);
 
   return (
-    <div className="space-y-5">
-      <div className="text-sm font-bold">My Projects</div>
+    <div className="k-screen">
+      <PageHeader
+        kicker="CLIENT"
+        title="My Projects"
+        sanskrit="परियोजना"
+        lede="Projects shared with you — track progress and approvals."
+      />
+
       {projects.length === 0 && (
-        <div className="rounded-3xl border border-dashed border-border p-10 text-center text-sm text-muted-foreground">
-          No projects assigned yet.
+        <div className="k-empty">
+          <div className="k-empty__icon">📂</div>
+          <div className="k-empty__title">No projects yet</div>
+          <div className="k-empty__sub">No projects have been assigned to you.</div>
         </div>
       )}
-      <div className="grid gap-4 md:grid-cols-2">
+
+      <div className="k-pgrid">
         {projects.map(p => (
-          <div key={p.team_id}
-            className="rounded-3xl border border-border/70 bg-card/50 p-5 cursor-pointer hover:border-border transition-colors"
-            onClick={() => navigate(`/client/project/${p.team_id}`)}>
-            <div className="flex items-center gap-3">
-              <FolderKanban size={18} style={{ color: K.teal }} />
-              <div className="font-bold text-sm">{p.name}</div>
+          <div
+            key={p.team_id}
+            className="k-pcard"
+            onClick={() => navigate(`/client/project/${p.team_id}`)}
+            style={{ cursor: 'pointer' }}
+          >
+            <div className="k-pcard__head">
+              <div className="k-pcard__bar" style={{ background: p.color || 'var(--k-primary)' }} />
+              <div className="k-pcard__titles">
+                <div className="k-pcard__name">{p.name}</div>
+                {p.workspace_name && <div className="k-pcard__client">{p.workspace_name}</div>}
+              </div>
             </div>
           </div>
         ))}
@@ -44,8 +59,8 @@ export function ClientProjectsPage() {
 
 export function ClientProjectBoardPage() {
   const { projectId } = useParams();
-  const navigate      = useNavigate();
-  const { pushToast } = useToast();
+  const navigate       = useNavigate();
+  const { pushToast }  = useToast();
   const [project,  setProject]  = useState(null);
   const [tasks,    setTasks]    = useState([]);
   const [columns,  setColumns]  = useState([]);
@@ -70,30 +85,49 @@ export function ClientProjectBoardPage() {
     return g;
   }, [tasks, columns]);
 
+  const projectName = project?.team?.name || project?.name || '…';
+
   return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-2">
-        <button onClick={() => navigate('/client/projects')} className="text-sm text-muted-foreground hover:text-foreground">Projects</button>
-        <ChevronRight size={14} className="text-muted-foreground" />
-        <div className="text-sm font-bold">{project?.team?.name || project?.name || '…'}</div>
-      </div>
-      <div className="flex gap-4 overflow-x-auto pb-4">
+    <div className="k-screen">
+      <PageHeader
+        kicker="CLIENT"
+        title={projectName}
+        sanskrit=""
+        lede="Your tasks — read-only view."
+        right={
+          <button className="k-link" style={{ fontSize: 13 }} onClick={() => navigate('/client/projects')}>
+            ← Projects
+          </button>
+        }
+      />
+
+      {/* Kanban columns scroll */}
+      <div style={{ display: 'flex', gap: 16, overflowX: 'auto', paddingBottom: 16 }}>
         {columns.map(col => (
-          <div key={col.column_id} className="rounded-3xl border border-border/70 bg-card/50 flex-shrink-0" style={{ width: 260, borderTopWidth: 3, borderTopColor: col.color }}>
-            <div className="flex items-center justify-between px-4 py-3 border-b border-border/60">
-              <span className="text-sm font-bold">{col.name}</span>
-              <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: col.color + '18', color: col.color }}>
-                {(grouped[col.column_id] || []).length}
-              </span>
+          <div
+            key={col.column_id}
+            className="k-card"
+            style={{ minWidth: 260, maxWidth: 280, flexShrink: 0, padding: 0, overflow: 'hidden', borderTopWidth: 3, borderTopColor: col.color || 'var(--k-primary)' }}
+          >
+            <div className="k-card__head" style={{ padding: '12px 16px' }}>
+              <div className="k-card__titles">
+                <h3 className="k-card__title" style={{ fontSize: 14 }}>{col.name}</h3>
+                <span className="k-segctrl__count">{(grouped[col.column_id] || []).length}</span>
+              </div>
             </div>
-            <div className="p-2 space-y-2">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '8px 12px 12px' }}>
               {(grouped[col.column_id] || []).map(t => (
-                <div key={t.task_id} className="rounded-2xl border border-border/60 bg-background/50 p-3">
-                  <div className="text-sm font-semibold">{t.title}</div>
-                  {t.description && <div className="mt-1 text-xs text-muted-foreground line-clamp-2">{t.description}</div>}
-                  {t.due_at && <div className="mt-2 text-xs" style={{ color: new Date(t.due_at) < new Date() ? '#ef4444' : K.mid }}>Due {formatDue(t.due_at)}</div>}
+                <div key={t.task_id} style={{ background: 'var(--bg-soft)', borderRadius: 'var(--r-md)', padding: '10px 14px', border: '1px solid var(--rule-soft)' }}>
+                  <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--ink)', marginBottom: 4 }}>{t.title}</div>
+                  {t.description && (
+                    <div style={{ fontSize: 12, color: 'var(--ink-3)', marginBottom: 6, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{t.description}</div>
+                  )}
+                  {t.due_at && <DueChip date={t.due_at} />}
                 </div>
               ))}
+              {(grouped[col.column_id] || []).length === 0 && (
+                <div style={{ fontSize: 12, color: 'var(--ink-faint)', fontStyle: 'italic', padding: '4px 2px' }}>Empty</div>
+              )}
             </div>
           </div>
         ))}
@@ -113,7 +147,7 @@ export function ClientPortal() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}><KLogo size={36} /><KWordmark dark /></div>
         <button onClick={async () => { await apiLogout(); navigate('/login'); }}
           style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#8aa5be', background: 'none', border: 'none', cursor: 'pointer' }}>
-          <LogOut size={14} /> Sign out
+          Sign out
         </button>
       </div>
       {tasks.length === 0 && <div style={{ color: '#8aa5be', fontSize: 14 }}>No tasks shared with you yet.</div>}

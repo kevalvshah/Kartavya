@@ -32,6 +32,7 @@ import { useFields }          from '../hooks/useFields';
 import { useViews }           from '../hooks/useViews';
 import { useRealtimeTasks }   from '../hooks/useRealtimeTasks';
 import { usePresence }        from '../hooks/usePresence';
+import { PageHeader, AvatarStack } from '../components/editorial';
 
 const VIEWS = [
   { id: 'kanban',   label: 'Board' },
@@ -116,176 +117,99 @@ export default function ProjectBoardPage() {
   };
 
   // ── Styles ───────────────────────────────────────────────────────────────
-  const labelSt = { fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4, display: 'block' };
-  const inputSt = { border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)', padding: '6px 10px', fontFamily: 'inherit', fontSize: 'var(--text-sm)', background: 'var(--bg-default)', color: 'var(--text-default)' };
+  const labelSt = { fontSize: 10.5, fontWeight: 600, color: 'var(--ink-3)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4, display: 'block' };
+  const inputSt = { border: '1px solid var(--rule)', borderRadius: 'var(--r-sm)', padding: '6px 10px', fontFamily: 'inherit', fontSize: 13, background: 'var(--surface)', color: 'var(--ink)' };
 
-  if (loading) return <div style={{ padding: 32, color: 'var(--text-muted)' }}>Loading board…</div>;
+  if (loading) return (
+    <div className="k-screen">
+      <div style={{ padding: '40px 0', textAlign: 'center', color: 'var(--ink-3)', fontFamily: 'var(--font-display)', fontStyle: 'italic' }}>
+        Loading board…
+      </div>
+    </div>
+  );
+
+  const projectName = project?.team?.name || project?.name || '…';
+  const presenceUsers = onlineUsers.map(u => ({ name: u.name, initials: u.initials, color: u.color }));
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-
-      {/* ── Header ────────────────────────────────────────────────────── */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-        <button
-          onClick={() => navigate('/projects')}
-          style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 'var(--text-sm)', fontFamily: 'inherit' }}>
-          ← Projects
-        </button>
-        <span style={{ color: 'var(--text-subtle)' }}>/</span>
-        <span style={{ fontWeight: 700, fontSize: 'var(--text-md)' }}>
-          {project?.team?.name || project?.name || '…'}
-        </span>
-
-        {/* ── Presence avatar stack ──────────────────────────────────── */}
-        {onlineUsers.length > 0 && (
-          <div
-            style={{ display: 'flex', alignItems: 'center', gap: 0, marginLeft: 8 }}
-            title={onlineUsers.map(u => u.name).join(', ')}
-          >
-            {onlineUsers.slice(0, 5).map((u, i) => (
-              <div
-                key={u.user_id}
-                title={u.user_id === me?.user_id ? `${u.name} (you)` : u.name}
-                style={{
-                  width: 28,
-                  height: 28,
-                  borderRadius: '50%',
-                  background: u.color,
-                  color: '#fff',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: 11,
-                  fontWeight: 600,
-                  border: '2px solid var(--bg-default)',
-                  marginLeft: i === 0 ? 0 : -8,
-                  zIndex: onlineUsers.length - i,
-                  position: 'relative',
-                  opacity: u.user_id === me?.user_id ? 0.75 : 1,
-                  cursor: 'default',
-                  flexShrink: 0,
-                }}
-              >
-                {u.initials}
-              </div>
-            ))}
-            {onlineUsers.length > 5 && (
-              <div style={{
-                width: 28, height: 28, borderRadius: '50%',
-                background: 'var(--bg-muted)', color: 'var(--text-muted)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 11, fontWeight: 600,
-                border: '2px solid var(--bg-default)',
-                marginLeft: -8, zIndex: 0,
-              }}>
-                +{onlineUsers.length - 5}
-              </div>
+    <div className="k-screen">
+      <PageHeader
+        kicker="WORKSPACE"
+        title={projectName}
+        sanskrit={project?.sanskrit || ''}
+        lede="Move work across the board. Click any card to open."
+        right={
+          <div className="k-headerright">
+            {/* Presence */}
+            {onlineUsers.length > 0 && (
+              <AvatarStack users={presenceUsers} size={26} max={5} />
             )}
-            <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 8, whiteSpace: 'nowrap' }}>
-              {onlineUsers.length === 1 ? 'Only you' : `${onlineUsers.length} online`}
-            </span>
-          </div>
-        )}
-
-        {/* ── View switcher ──────────────────────────────────────────── */}
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: 4, background: 'var(--bg-muted)', borderRadius: 'var(--radius-md)', padding: 3 }}>
-          {VIEWS.map(v => (
-            <button
-              key={v.id}
-              onClick={() => setView(v.id)}
-              style={{
-                padding: '4px 12px', border: 'none', borderRadius: 'var(--radius-sm)',
-                cursor: 'pointer', fontFamily: 'inherit', fontSize: 'var(--text-sm)',
-                fontWeight: view === v.id ? 600 : 400,
-                background: view === v.id ? 'var(--bg-elevated)' : 'transparent',
-                color: view === v.id ? 'var(--text-default)' : 'var(--text-muted)',
-                boxShadow: view === v.id ? 'var(--shadow-sm)' : 'none',
-                transition: 'all 0.15s',
-              }}
-            >
-              {v.label}
+            {/* View switcher */}
+            <div className="k-segctrl">
+              {VIEWS.map(v => (
+                <button
+                  key={v.id}
+                  className={'k-segctrl__btn' + (view === v.id ? ' is-active' : '')}
+                  onClick={() => setView(v.id)}
+                >
+                  {v.label}
+                </button>
+              ))}
+            </div>
+            {/* Fields + Save view */}
+            <button className="k-btn k-btn--ghost k-btn--sm" onClick={() => setShowFieldMgr(v => !v)}>
+              ⚙ Fields
             </button>
-          ))}
-        </div>
-
-        {savedViews?.length > 0 && (
-          <div style={{ display: 'flex', gap: 4 }}>
-            {savedViews.map(sv => (
-              <button
-                key={sv.view_id}
-                onClick={() => setView(sv.config?.viewType || 'kanban')}
-                style={{ padding: '4px 10px', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)', cursor: 'pointer', fontFamily: 'inherit', fontSize: 'var(--text-xs)', background: 'var(--bg-default)', color: 'var(--text-muted)' }}
-              >
-                {sv.name}
-              </button>
-            ))}
+            <button
+              className="k-btn k-btn--ghost k-btn--sm"
+              onClick={() => saveView({ name: `View ${(savedViews?.length || 0) + 1}`, config: { viewType: view } })}
+            >
+              + Save view
+            </button>
+            <button className="k-link" style={{ fontSize: 13 }} onClick={() => navigate('/projects')}>
+              ← Projects
+            </button>
           </div>
-        )}
+        }
+      />
 
-        <button
-          onClick={() => setShowFieldMgr(v => !v)}
-          style={{ padding: '5px 12px', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)', cursor: 'pointer', fontFamily: 'inherit', fontSize: 'var(--text-sm)', background: 'var(--bg-default)', color: 'var(--text-muted)' }}
-        >
-          ⚙ Fields
-        </button>
-
-        <button
-          onClick={() => saveView({ name: `View ${(savedViews?.length || 0) + 1}`, config: { viewType: view } })}
-          style={{ padding: '5px 12px', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)', cursor: 'pointer', fontFamily: 'inherit', fontSize: 'var(--text-sm)', background: 'var(--bg-default)', color: 'var(--text-muted)' }}
-        >
-          + Save view
-        </button>
-      </div>
-
-      {/* ── Field manager panel ───────────────────────────────────────── */}
+      {/* Field manager panel */}
       {showFieldMgr && (
-        <div style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-lg)', padding: 'var(--space-5)' }}>
-          <div style={{ fontWeight: 600, fontSize: 'var(--text-sm)', marginBottom: 12 }}>Custom Fields</div>
-          <div style={{ display: 'flex', gap: 8, marginBottom: 12, alignItems: 'flex-end' }}>
-            <div style={{ flex: 1 }}>
-              <label style={labelSt}>Name</label>
+        <section className="k-card">
+          <header className="k-card__head">
+            <div className="k-card__titles">
+              <h3 className="k-card__title">Custom Fields</h3>
+            </div>
+          </header>
+          <div className="k-card__body">
+            <div style={{ display: 'flex', gap: 8, marginBottom: 12, alignItems: 'flex-end' }}>
               <input
+                className="k-input"
                 value={newFieldName}
                 onChange={e => setNewFieldName(e.target.value)}
                 placeholder="Field name"
-                style={{ ...inputSt, width: '100%' }}
+                style={{ flex: 1 }}
               />
-            </div>
-            <div>
-              <label style={labelSt}>Type</label>
-              <select value={newFieldType} onChange={e => setNewFieldType(e.target.value)} style={inputSt}>
-                {['text', 'number', 'date', 'select', 'checkbox', 'url', 'person'].map(t => (
-                  <option key={t} value={t}>{t}</option>
-                ))}
+              <select className="k-select" value={newFieldType} onChange={e => setNewFieldType(e.target.value)}>
+                {['text','number','date','select','checkbox','url','person'].map(t => <option key={t} value={t}>{t}</option>)}
               </select>
+              <button className="k-btn k-btn--primary k-btn--sm" onClick={addField}>Add</button>
             </div>
-            <button
-              onClick={addField}
-              style={{ padding: '6px 14px', background: 'var(--accent-default)', color: '#fff', border: 'none', borderRadius: 'var(--radius-sm)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600, fontSize: 'var(--text-sm)' }}
-            >
-              Add
-            </button>
+            {(fieldDefs || []).length === 0 ? (
+              <p style={{ color: 'var(--ink-3)', fontSize: 13 }}>No custom fields yet.</p>
+            ) : (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                {(fieldDefs || []).map(f => (
+                  <div key={f.field_id} style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--bg-soft)', borderRadius: 'var(--r-sm)', padding: '4px 10px', fontSize: 13 }}>
+                    <span style={{ fontWeight: 500 }}>{f.name}</span>
+                    <span style={{ color: 'var(--ink-3)', fontSize: 11 }}>{f.type}</span>
+                    <button onClick={() => deleteField(f.field_id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-3)', fontSize: 14, lineHeight: 1 }}>×</button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
-          {(fieldDefs || []).length === 0 ? (
-            <p style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)' }}>No custom fields yet.</p>
-          ) : (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-              {(fieldDefs || []).map(f => (
-                <div
-                  key={f.field_id}
-                  style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--bg-muted)', borderRadius: 'var(--radius-sm)', padding: '4px 10px', fontSize: 'var(--text-sm)' }}
-                >
-                  <span style={{ fontWeight: 500 }}>{f.name}</span>
-                  <span style={{ color: 'var(--text-subtle)', fontSize: 'var(--text-xs)' }}>{f.type}</span>
-                  <button
-                    onClick={() => deleteField(f.field_id)}
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 14, lineHeight: 1 }}
-                  >×</button>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+        </section>
       )}
 
       {/* ── Board views ──────────────────────────────────────────────── */}
@@ -298,6 +222,9 @@ export default function ProjectBoardPage() {
           teamMembers={teamMembers}
           onTasksChange={setTasks}
           onColumnChange={handleColumnChange}
+          showRequested={me?.role === 'admin' || me?.role === 'owner'}
+          currentUserId={me?.user_id}
+          currentUserRole={me?.role}
         />
       )}
       {view === 'table' && (
@@ -331,3 +258,6 @@ export default function ProjectBoardPage() {
     </div>
   );
 }
+
+// remove unused style vars (they were only referenced in the old header)
+// labelSt and inputSt are no longer needed but harmless to leave

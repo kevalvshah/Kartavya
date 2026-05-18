@@ -5,14 +5,16 @@ import React, { useState } from 'react';
 import { useLocation } from 'react-router-dom';
 
 const PAGE_META = {
-  '/dashboard':              { en: 'Dashboard',     hi: 'आज' },
+  '/dashboard':              { en: 'Today',         hi: 'आज' },
+  '/boards':                 { en: 'Boards',        hi: 'फ़लक' },
   '/projects':               { en: 'Projects',      hi: 'योजना' },
-  '/tasks':                  { en: 'All Tasks',     hi: 'कर्तव्य' },
+  '/tasks':                  { en: 'Tasks',         hi: 'कर्तव्य' },
   '/teams':                  { en: 'Teams',         hi: 'सहयोगी' },
+  '/inbox':                  { en: 'Inbox',         hi: 'सन्देश' },
   '/activity':               { en: 'Activity',      hi: 'क्रिया' },
   '/automations':            { en: 'Automations',   hi: 'स्वतंत्र' },
   '/time':                   { en: 'Time Report',   hi: 'काल' },
-  '/templates':              { en: 'Templates',     hi: 'साँचा' },
+  '/templates':              { en: 'Templates',     hi: 'रचना' },
   '/approvals':              { en: 'Approvals',     hi: 'सम्मति' },
   '/settings/categories':    { en: 'Categories',    hi: 'वर्ग' },
   '/settings/notifications': { en: 'Notifications', hi: 'सूचना' },

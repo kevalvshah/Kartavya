@@ -4,6 +4,7 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../lib/api';
 import { useToast } from '../components/ui/toast';
+import { PageHeader } from '../components/editorial';
 
 const DEFAULT_COLOR = '#05b7aa';
 
@@ -35,11 +36,8 @@ export default function CategoriesPage() {
   };
 
   return (
-    <div className="k-page">
-      <div className="k-pageh">
-        <h1 className="k-pageh__title">Categories</h1>
-        <span className="k-pageh__sans">श्रेणी</span>
-      </div>
+    <div className="k-screen">
+      <PageHeader kicker="SETTINGS" title="Categories" sanskrit="वर्ग" lede="Tags you can drop on any task. Used in filters, reports, and automations." />
 
       <div className="k-card" style={{ marginBottom: 'var(--sp-5)' }}>
         <div className="k-card__head">

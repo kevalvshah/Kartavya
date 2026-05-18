@@ -3,6 +3,7 @@
  */
 import React, { useState, useEffect } from 'react';
 import { api } from '../lib/api';
+import { PageHeader } from '../components/editorial';
 
 const TRIGGERS = [
   { value: 'task_created',            label: 'Task created' },
@@ -112,15 +113,15 @@ export default function AutomationsPage({ teamId: propTeamId }) {
   };
 
   if (loading) return (
-    <div className="k-page">
-      <div style={{ padding: '32px 0', textAlign: 'center', color: 'var(--ink-3)', fontFamily: 'var(--font-display)', fontStyle: 'italic' }}>
+    <div className="k-screen">
+      <div style={{ padding: '40px 0', textAlign: 'center', color: 'var(--ink-3)', fontFamily: 'var(--font-display)', fontStyle: 'italic' }}>
         Loading automations…
       </div>
     </div>
   );
 
   if (!teamId && teams.length === 0) return (
-    <div className="k-page">
+    <div className="k-screen">
       <div className="k-empty">
         <div className="k-empty__icon">⚡</div>
         <div className="k-empty__title">No projects yet</div>
@@ -130,24 +131,28 @@ export default function AutomationsPage({ teamId: propTeamId }) {
   );
 
   return (
-    <div className="k-page">
-      <div className="k-pageh">
-        <h1 className="k-pageh__title">Automations</h1>
-        <span className="k-pageh__sans">स्वचालन</span>
-        <div className="k-pageh__actions">
-          {teams.length > 1 && (
-            <select className="k-select" value={teamId} onChange={e => setTeamId(e.target.value)}>
-              {teams.map(t => <option key={t.team_id} value={t.team_id}>{t.name}</option>)}
-            </select>
-          )}
-          {!creating && (
-            <button className="k-btn k-btn--primary k-btn--sm" onClick={() => setCreating(true)}>
-              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2"><path d="M8 3v10M3 8h10"/></svg>
-              New Rule
-            </button>
-          )}
-        </div>
-      </div>
+    <div className="k-screen">
+      <PageHeader
+        kicker="OPERATIONS"
+        title="Automations"
+        sanskrit="स्वचालन"
+        lede='"When this happens, then do that." Rules run on every event in your workspace.'
+        right={
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            {teams.length > 1 && (
+              <select className="k-select" value={teamId} onChange={e => setTeamId(e.target.value)}>
+                {teams.map(t => <option key={t.team_id} value={t.team_id}>{t.name}</option>)}
+              </select>
+            )}
+            {!creating && (
+              <button className="k-btn k-btn--primary k-btn--sm" onClick={() => setCreating(true)}>
+                <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2"><path d="M8 3v10M3 8h10"/></svg>
+                New rule
+              </button>
+            )}
+          </div>
+        }
+      />
 
       {/* Builder form */}
       {creating && (
@@ -230,48 +235,57 @@ export default function AutomationsPage({ teamId: propTeamId }) {
           <div className="k-empty__sub">Create your first rule to automate repetitive work.</div>
         </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-3)' }}>
-          {automations.map(auto => {
-            const condCount = auto.trigger?.filters?.length || 0;
+        <div className="k-rules">
+          {automations.map((auto, idx) => {
+            const filters  = auto.trigger?.filters || [];
+            const condText = filters.length > 0
+              ? filters.map(c => `${c.field} ${c.op === 'equals' ? '=' : '≠'} ${c.value}`).join(' · ')
+              : 'Any condition';
+            const thenText = (auto.actions || []).map(a => ACTIONS.find(x => x.value === a.type)?.label || a.type).join(', ')
+              || (auto.action_type ? ACTIONS.find(x => x.value === auto.action_type)?.label || auto.action_type : 'Action');
+            const triggerSans = { task_created: 'नया कार्य', status_changed: 'स्थिति', field_changed: 'क्षेत्र', assigned: 'नियुक्त', task_overdue: 'विलंबित', comment_added: 'टिप्पणी', due_date_approaching: 'समय', approval_status_changed: 'अनुमोदन' };
             return (
-              <div key={auto.automation_id} className="k-card" style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, flex: 1 }}>
-                  <div style={{ width: 36, height: 36, borderRadius: 8, background: 'rgba(5,183,170,.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, flexShrink: 0 }}>⚡</div>
-                  <div>
-                    <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--ink)', marginBottom: 3 }}>{auto.name}</div>
-                    <div style={{ fontSize: 12, color: 'var(--ink-3)' }}>
-                      When <strong>{TRIGGERS.find(t => t.value === auto.trigger?.event)?.label || auto.trigger?.event}</strong>
-                      {condCount > 0 && <> + {condCount} condition{condCount > 1 ? 's' : ''}</>}
-                      {' → '}
-                      {auto.actions?.map(a => ACTIONS.find(x => x.value === a.type)?.label || a.type).join(', ')}
-                    </div>
-                    {condCount > 0 && (
-                      <div style={{ marginTop: 6, display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                        {(auto.trigger?.filters || []).map((c, i) => (
-                          <span key={i} style={{ background: 'var(--bg-soft)', borderRadius: 4, padding: '2px 7px', fontSize: 11, color: 'var(--ink-2)' }}>
-                            {c.field} {c.op === 'equals' ? '=' : '≠'} {c.value}
-                          </span>
-                        ))}
-                      </div>
-                    )}
+              <div key={auto.automation_id} className={'k-rule' + (!auto.enabled ? ' is-paused' : '')}>
+                <div className="k-rule__head">
+                  <span className="k-rule__id">AU-{idx + 1}</span>
+                  <h3>{auto.name}</h3>
+                  <span className={'k-rule__status k-rule__status--' + (auto.enabled ? 'on' : 'off')}>
+                    <span className="k-rule__status-dot" />
+                    {auto.enabled ? 'Active' : 'Paused'}
+                  </span>
+                  <span className="k-mute" style={{ marginLeft: 0 }}>
+                    {auto.run_count > 0 ? `${auto.run_count} runs` : '0 runs'}
+                    {auto.owner_name ? ` · owned by ${auto.owner_name.split(' ')[0]}` : ''}
+                  </span>
+                </div>
+                <div className="k-rule__flow">
+                  <div className="k-rule__step k-rule__step--when">
+                    <div className="k-rule__step-lbl">WHEN · प्रसंग</div>
+                    <div className="k-rule__step-body">{TRIGGERS.find(t => t.value === auto.trigger?.event)?.label || auto.trigger?.event || 'Trigger'}</div>
+                    {triggerSans[auto.trigger?.event] && <div className="k-rule__step-sans">{triggerSans[auto.trigger?.event]}</div>}
+                  </div>
+                  <div className="k-rule__arrow">
+                    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.4"><path d="M2 10h16M14 5l5 5-5 5"/></svg>
+                  </div>
+                  <div className="k-rule__step k-rule__step--cond">
+                    <div className="k-rule__step-lbl">IF · यदि</div>
+                    <div className="k-rule__step-body">{condText}</div>
+                  </div>
+                  <div className="k-rule__arrow">
+                    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.4"><path d="M2 10h16M14 5l5 5-5 5"/></svg>
+                  </div>
+                  <div className="k-rule__step k-rule__step--then">
+                    <div className="k-rule__step-lbl">THEN · क्रिया</div>
+                    <div className="k-rule__step-body">{thenText}</div>
                   </div>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-                  {(auto.run_count > 0) && (
-                    <span style={{ fontSize: 11, color: 'var(--ink-3)', background: 'var(--bg-soft)', borderRadius: 20, padding: '2px 8px' }}>
-                      {auto.run_count} runs
-                    </span>
-                  )}
-                  <button onClick={() => handleToggle(auto)}
-                    style={{ fontSize: 11, fontWeight: 700, padding: '3px 12px', borderRadius: 99, border: '1px solid', cursor: 'pointer',
-                      background: auto.enabled ? 'rgba(16,185,129,.12)' : 'var(--bg-soft)',
-                      color: auto.enabled ? '#059669' : 'var(--ink-3)',
-                      borderColor: auto.enabled ? '#059669' : 'var(--rule-soft)' }}>
-                    {auto.enabled ? 'On' : 'Off'}
+                <div className="k-rule__foot">
+                  <button className="k-btn k-btn--ghost k-btn--sm">Edit</button>
+                  <button className="k-btn k-btn--ghost k-btn--sm">View runs</button>
+                  <button className="k-btn k-btn--ghost k-btn--sm" onClick={() => handleToggle(auto)}>
+                    {auto.enabled ? 'Pause' : 'Resume'}
                   </button>
-                  <button className="k-iconbtn" style={{ color: 'var(--danger)' }} onClick={() => handleDelete(auto.automation_id)} title="Delete">
-                    <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4"><path d="M3 4h10M5 4V3h6v1M6 7v5M10 7v5M4 4l1 9h6l1-9"/></svg>
-                  </button>
+                  <button className="k-btn k-btn--ghost k-btn--sm" style={{ marginLeft: 'auto', color: 'var(--danger)' }} onClick={() => handleDelete(auto.automation_id)}>Delete</button>
                 </div>
               </div>
             );

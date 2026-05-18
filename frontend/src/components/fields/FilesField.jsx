@@ -1,9 +1,5 @@
-/**
- * FilesField — file list with upload button.
- * value: [{name, url}]
- */
-import React, { useRef } from 'react';
-import { api } from '../../lib/api';
+﻿import React, { useRef } from "react";
+import { api } from "../../lib/api";
 
 export default function FilesField({ field, value, onChange, readOnly }) {
   const files = Array.isArray(value) ? value : [];
@@ -13,48 +9,44 @@ export default function FilesField({ field, value, onChange, readOnly }) {
     const file = e.target.files?.[0];
     if (!file) return;
     const form = new FormData();
-    form.append('file', file);
+    form.append("file", file);
     try {
-      const res = await api.post('/upload', form);
+      const res = await api.post("/upload", form);
       onChange([...files, { name: res.data.name, url: res.data.url }]);
     } catch (err) {
-      console.error('Upload failed', err);
+      console.error("Upload failed", err);
     }
-    e.target.value = '';
+    e.target.value = "";
   };
 
   const removeFile = (idx) => onChange(files.filter((_, i) => i !== idx));
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
       {files.map((f, i) => (
-        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 'var(--text-sm)' }}>
+        <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13 }}>
           <span style={{ fontSize: 16 }}>📎</span>
           <a href={f.url} target="_blank" rel="noreferrer"
-            style={{ color: 'var(--accent-default)', textDecoration: 'none', flex: 1 }}
+            style={{ color: "var(--k-primary)", textDecoration: "none", flex: 1 }}
           >{f.name}</a>
           {!readOnly && (
             <button onClick={() => removeFile(i)}
-              style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--danger)', fontSize: 14 }}
+              className="k-iconbtn"
+              style={{ color: "var(--danger)", fontSize: 14 }}
             >✕</button>
           )}
         </div>
       ))}
       {!readOnly && (
         <>
-          <input ref={inputRef} type="file" style={{ display: 'none' }} onChange={handleUpload} />
+          <input ref={inputRef} type="file" style={{ display: "none" }} onChange={handleUpload} />
           <button
             onClick={() => inputRef.current?.click()}
-            style={{
-              display: 'inline-flex', alignItems: 'center', gap: 6,
-              border: '1px dashed var(--border-strong)', borderRadius: 'var(--radius-sm)',
-              padding: '5px 12px', background: 'transparent', cursor: 'pointer',
-              color: 'var(--text-muted)', fontSize: 'var(--text-sm)', fontFamily: 'inherit',
-            }}
+            className="k-btn k-btn--ghost k-btn--sm"
+            style={{ alignSelf: "flex-start", borderStyle: "dashed" }}
           >+ Attach file</button>
         </>
       )}
     </div>
   );
 }
-

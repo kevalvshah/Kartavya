@@ -56,31 +56,30 @@ export default function AppShell() {
   const teamId = teamIdFromPath || (teamsLoaded ? (teams[0]?.team_id || '') : null);
 
   return (
-    <div data-testid="app-shell" style={{ display: 'flex', minHeight: '100vh', background: 'var(--bg)' }}>
-      {/* Desktop sidebar */}
-      <div className="hidden lg:block" style={{ flexShrink: 0 }}>
+    <div data-testid="app-shell" className="k-app">
+      {/* Sidebar — hidden on mobile via CSS */}
+      <div className="k-app__sidebar">
         <Sidebar inboxCount={unread} />
       </div>
 
-      {/* Mobile drawer */}
+      {/* Mobile overlay drawer */}
       {sidebarOpen && (
-        <div className="fixed inset-0 z-50 lg:hidden" onClick={() => setSidebarOpen(false)}>
-          <div className="absolute inset-0 bg-black/60" />
-          <div className="absolute left-0 top-0 bottom-0" onClick={e => e.stopPropagation()}>
-            <Sidebar />
+        <div className="k-app__mob-overlay" onClick={() => setSidebarOpen(false)}>
+          <div className="k-app__mob-drawer" onClick={e => e.stopPropagation()}>
+            <Sidebar inboxCount={unread} />
           </div>
         </div>
       )}
 
       {/* Main column */}
-      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
-        {/* Mobile header */}
-        <div className="lg:hidden flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: 'var(--rule)', background: 'var(--surface)' }}>
-          <button onClick={() => setSidebarOpen(true)} style={{ padding: 8, borderRadius: 8, border: '1px solid var(--rule)', background: 'transparent', color: 'var(--ink-2)', cursor: 'pointer' }} aria-label="Open menu">
+      <div className="k-main">
+        {/* Mobile topbar */}
+        <div className="k-app__mob-bar">
+          <button className="k-iconbtn" onClick={() => setSidebarOpen(true)} aria-label="Open menu">
             <Menu size={18} />
           </button>
           <span style={{ fontFamily: 'var(--font-display)', fontSize: 16, color: 'var(--ink)', fontWeight: 500 }}>Kartavya</span>
-          <button onClick={() => setNotifOpen(true)} style={{ padding: 8, borderRadius: 8, border: '1px solid var(--rule)', background: 'transparent', color: 'var(--ink-2)', cursor: 'pointer', position: 'relative' }} aria-label="Notifications">
+          <button className="k-iconbtn" style={{ position: 'relative' }} onClick={() => setNotifOpen(true)} aria-label="Notifications">
             <Bell size={18} />
             {unread > 0 && (
               <span style={{ position: 'absolute', top: -4, right: -4, height: 16, minWidth: 16, padding: '0 4px', borderRadius: 99, fontSize: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#dc2626', color: '#fff', fontWeight: 700 }}>
@@ -91,12 +90,12 @@ export default function AppShell() {
         </div>
 
         {/* Desktop topbar */}
-        <div className="hidden lg:block">
+        <div className="k-app__topbar">
           <Topbar unread={unread} onOpenNotifications={() => setNotifOpen(true)} onNewTask={() => setNewTaskOpen(true)} />
         </div>
 
         {/* Page content */}
-        <main style={{ flex: 1, minWidth: 0, overflow: 'auto' }}>
+        <main className="k-content">
           <Outlet context={{ teamId, teams }} />
         </main>
       </div>
