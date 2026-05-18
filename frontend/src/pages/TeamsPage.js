@@ -12,9 +12,10 @@ export default function TeamsPage() {
   const [name,           setName]           = useState('');
   const [selectedTeamId, setSelectedTeamId] = useState('');
   const [teamDetail,     setTeamDetail]     = useState(null);
-  const [inviteEmail,    setInviteEmail]    = useState('');
-  const [inviteRole,     setInviteRole]     = useState('member');
-  const [showCreate,     setShowCreate]     = useState(false);
+  const [inviteEmail,      setInviteEmail]      = useState('');
+  const [inviteRole,       setInviteRole]       = useState('member');
+  const [clientApproval,   setClientApproval]   = useState(true);
+  const [showCreate,       setShowCreate]        = useState(false);
 
   const loadTeams = async () => {
     const res = await api.get('/teams');
@@ -48,9 +49,11 @@ export default function TeamsPage() {
   const addMember = async () => {
     if (!inviteEmail.trim()) return;
     const res = await api.post(`/teams/${selectedTeamId}/members`, {
-      email: inviteEmail.trim().toLowerCase(), role: inviteRole,
+      email: inviteEmail.trim().toLowerCase(),
+      role: inviteRole,
+      receives_approval_emails: inviteRole === 'client' ? clientApproval : undefined,
     });
-    setInviteEmail(''); setInviteRole('member');
+    setInviteEmail(''); setInviteRole('member'); setClientApproval(true);
     setTeamDetail(prev => ({ ...prev, members: [res.data, ...(prev?.members || [])] }));
   };
 
@@ -178,24 +181,45 @@ export default function TeamsPage() {
         </div>
       )}
 
-      {/* Invite form */}
+      {/* Add member form */}
       {isAdmin && (
         <section className="k-card">
           <header className="k-card__head">
             <div className="k-card__titles">
-              <h3 className="k-card__title">Invite member</h3>
-              <span className="k-card__sans">आमंत्रण</span>
+              <h3 className="k-card__title">Add member</h3>
+              <span className="k-card__sans">सदस्य जोड़ें</span>
             </div>
           </header>
-          <div className="k-card__body">
+          <div className="k-card__body" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
               <input className="k-input" type="email" value={inviteEmail} onChange={e => setInviteEmail(e.target.value)}
                 placeholder="Email address" style={{ flex: '2 1 200px' }} />
               <select className="k-select" value={inviteRole} onChange={e => setInviteRole(e.target.value)} style={{ flex: '1 1 120px' }}>
-                {['admin','owner','member','client'].map(r => <option key={r} value={r}>{r}</option>)}
+                {['member','admin','owner','client'].map(r => <option key={r} value={r}>{r}</option>)}
               </select>
-              <button className="k-btn k-btn--primary" onClick={addMember}>Invite</button>
+              <button className="k-btn k-btn--primary" onClick={addMember}>Add</button>
             </div>
+            {inviteRole === 'client' && (
+              <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontSize: 13, color: 'var(--ink-2)' }}>
+                <div
+                  onClick={() => setClientApproval(v => !v)}
+                  style={{
+                    width: 36, height: 20, borderRadius: 10, position: 'relative', cursor: 'pointer',
+                    background: clientApproval ? 'var(--k-primary)' : 'var(--rule)',
+                    transition: 'background .15s',
+                    flexShrink: 0,
+                  }}
+                >
+                  <div style={{
+                    position: 'absolute', top: 3, left: clientApproval ? 18 : 3,
+                    width: 14, height: 14, borderRadius: '50%', background: '#fff',
+                    transition: 'left .15s',
+                    boxShadow: '0 1px 3px rgba(0,0,0,.2)',
+                  }} />
+                </div>
+                <span>Requires approval for task completion</span>
+              </label>
+            )}
           </div>
         </section>
       )}

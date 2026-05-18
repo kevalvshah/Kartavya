@@ -121,6 +121,13 @@ async def accept_invite(body: AcceptInviteBody):
         user_id, invite["email"],
     )
     user = await pool.fetchrow("SELECT * FROM users WHERE user_id=$1", user_id)
+
+    try:
+        from email_service import send_welcome_email
+        send_welcome_email(invite["email"], body.name)
+    except Exception:
+        pass
+
     return {"token": _create_token(user_id), "user": _safe_user(dict(user))}
 
 
