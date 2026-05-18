@@ -32,7 +32,7 @@ export default function TemplatesPage() {
   const [ptDesc,    setPtDesc]    = useState('');
   const [saving,    setSaving]    = useState(false);
 
-  const [applyTmpl,      setApplyTmpl]      = useState('');
+  const [applyModal,     setApplyModal]     = useState(null); // { tmplId, tmplName }
   const [applyToProject, setApplyToProject] = useState('');
   const [applying,       setApplying]       = useState(false);
 
@@ -75,13 +75,15 @@ export default function TemplatesPage() {
     finally { setSaving(false); }
   };
 
-  const applyProjectTemplate = async (tmplId) => {
-    if (!applyToProject) { pushToast({ type: 'error', title: 'Choose a target project' }); return; }
+  const applyProjectTemplate = async (tmplId, projectId) => {
+    const pid = projectId || applyToProject;
+    if (!pid) { pushToast({ type: 'error', title: 'Choose a target project' }); return; }
     setApplying(true);
     try {
-      const res = await api.post(`/templates/projects/${tmplId}/apply?team_id=${applyToProject}`);
+      const res = await api.post(`/templates/projects/${tmplId}/apply?team_id=${pid}`);
       pushToast({ type: 'success', title: `Applied — ${res.data.created.columns} columns created` });
-      navigate(`/projects/${applyToProject}`);
+      setApplyModal(null); setApplyToProject('');
+      navigate(`/projects/${pid}`);
     } catch (_) { pushToast({ type: 'error', title: 'Could not apply template' }); }
     finally { setApplying(false); }
   };
@@ -164,12 +166,11 @@ export default function TemplatesPage() {
                         <button
                           className="k-btn k-btn--primary k-btn--sm"
                           onClick={() => {
-                            setApplyTmpl(t.template_id);
-                            if (projects.length === 1) { applyProjectTemplate(t.template_id); }
-                            else {
-                              const target = window.prompt(`Apply "${t.name}" to which project?\n${projects.map((p,i) => `${i+1}. ${p.name}`).join('\n')}\n\nEnter number:`);
-                              const p = projects[parseInt(target, 10) - 1];
-                              if (p) { setApplyToProject(p.team_id); applyProjectTemplate(t.template_id); }
+                            if (projects.length === 1) {
+                              applyProjectTemplate(t.template_id, projects[0].team_id);
+                            } else {
+                              setApplyToProject('');
+                              setApplyModal({ tmplId: t.template_id, tmplName: t.name });
                             }
                           }}
                           disabled={applying}
@@ -273,6 +274,81 @@ export default function TemplatesPage() {
             </div>
           )}
         </>
+      )}
+      {/* Apply template modal */}
+      {applyModal && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 1000,
+          background: 'rgba(0,0,0,.45)', backdropFilter: 'blur(3px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }} onClick={() => setApplyModal(null)}>
+          <div style={{
+            background: 'var(--surface)', borderRadius: 16,
+            border: '1px solid var(--rule)',
+            boxShadow: '0 24px 64px rgba(0,0,0,.22)',
+            width: 420, padding: '28px 28px 24px',
+          }} onClick={e => e.stopPropagation()}>
+            {/* Header */}
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 20 }}>
+              <div>
+                <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--k-primary)', marginBottom: 4 }}>
+                  USE TEMPLATE · साँचा
+                </div>
+                <h2 style={{ margin: 0, fontFamily: 'var(--font-display)', fontWeight: 400, fontSize: 22, color: 'var(--ink)', lineHeight: 1.2 }}>
+                  {applyModal.tmplName}
+                </h2>
+              </div>
+              <button onClick={() => setApplyModal(null)} style={{
+                width: 28, height: 28, borderRadius: 7, border: '1px solid var(--rule)',
+                background: 'transparent', cursor: 'pointer', fontSize: 16, color: 'var(--ink-3)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+              }}>×</button>
+            </div>
+
+            {/* Project picker */}
+            <label style={{ display: 'block', fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--ink-3)', marginBottom: 8 }}>
+              Apply to project
+            </label>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 24 }}>
+              {projects.map(p => (
+                <button
+                  key={p.team_id}
+                  onClick={() => setApplyToProject(p.team_id)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 10,
+                    padding: '10px 14px', borderRadius: 10, cursor: 'pointer',
+                    border: applyToProject === p.team_id ? '1.5px solid var(--k-primary)' : '1.5px solid var(--rule)',
+                    background: applyToProject === p.team_id ? 'var(--side-active)' : 'var(--bg)',
+                    color: 'var(--ink)', fontFamily: 'var(--font-ui)', fontSize: 14, textAlign: 'left',
+                    transition: 'border .1s, background .1s',
+                  }}
+                >
+                  <div style={{
+                    width: 8, height: 8, borderRadius: '50%', flexShrink: 0,
+                    background: applyToProject === p.team_id ? 'var(--k-primary)' : 'var(--rule-strong)',
+                    transition: 'background .1s',
+                  }} />
+                  {p.name}
+                </button>
+              ))}
+            </div>
+
+            {/* Actions */}
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button
+                className="k-btn k-btn--primary"
+                style={{ flex: 1 }}
+                disabled={!applyToProject || applying}
+                onClick={() => applyProjectTemplate(applyModal.tmplId)}
+              >
+                {applying ? 'Applying…' : 'Apply template'}
+              </button>
+              <button className="k-btn k-btn--ghost" onClick={() => setApplyModal(null)}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
