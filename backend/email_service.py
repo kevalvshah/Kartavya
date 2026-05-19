@@ -37,6 +37,7 @@ else:
 
 # ── Design tokens (baked hex — no CSS vars, no color-mix) ─────────────────────
 _BG         = "#F6F3EC"
+_BG_SOFT    = "#F0ECDF"
 _SURFACE    = "#FCFAF5"
 _RULE       = "#E2DCC9"
 _RULE_SOFT  = "#EFE9D8"
@@ -126,9 +127,7 @@ def _base(preheader: str, kicker: str, headline: str, sanskrit: str,
         <h1 class="em__h1" style="margin:0 0 4px;font-family:{_FONT_DISP};font-size:34px;
                   font-weight:400;line-height:1.1;letter-spacing:-0.02em;color:{_INK};">{headline}</h1>
         <p style="margin:0 0 24px;font-family:{_FONT_HINDI};font-size:17px;color:{_TEAL};font-weight:400;">{sanskrit}</p>
-        <!-- lede -->
-        <p class="em__lede" style="margin:0 0 28px;font-family:{_FONT_UI};font-size:15px;
-                  line-height:1.65;color:{_INK2};">{lede}</p>
+        {f'<!-- lede --><p class="em__lede" style="margin:0 0 28px;font-family:{_FONT_UI};font-size:15px;line-height:1.65;color:{_INK2};">{lede}</p>' if lede else ''}
       </td></tr>
       <!-- body rows -->
       {body_rows}
@@ -149,10 +148,12 @@ def _base(preheader: str, kicker: str, headline: str, sanskrit: str,
                   Kartavya &mdash; <em>do what must be done.</em><br>
                   <span style="color:{_INK3};">Aekam Inc &middot; Ahmedabad, IN</span>
                 </td>
-                <td align="right" style="font-family:{_FONT_UI};font-size:11px;color:{_TEAL};white-space:nowrap;vertical-align:top;">
-                  <a href="{FRONTEND_URL}/dashboard" style="color:{_TEAL};text-decoration:none;">Open app</a>
+                <td align="right" style="font-family:{_FONT_UI};font-size:11px;color:{_INK3};white-space:nowrap;vertical-align:top;">
+                  <a href="{FRONTEND_URL}/dashboard" style="color:{_DEEP};text-decoration:none;">Open app</a>
                   &nbsp;&middot;&nbsp;
-                  <a href="{FRONTEND_URL}/settings/notifications" style="color:{_TEAL};text-decoration:none;">Settings</a>
+                  <a href="{FRONTEND_URL}/settings/notifications" style="color:{_DEEP};text-decoration:none;">Settings</a>
+                  &nbsp;&middot;&nbsp;
+                  <a href="{FRONTEND_URL}/settings/notifications" style="color:{_DEEP};text-decoration:none;">Unsubscribe</a>
                 </td>
               </tr>
             </table>
@@ -244,65 +245,78 @@ def send_email(to_email: str, subject: str, html_content: str,
 
 
 # ── 1. Invite email ────────────────────────────────────────────────────────────
+def _info_card(rows: list[tuple[str, str]], hindi_sub: dict[str, str] = None) -> str:
+    """Render an editorial card with dashed-separator rows matching the email design.
+    rows: list of (label, value) tuples.
+    hindi_sub: optional dict of label -> hindi subtitle shown below the value.
+    """
+    hindi_sub = hindi_sub or {}
+
+    def _row(label, value, is_last=False):
+        border = "" if is_last else f"border-bottom:1px dashed {_RULE};"
+        sub = ""
+        if label in hindi_sub:
+            sub = (f'<span style="display:block;font-family:{_FONT_HINDI};'
+                   f'font-size:12px;color:{_INK3};margin-top:2px;">{_h(hindi_sub[label])}</span>')
+        return (
+            f'<tr>'
+            f'<td style="padding:8px 0;font-family:{_FONT_UI};font-size:10.5px;'
+            f'letter-spacing:0.16em;text-transform:uppercase;color:{_INK3};font-weight:700;'
+            f'vertical-align:top;{border}white-space:nowrap;">{label}</td>'
+            f'<td style="padding:8px 0;font-family:{_FONT_UI};font-size:14px;color:{_INK};'
+            f'font-weight:500;text-align:right;vertical-align:top;{border}">{_h(value)}{sub}</td>'
+            f'</tr>'
+        )
+
+    inner = "".join(
+        _row(lbl, val, is_last=(i == len(rows) - 1))
+        for i, (lbl, val) in enumerate(rows)
+    )
+    return (
+        f'<tr><td style="padding:0 36px 28px;">'
+        f'<table width="100%" cellpadding="0" cellspacing="0" border="0"'
+        f' style="background:{_BG_SOFT};border:1px solid {_RULE};border-radius:12px;padding:18px 20px;">'
+        f'{inner}</table></td></tr>'
+    )
+
+
 def send_invite_email(to_email: str, inviter_name: str, role: str,
                       invite_token: str, workspace_name: str = "Kartavya",
-                      expires_label: str = "7 days", recipient_name: str = ""):
-    invite_url     = f"{FRONTEND_URL}/accept-invite?token={invite_token}"
-    workspace_url  = f"{FRONTEND_URL}/dashboard"
-    role_label     = _h(role.capitalize())
-    inviter_first  = _h(inviter_name.split()[0] if inviter_name else "Someone")
-    recip_first    = _h(recipient_name.split()[0] if recipient_name else "")
-    greeting       = f'Hi <strong>{recip_first}</strong>, ' if recip_first else ''
-    preheader      = f"{inviter_name} invited you to {workspace_name} on Kartavya — accept within {expires_label}."
+                      expires_label: str = "7 days", recipient_name: str = "",
+                      workspace_hindi: str = "मुख्य कार्यस्थल"):
+    invite_url    = f"{FRONTEND_URL}/accept-invite?token={invite_token}"
+    workspace_url = f"{FRONTEND_URL}/dashboard"
+    role_label    = role.capitalize()
+    inviter_first = inviter_name.split()[0] if inviter_name else "Someone"
+    recip_first   = recipient_name.split()[0] if recipient_name else ""
+    greeting      = f'Hi <strong>{_h(recip_first)}</strong>, ' if recip_first else ''
+    preheader     = f"{inviter_name} invited you to {workspace_name} on Kartavya — accept within {expires_label}."
 
-    info_table = (
-        f'<tr><td style="padding:0 36px 28px;">'
-        f'<table width="100%" cellpadding="0" cellspacing="0" border="0" class="em__card"'
-        f' style="background:{_BG};border:1px solid {_RULE};border-radius:10px;overflow:hidden;">'
-        f'<tr>'
-        f'<td style="padding:14px 18px 14px 18px;font-family:{_FONT_UI};font-size:12px;'
-        f'letter-spacing:0.12em;text-transform:uppercase;color:{_INK3};font-weight:700;'
-        f'border-bottom:1px solid {_RULE_SOFT};width:38%;">WORKSPACE</td>'
-        f'<td style="padding:14px 18px;font-family:{_FONT_UI};font-size:14px;color:{_INK};'
-        f'border-bottom:1px solid {_RULE_SOFT};">{_h(workspace_name)}</td>'
-        f'</tr>'
-        f'<tr>'
-        f'<td style="padding:14px 18px;font-family:{_FONT_UI};font-size:12px;'
-        f'letter-spacing:0.12em;text-transform:uppercase;color:{_INK3};font-weight:700;'
-        f'border-bottom:1px solid {_RULE_SOFT};">INVITED BY</td>'
-        f'<td style="padding:14px 18px;font-family:{_FONT_UI};font-size:14px;color:{_INK};'
-        f'border-bottom:1px solid {_RULE_SOFT};">{_h(inviter_name)}</td>'
-        f'</tr>'
-        f'<tr>'
-        f'<td style="padding:14px 18px;font-family:{_FONT_UI};font-size:12px;'
-        f'letter-spacing:0.12em;text-transform:uppercase;color:{_INK3};font-weight:700;'
-        f'border-bottom:1px solid {_RULE_SOFT};">YOUR ROLE</td>'
-        f'<td style="padding:14px 18px;font-family:{_FONT_UI};font-size:14px;color:{_INK};'
-        f'border-bottom:1px solid {_RULE_SOFT};">{role_label}</td>'
-        f'</tr>'
-        f'<tr>'
-        f'<td style="padding:14px 18px;font-family:{_FONT_UI};font-size:12px;'
-        f'letter-spacing:0.12em;text-transform:uppercase;color:{_INK3};font-weight:700;">EXPIRES</td>'
-        f'<td style="padding:14px 18px;font-family:{_FONT_UI};font-size:14px;color:{_INK};">'
-        f'{_h(expires_label)}</td>'
-        f'</tr>'
-        f'</table></td></tr>'
+    card = _info_card(
+        [
+            ("WORKSPACE",  workspace_name),
+            ("INVITED BY", f"{inviter_name} · {role_label}"),
+            ("YOUR ROLE",  role_label),
+            ("EXPIRES",    expires_label),
+        ],
+        hindi_sub={"WORKSPACE": workspace_hindi},
     )
 
     body = (
         _body_text(f'{greeting}<strong>{_h(inviter_name)}</strong> has invited you to collaborate '
-                   f'on <strong>{_h(workspace_name)}</strong> using Kartavya. '
+                   f'on <strong>Kartavya</strong> — the task workspace where '
+                   f'{_h(workspace_name)}\'s team plans projects, tracks deadlines, and ships client work. '
                    f'Accept below to get started.')
-        + info_table
+        + card
         + _cta_row(invite_url, "Accept invite", _TEAL, workspace_url, "View workspace")
-        + _body_text(f'<span style="font-size:12px;color:{_INK3};">The invite link expires in '
+        + _body_text(f'<span style="font-size:12.5px;color:{_INK3};">The invite link expires in '
                      f'{_h(expires_label)}. If you weren\'t expecting this email, you can safely ignore it.</span>')
     )
     return send_email(
         to_email,
         f"{inviter_name} invited you to {workspace_name} on Kartavya",
-        _base(preheader, "YOU'RE INVITED · आपका स्वागत है",
-              f"{inviter_first} invited you to {_h(workspace_name)} Workspace.",
+        _base(preheader, "YOU'RE INVITED",
+              f"{_h(inviter_first)} invited you to {_h(workspace_name)} Workspace.",
               "आपका स्वागत है", "", body),
         reply_to=None,
     )
@@ -312,18 +326,61 @@ def send_invite_email(to_email: str, inviter_name: str, role: str,
 def send_welcome_email(user_email: str, user_name: str,
                        workspace_name: str = "Kartavya"):
     first_name = _h(user_name.split()[0] if user_name else "there")
-    preheader  = f"Your Kartavya account is ready. Tasks, timelines, approvals — all in one place."
+    preheader  = f"Your Kartavya account is live. Here's the shortest path to doing what must be done."
+
+    def _step(num_hi, title, body_text):
+        return (
+            f'<tr><td style="padding:14px 0;border-bottom:1px dashed {_RULE};">'
+            f'<table cellpadding="0" cellspacing="0" border="0" width="100%"><tr>'
+            f'<td style="width:36px;vertical-align:top;padding-right:14px;">'
+            f'<div style="width:28px;height:28px;border-radius:50%;background:{_BG_SOFT};'
+            f'border:1px solid {_RULE};text-align:center;line-height:28px;'
+            f'font-family:{_FONT_DISP};font-size:16px;color:{_INK};">{num_hi}</div></td>'
+            f'<td style="vertical-align:top;">'
+            f'<div style="font-family:{_FONT_UI};font-size:14.5px;font-weight:600;color:{_INK};margin-bottom:2px;">{title}</div>'
+            f'<div style="font-family:{_FONT_UI};font-size:13.5px;color:{_INK3};line-height:1.55;">{body_text}</div>'
+            f'</td></tr></table></td></tr>'
+        )
+
+    steps = (
+        f'<tr><td style="padding:0 36px 28px;">'
+        f'<table width="100%" cellpadding="0" cellspacing="0" border="0">'
+        + _step("१", "Open today's dashboard",
+                "See what's due, what's overdue, and what your team is working on right now.")
+        + _step("२", "Browse projects",
+                "See every active engagement — internal work, client deliverables, deadlines, and progress at a glance.")
+        + _step("३", "Create your first task",
+                'Hit the "+ New task" button in the top bar. Assign it, set a priority, add a due date.')
+        + _step("४", "Enable notifications",
+                "Get pinged for mentions, assignments, and approvals. Configure in Settings → Notifications.")
+        + f'</table></td></tr>'
+    )
+
+    gita_block = (
+        f'<tr><td style="padding:0 36px 24px;">'
+        f'<div style="border-left:2px solid {_TEAL};padding:6px 0 6px 16px;">'
+        f'<span style="font-family:{_FONT_HINDI};font-size:16px;color:{_INK2};">'
+        f'कर्तव्ये अधिकारस्ते मा फलेषु कदाचन।</span>'
+        f'<span style="display:block;font-family:{_FONT_DISP};font-style:italic;'
+        f'font-size:12px;color:{_INK3};margin-top:6px;">'
+        f'Bhagavad Gita 2.47 — do your duty; don\'t fixate on the fruit.</span>'
+        f'</div></td></tr>'
+    )
+
     body = (
-        _body_text(f'Hi <strong>{first_name}</strong>, your account is ready. '
-                   f'You can now collaborate on tasks, track time, and review approvals '
-                   f'inside <strong>{_h(workspace_name)}</strong>.')
-        + _cta_row(f"{FRONTEND_URL}/dashboard", "Open Kartavya", _TEAL)
+        _body_text(f'Hi <strong>{first_name}</strong>, your account is live. '
+                   f'Here\'s the shortest path to doing <em style="font-family:{_FONT_DISP};'
+                   f'font-style:italic;color:{_DEEP};">what must be done</em> on day one.')
+        + steps
+        + _cta_row(f"{FRONTEND_URL}/dashboard", "Open Kartavya", _TEAL,
+                   f"{FRONTEND_URL}/dashboard", "Read the quickstart")
+        + gita_block
     )
     return send_email(
         user_email,
         f"Welcome to Kartavya",
-        _base(preheader, "WELCOME · स्वागत", f"Welcome, {first_name}", "कर्तव्य का आरंभ",
-              "Your workspace is ready.", body, show_gita=True),
+        _base(preheader, "WELCOME ABOARD", f"Glad to have you, {first_name}.",
+              "कर्तव्य में आपका स्वागत है", "", body),
     )
 
 
@@ -339,18 +396,33 @@ def send_approval_request_email(user_email: str, user_name: str,
                    if approve_token else approve_url)
     first_name  = _h(user_name.split()[0] if user_name else "there")
     preheader   = f"{requester_name} needs your sign-off on: {task_title}"
+    card_rows = [("TITLE", task_title)]
+    if project:  card_rows.append(("PROJECT", project))
+    if priority: card_rows.append(("PRIORITY", priority))
+    if due_date: card_rows.append(("NEEDED BY", due_date))
+    card = _info_card(card_rows)
+    note_html = ""
+    if notes:
+        note_html = _body_text(
+            f'<span style="font-size:14.5px;line-height:1.6;color:{_INK2};">'
+            f'<strong>Note from {_h(requester_name.split()[0])}:</strong> '
+            f'&ldquo;{_h(notes)}&rdquo;</span>'
+        )
     body = (
         _body_text(f'Hi <strong>{first_name}</strong>, '
                    f'<strong>{_h(requester_name)}</strong> has submitted a new request that needs your approval.')
-        + _task_card(task_title, project=project, priority=priority, due_date=due_date, note=notes)
-        + _cta_row(approve_url, "Approve &amp; Queue", _OK_BORDER,
-                   reject_url, "Decline")
+        + card
+        + note_html
+        + _cta_row(approve_url, "Approve &amp; queue", _OK_BORDER,
+                   reject_url, "Decline with reason")
+        + _body_text(f'<span style="font-size:12.5px;color:{_INK3};">Approving moves this task to '
+                     f'<strong>To do</strong> and notifies the assignees. {_h(requester_name.split()[0])} gets an email either way.</span>')
     )
     return send_email(
         user_email,
         f"Approval needed: {task_title}",
-        _base(preheader, "APPROVAL NEEDED · अनुमोदन", f"{requester_name} needs your sign-off",
-              "समीक्षा करें", "A new request is waiting for your review.", body),
+        _base(preheader, "APPROVAL NEEDED", f"{_h(requester_name)} requested a new task.",
+              "अनुमोदन हेतु अनुरोध", "", body),
     )
 
 
@@ -362,23 +434,26 @@ def send_request_approved_email(user_email: str, user_name: str,
     task_url   = f"{FRONTEND_URL}/client/projects"
     first_name = _h(user_name.split()[0] if user_name else "there")
     preheader  = f"Your request was approved by {reviewer_name}. The team is on it."
-    detail = ""
-    if assignees: detail += f"<br><b>Assigned to:</b> {_h(assignees)}"
-    if due_date:  detail += f"<br><b>Target date:</b> {_h(due_date)}"
+    card_rows = [("TASK", task_title)]
+    if assignees: card_rows.append(("ASSIGNED TO", assignees))
+    if due_date:  card_rows.append(("TARGET DATE", due_date))
+    card_rows.append(("STATUS", "To do"))
+    card = _info_card(card_rows)
     body = (
-        _body_text(f'Hi <strong>{first_name}</strong>, great news — '
-                   f'<strong>{_h(reviewer_name)}</strong> has approved your request '
-                   f'and the team will begin work shortly.')
-        + _task_card(task_title, due_date=due_date)
-        + (_body_text(f'<span style="font-size:13px;color:{_INK3};">{detail}</span>')
-           if detail else "")
-        + _cta_row(task_url, "View in Portal", _TEAL)
+        _body_text(f'Hi <strong>{first_name}</strong> — '
+                   f'<strong>{_h(reviewer_name)}</strong> approved your request. The team has '
+                   f'picked it up and you\'ll see status updates in the Kartavya portal.')
+        + card
+        + _body_text(f'<span style="font-size:14.5px;color:{_INK2};">'
+                     f'<strong>What happens next:</strong> work starts within one business day. '
+                     f'You\'ll get another email when it\'s marked complete and ready for your review.</span>')
+        + _cta_row(task_url, "View task", _TEAL, f"{FRONTEND_URL}/client/projects", "Open portal")
     )
     return send_email(
         user_email,
         f"Your request was approved: {task_title}",
-        _base(preheader, "REQUEST APPROVED · स्वीकृत", "Your request was approved",
-              "अनुमोदित", "The team will begin work on your task.", body),
+        _base(preheader, "REQUEST APPROVED", "Your request is in the queue.",
+              "अनुमोदन प्राप्त हुआ", "", body),
     )
 
 
@@ -395,28 +470,44 @@ def send_task_done_email(user_email: str, user_name: str,
                     if approve_token else approve_url)
     first_name   = user_name.split()[0] if user_name else "there"
     preheader    = f"{completer_name} has completed: {task_title}. Ready for your review."
-    attach_html  = ""
+    card_rows = [
+        ("TASK", task_title),
+        ("COMPLETED BY", completer_name),
+        ("STATUS", "Done"),
+    ]
+    if time_spent: card_rows.append(("TIME SPENT", time_spent))
+    card = _info_card(card_rows)
+    note_html = ""
+    if completer_note:
+        note_html = _body_text(
+            f'<span style="font-size:14.5px;line-height:1.6;color:{_INK2};">'
+            f'<strong>{_h(completer_name.split()[0])}\'s note:</strong> '
+            f'&ldquo;{_h(completer_note)}&rdquo;</span>'
+        )
+    attach_html = ""
     if attachments:
-        items = "".join(f'<li style="padding:2px 0;">{_h(str(a))}</li>' for a in attachments)
+        file_list = ", ".join(
+            f'<code style="font-family:{_FONT_UI};font-size:12px;background:{_BG_SOFT};'
+            f'padding:1px 5px;border-radius:4px;border:1px solid {_RULE};">{_h(str(a))}</code>'
+            for a in attachments
+        )
         attach_html = _body_text(
-            f'<strong>Attachments:</strong><ul style="margin:6px 0 0;padding-left:18px;">{items}</ul>')
-    meta_txt = f"Completed by <strong>{_h(completer_name)}</strong>"
-    if time_spent: meta_txt += f" &nbsp;·&nbsp; <strong>{_h(time_spent)}</strong>"
+            f'<span style="font-size:12.5px;color:{_INK3};">Two files attached to the task: {file_list}. Open the task to download.</span>')
     body = (
         _body_text(f'Hi <strong>{_h(first_name)}</strong>, '
-                   f'<strong>{_h(completer_name)}</strong> has completed the following task '
-                   f'and it is ready for your review.')
-        + _task_card(task_title, note=completer_note)
-        + _body_text(f'<span style="font-size:13px;color:{_INK3};">{meta_txt}</span>')
+                   f'<strong>{_h(completer_name)}</strong> just marked your task complete. '
+                   f'Please take a look when you have a moment and approve, or send it back with notes.')
+        + card
+        + note_html
         + attach_html
-        + _cta_row(approve_url, "Approve &amp; Close", _OK_BORDER,
+        + _cta_row(approve_url, "Approve &amp; close", _OK_BORDER,
                    reject_url, "Send back with notes")
     )
     return send_email(
         user_email,
         f"Done: {task_title}",
-        _base(preheader, "TASK COMPLETE · पूर्ण", "Your task is done",
-              "समाप्त", "Ready for your approval and sign-off.", body),
+        _base(preheader, "WORK COMPLETED", "Done — ready for your review.",
+              "कार्य सम्पन्न", "", body),
     )
 
 

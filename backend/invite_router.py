@@ -165,8 +165,12 @@ async def create_invite(body: InviteCreate, pool=Depends(get_pool), admin=Depend
 
     try:
         from email_service import send_invite_email
-        inviter_name = admin.get("full_name") or admin.get("name") or admin.get("email", "An admin")
+        inviter_name   = admin.get("full_name") or admin.get("name") or admin.get("email", "An admin")
+        workspace_name = admin.get("company_name") or "Kartavya"
+        expires_label  = expires_at.strftime("%b %-d, %Y")
         send_invite_email(body.email.lower(), inviter_name, body.role, token,
+                          workspace_name=workspace_name,
+                          expires_label=expires_label,
                           recipient_name=body.full_name or "")
     except Exception as exc:
         import logging
