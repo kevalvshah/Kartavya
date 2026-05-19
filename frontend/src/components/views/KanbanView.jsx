@@ -35,7 +35,19 @@ export default function KanbanView({
     return [REQUESTED_COL, ...(columns || [])];
   }, [columns, showRequested]);
 
+  // Status → column fallback for tasks with missing/invalid column_id
+  const statusFallbackCol = useMemo(() => {
+    const cols = visibleColumns.filter(c => !c._synthetic);
+    const find = (names) => cols.find(c => names.includes(c.name?.toLowerCase()))?.column_id;
+    return {
+      done:        find(['done', 'complete', 'completed']) || cols[cols.length - 1]?.column_id,
+      in_progress: find(['in progress', 'in-progress', 'inprogress', 'doing', 'review', 'in review', 'approval']) || cols[1]?.column_id || cols[0]?.column_id,
+      todo:        find(['to do', 'todo', 'backlog', 'open', 'not started']) || cols[0]?.column_id,
+    };
+  }, [visibleColumns]);
+
   const byCol = useMemo(() => {
+    const validColIds = new Set(visibleColumns.map(c => c.column_id));
     const m = {};
     visibleColumns.forEach(c => { m[c.column_id] = []; });
     (tasks || []).forEach(t => {
@@ -43,13 +55,15 @@ export default function KanbanView({
         m['__requested__'].push(t);
         return;
       }
-      const cid = t.column_id || '__none__';
-      if (!m[cid]) m[cid] = [];
-      m[cid].push(t);
+      // Use column_id if valid; otherwise fall back to a column matching the task's status
+      const cid = (t.column_id && validColIds.has(t.column_id))
+        ? t.column_id
+        : (statusFallbackCol[t.status] || statusFallbackCol.todo);
+      if (cid && m[cid]) m[cid].push(t);
     });
     Object.values(m).forEach(arr => arr.sort((a, b) => (a.order ?? a.sort_order ?? 0) - (b.order ?? b.sort_order ?? 0)));
     return m;
-  }, [visibleColumns, tasks, showRequested]);
+  }, [visibleColumns, tasks, showRequested, statusFallbackCol]);
 
   // Can this task be dragged by the current user?
   const canDrag = (task) => {

@@ -812,7 +812,18 @@ async def move_task(task_id:str,payload:TaskMoveIn,pool=Depends(get_db),user=Dep
     doc=await pool.fetchrow("SELECT * FROM tasks WHERE task_id=$1 AND (user_id=$2 OR team_id=ANY($3::text[]))",task_id,user["user_id"],team_ids)
     if not doc: raise HTTPException(404)
     col=await pool.fetchrow("SELECT * FROM project_columns WHERE column_id=$1",payload.column_id)
-    new_status="done" if (col and col["is_done"]) else ("in_progress" if doc["status"]=="done" else doc["status"])
+    if col and col["is_done"]:
+        new_status="done"
+    elif col:
+        col_name=(col["name"] or "").lower()
+        if "progress" in col_name or "review" in col_name or "approval" in col_name or "doing" in col_name:
+            new_status="in_progress"
+        elif "todo" in col_name or "to do" in col_name or "backlog" in col_name or "open" in col_name:
+            new_status="todo"
+        else:
+            new_status="in_progress" if doc["status"]=="todo" else doc["status"]
+    else:
+        new_status=doc["status"]
     completed_at=now_utc() if new_status=="done" else None
     completed_by=user["user_id"] if new_status=="done" else None
     row=await pool.fetchrow("UPDATE tasks SET column_id=$1,status=$2,sort_order=$3,completed_at=$4,completed_by_user_id=$5,updated_at=NOW() WHERE task_id=$6 RETURNING *",
