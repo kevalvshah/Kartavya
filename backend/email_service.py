@@ -210,7 +210,7 @@ def _cta_row(primary_url: str, primary_label: str, primary_style: str = "primary
                       f'border-radius:8px;padding:13px 22px;display:inline-block;'
                       f'background:transparent;min-width:140px;text-align:center;letter-spacing:0.005em;">'
                       f'{ghost_label}</a></td>')
-    return (f'<tr><td style="padding:28px 36px 20px;"><table cellpadding="0" cellspacing="0" border="0">'
+    return (f'<tr><td style="padding:4px 36px 20px;"><table cellpadding="0" cellspacing="0" border="0">'
             f'<tr>'
             f'<td class="em__cta-cell" align="center">'
             f'<a class="em__cta-btn" href="{primary_url}" '
@@ -287,10 +287,15 @@ def _info_card(rows: list[tuple[str, str]], hindi_sub: dict[str, str] = None) ->
 
     inner = "".join(_row(i, lbl, val) for i, (lbl, val) in enumerate(rows))
     return (
-        f'<tr><td style="padding:0 36px 28px;">'
+        f'<tr><td style="padding:0 36px 24px;">'
         f'<table width="100%" cellpadding="0" cellspacing="0" border="0"'
-        f' style="background:{_BG_SOFT};border:1px solid {_RULE};border-radius:12px;padding:18px 20px;">'
-        f'{inner}</table></td></tr>'
+        f' style="background:{_BG_SOFT};border:1px solid {_RULE};border-radius:12px;">'
+        f'<tr><td style="padding:18px 20px;">'
+        f'<table width="100%" cellpadding="0" cellspacing="0" border="0">'
+        f'{inner}'
+        f'</table>'
+        f'</td></tr>'
+        f'</table></td></tr>'
     )
 
 
