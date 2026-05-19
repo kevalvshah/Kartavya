@@ -1,6 +1,7 @@
 """Approvals Router — Task Approval Workflow
 Fix: all email calls now pass task_id for deep-link; send_approval_notification_email
 signature extended; client-approve/reject fan out team-sync emails.
+Token-based magic-link endpoints for client approval via email.
 """
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -8,10 +9,36 @@ from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime, timezone
 import uuid
+import os
+import jwt as _jwt
 
 from auth_router import require_user, require_admin
 from db import get_pool
 import asyncpg
+
+_JWT_SECRET = os.environ.get("JWT_SECRET", "")
+_JWT_ALG    = "HS256"
+
+
+def _make_client_token(task_id: str, client_user_id: str) -> str:
+    import time
+    return _jwt.encode(
+        {"task_id": task_id, "client_user_id": client_user_id,
+         "type": "client_approval", "exp": time.time() + 86400 * 7},
+        _JWT_SECRET, algorithm=_JWT_ALG
+    )
+
+
+def _decode_client_token(token: str) -> dict:
+    try:
+        payload = _jwt.decode(token, _JWT_SECRET, algorithms=[_JWT_ALG])
+        if payload.get("type") != "client_approval":
+            raise HTTPException(400, "Invalid token type")
+        return payload
+    except _jwt.ExpiredSignatureError:
+        raise HTTPException(400, "Approval link has expired")
+    except _jwt.PyJWTError:
+        raise HTTPException(400, "Invalid or malformed approval token")
 
 router = APIRouter(prefix="/api", tags=["approvals"])
 
@@ -235,8 +262,19 @@ async def request_client_approval(task_id: str, payload: ClientApprovalRequest,
         WHERE task_id=$2
     """, payload.notes, task_id)
 
-    await send_approval_notification(pool, task_id, task["title"],
-                                     client["user_id"], "request", payload.notes)
+    # Generate magic-link token for email
+    token = _make_client_token(task_id, client["user_id"])
+    requester_name = user.get("full_name") or user.get("name") or user.get("email", "Team")
+    try:
+        from email_service import send_approval_request_email
+        send_approval_request_email(
+            payload.client_email, client["name"] or payload.client_email,
+            requester_name, task["title"], task_id,
+            notes=payload.notes, approve_token=token
+        )
+    except Exception as exc:
+        import logging; logging.getLogger(__name__).warning(f"client approval email failed: {exc}")
+
     return {"message": "Client approval requested", "approval_status": "pending_client"}
 
 
@@ -302,6 +340,86 @@ async def client_approve_task(task_id: str, payload: ApprovalRequest,
 
     return {"message": "Task approved by client", "approval_status": "approved",
             "new_column_id": new_col_id}
+
+
+@router.get("/approvals/by-token/{token}")
+async def get_approval_by_token(token: str, pool=Depends(get_pool)):
+    """Public endpoint — no auth required; used by email magic-link."""
+    payload = _decode_client_token(token)
+    task_id = payload["task_id"]
+    task = await pool.fetchrow("""
+        SELECT t.task_id, t.title, t.description, t.priority, t.due_at, t.approval_status,
+               t.approval_notes AS notes, t.approval_requested_at AS requested_at,
+               COALESCE(u.full_name, u.name, u.email) AS requester_name
+        FROM tasks t
+        LEFT JOIN users u ON u.user_id = t.created_by_user_id
+        WHERE t.task_id = $1
+    """, task_id)
+    if not task:
+        raise HTTPException(404, "Task not found")
+    if task["approval_status"] not in ("pending_client",):
+        # Already decided
+        return {"task": dict(task), "already_decided": True,
+                "requester_name": task["requester_name"], "requested_at": task["requested_at"]}
+    return {"task": dict(task), "already_decided": False,
+            "requester_name": task["requester_name"], "requested_at": task["requested_at"]}
+
+
+@router.post("/approvals/by-token/{token}/approve")
+async def approve_by_token(token: str, payload_body: ApprovalRequest, pool=Depends(get_pool)):
+    """Public magic-link endpoint — client approves via email link."""
+    payload = _decode_client_token(token)
+    task_id        = payload["task_id"]
+    client_user_id = payload["client_user_id"]
+    task = await pool.fetchrow("SELECT * FROM tasks WHERE task_id=$1", task_id)
+    if not task:
+        raise HTTPException(404, "Task not found")
+    if task["approval_status"] != "pending_client":
+        raise HTTPException(400, "This approval link is no longer active")
+    done_col = await pool.fetchrow(
+        "SELECT column_id FROM project_columns WHERE team_id=$1 AND is_done=TRUE ORDER BY sort_order DESC LIMIT 1",
+        task["team_id"]
+    )
+    new_col_id = done_col["column_id"] if done_col else task["column_id"]
+    await pool.execute("""
+        UPDATE tasks SET approval_status='approved', approved_by=$1, approval_notes=$2,
+            approval_decided_at=NOW(), column_id=$3, status='done',
+            completed_at=NOW(), completed_by_user_id=$1, updated_at=NOW()
+        WHERE task_id=$4
+    """, client_user_id, payload_body.notes, new_col_id, task_id)
+    if task.get("created_by_user_id") and task["created_by_user_id"] != client_user_id:
+        await send_approval_notification(pool, task_id, task["title"],
+                                         task["created_by_user_id"], "approved", payload_body.notes)
+    return {"message": "Task approved by client", "approval_status": "approved"}
+
+
+@router.post("/approvals/by-token/{token}/reject")
+async def reject_by_token(token: str, payload_body: ApprovalRequest, pool=Depends(get_pool)):
+    """Public magic-link endpoint — client rejects via email link."""
+    payload = _decode_client_token(token)
+    task_id        = payload["task_id"]
+    client_user_id = payload["client_user_id"]
+    task = await pool.fetchrow("SELECT * FROM tasks WHERE task_id=$1", task_id)
+    if not task:
+        raise HTTPException(404, "Task not found")
+    if task["approval_status"] != "pending_client":
+        raise HTTPException(400, "This approval link is no longer active")
+    if not payload_body.notes:
+        raise HTTPException(400, "Rejection reason is required")
+    revision_col = await pool.fetchrow(
+        "SELECT column_id FROM project_columns WHERE team_id=$1 AND is_done=FALSE ORDER BY sort_order ASC LIMIT 1",
+        task["team_id"]
+    )
+    new_col_id = revision_col["column_id"] if revision_col else task["column_id"]
+    await pool.execute("""
+        UPDATE tasks SET approval_status='rejected', approved_by=$1, approval_notes=$2,
+            approval_decided_at=NOW(), column_id=$3, status='in_progress', updated_at=NOW()
+        WHERE task_id=$4
+    """, client_user_id, payload_body.notes, new_col_id, task_id)
+    if task.get("created_by_user_id"):
+        await send_approval_notification(pool, task_id, task["title"],
+                                         task["created_by_user_id"], "rejected", payload_body.notes)
+    return {"message": "Task rejected by client", "approval_status": "rejected"}
 
 
 @router.post("/tasks/{task_id}/client-reject")

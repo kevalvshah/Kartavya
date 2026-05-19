@@ -14,10 +14,16 @@ const PRIORITY_COLOR = { urgent: '#C0392B', high: '#B06A00', medium: '#0082c6', 
 
 export default function ApprovalsPage() {
   const { pushToast } = useToast();
-  const [requests, setRequests] = useState([]);
-  const [history,  setHistory]  = useState([]);
-  const [loading,  setLoading]  = useState(true);
-  const [deciding, setDeciding] = useState({});
+  const [requests,    setRequests]    = useState([]);
+  const [history,     setHistory]     = useState([]);
+  const [loading,     setLoading]     = useState(true);
+  const [deciding,    setDeciding]    = useState({});
+  // Client-send modal state
+  const [clientModal, setClientModal] = useState(null); // { approvalId } | null
+  const [clientEmail, setClientEmail] = useState('');
+  const [sendNotes,   setSendNotes]   = useState('');
+  const [rejectModal, setRejectModal] = useState(null); // { approvalId } | null
+  const [rejectNote,  setRejectNote]  = useState('');
   const user     = currentUser();
   const isClient = user?.role === 'client';
 
@@ -39,17 +45,48 @@ export default function ApprovalsPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  const decide = async (approvalId, status) => {
+  const decide = async (approvalId, status, extra = {}) => {
     setDeciding(d => ({ ...d, [approvalId]: true }));
     try {
-      await api.post(`/approvals/${approvalId}/review`, { status, notes: '' });
-      pushToast({ type: 'success', title: status === 'approved' ? 'Approved ✓' : 'Rejected' });
+      await api.post(`/approvals/${approvalId}/review`, { status, notes: extra.notes || '', ...extra });
+      pushToast({ type: 'success', title: status === 'approved' ? 'Approved ✓' : status === 'rejected' ? 'Rejected' : 'Sent to client ✓' });
       load();
     } catch (e) {
       pushToast({ type: 'error', title: 'Action failed', message: e?.response?.data?.detail || 'Try again' });
     } finally {
       setDeciding(d => { const n = { ...d }; delete n[approvalId]; return n; });
     }
+  };
+
+  const openApproveFlow = (approvalId) => {
+    // Only task-level approvals get the client-send choice
+    if (approvalId.startsWith('task_approval::')) {
+      setClientEmail(''); setSendNotes('');
+      setClientModal({ approvalId });
+    } else {
+      decide(approvalId, 'approved');
+    }
+  };
+
+  const openRejectFlow = (approvalId) => {
+    setRejectNote('');
+    setRejectModal({ approvalId });
+  };
+
+  const confirmApproveWithClient = async () => {
+    const { approvalId } = clientModal;
+    setClientModal(null);
+    if (clientEmail.trim()) {
+      await decide(approvalId, 'approved', { send_to_client: true, client_email: clientEmail.trim(), notes: sendNotes });
+    } else {
+      await decide(approvalId, 'approved', { send_to_client: false, notes: sendNotes });
+    }
+  };
+
+  const confirmReject = async () => {
+    const { approvalId } = rejectModal;
+    setRejectModal(null);
+    await decide(approvalId, 'rejected', { notes: rejectNote });
   };
 
   const today   = new Date(); today.setHours(0,0,0,0);
@@ -137,14 +174,14 @@ export default function ApprovalsPage() {
                     <div className="k-approval-row__actions">
                       <button
                         className="k-btn k-btn--primary k-btn--sm"
-                        onClick={() => decide(r.approval_id, 'approved')}
+                        onClick={() => openApproveFlow(r.approval_id)}
                         disabled={isDeciding}
                       >
                         {isDeciding ? '…' : '✓ Approve'}
                       </button>
                       <button
                         className="k-btn k-btn--ghost k-btn--sm"
-                        onClick={() => decide(r.approval_id, 'rejected')}
+                        onClick={() => openRejectFlow(r.approval_id)}
                         disabled={isDeciding}
                         style={{ color: 'var(--danger)' }}
                       >
@@ -197,6 +234,83 @@ export default function ApprovalsPage() {
             ))}
           </div>
         </section>
+      )}
+      {/* Approve modal — option to send to client */}
+      {clientModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
+          <div className="k-card" style={{ width: 420, padding: '28px 32px' }}>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 500, color: 'var(--ink)', marginBottom: 4 }}>Approve task</div>
+            <div style={{ fontFamily: 'var(--font-hindi)', fontSize: 13, color: 'var(--ink-3)', marginBottom: 20 }}>स्वीकृत करें</div>
+
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--ink-3)', display: 'block', marginBottom: 6 }}>
+                Notes (optional)
+              </label>
+              <textarea
+                value={sendNotes}
+                onChange={e => setSendNotes(e.target.value)}
+                placeholder="Add a note for the requester…"
+                rows={2}
+                className="k-input"
+                style={{ width: '100%', resize: 'none', boxSizing: 'border-box' }}
+              />
+            </div>
+
+            <div style={{ padding: '14px 16px', background: 'var(--bg-soft)', borderRadius: 'var(--r-md)', border: '1px solid var(--rule)', marginBottom: 20 }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink-2)', marginBottom: 8 }}>Send for client approval?</div>
+              <div style={{ fontSize: 12, color: 'var(--ink-3)', marginBottom: 10 }}>
+                Leave blank to move task to Done. Enter a client email to send them an approval link.
+              </div>
+              <input
+                type="email"
+                value={clientEmail}
+                onChange={e => setClientEmail(e.target.value)}
+                placeholder="client@example.com (optional)"
+                className="k-input"
+                style={{ width: '100%', boxSizing: 'border-box', fontSize: 13 }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button className="k-btn k-btn--ghost" onClick={() => setClientModal(null)} style={{ flex: 1 }}>Cancel</button>
+              <button className="k-btn k-btn--primary" onClick={confirmApproveWithClient} style={{ flex: 2 }}>
+                {clientEmail.trim() ? '✓ Approve & Send to Client' : '✓ Approve & Mark Done'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reject modal */}
+      {rejectModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
+          <div className="k-card" style={{ width: 380, padding: '28px 32px' }}>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 500, color: 'var(--ink)', marginBottom: 4 }}>Reject task</div>
+            <div style={{ fontFamily: 'var(--font-hindi)', fontSize: 13, color: 'var(--ink-3)', marginBottom: 20 }}>अस्वीकृत करें</div>
+            <label style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--ink-3)', display: 'block', marginBottom: 6 }}>
+              Reason (required)
+            </label>
+            <textarea
+              value={rejectNote}
+              onChange={e => setRejectNote(e.target.value)}
+              placeholder="Why is this being rejected?"
+              rows={3}
+              className="k-input"
+              style={{ width: '100%', resize: 'none', boxSizing: 'border-box', marginBottom: 16 }}
+            />
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button className="k-btn k-btn--ghost" onClick={() => setRejectModal(null)} style={{ flex: 1 }}>Cancel</button>
+              <button
+                className="k-btn k-btn--ghost"
+                onClick={confirmReject}
+                disabled={!rejectNote.trim()}
+                style={{ flex: 2, color: 'var(--k-danger)', borderColor: 'var(--k-danger)' }}
+              >
+                ✕ Confirm Reject
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

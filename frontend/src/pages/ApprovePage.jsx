@@ -32,24 +32,36 @@ export default function ApprovePage() {
   const [state,    setState]    = useState('loading'); // loading | ready | deciding | approved | rejected | error
   const [approval, setApproval] = useState(null);
   const [errorMsg, setErrorMsg] = useState('');
+  const [rejectNote, setRejectNote] = useState('');
+  const [showReject, setShowReject] = useState(false);
 
-  const token = new URLSearchParams(window.location.search).get('token');
+  const token  = new URLSearchParams(window.location.search).get('token');
+  const action = new URLSearchParams(window.location.search).get('action'); // ?action=reject from email
 
   useEffect(() => {
     if (!token) { setState('error'); setErrorMsg('No approval token in URL.'); return; }
     api.get(`/approvals/by-token/${token}`)
-      .then(r => { setApproval(r.data); setState('ready'); })
+      .then(r => {
+        setApproval(r.data);
+        if (r.data.already_decided) {
+          const s = r.data.task?.approval_status;
+          setState(s === 'approved' ? 'approved' : s === 'rejected' ? 'rejected' : 'ready');
+        } else {
+          setState('ready');
+          if (action === 'reject') setShowReject(true);
+        }
+      })
       .catch(e => {
         const msg = e?.response?.data?.detail || 'Invalid or expired approval link.';
         setState('error'); setErrorMsg(msg);
       });
-  }, [token]);
+  }, [token, action]);
 
-  const decide = async (action) => {
+  const decide = async (act, notes = '') => {
     setState('deciding');
     try {
-      await api.post(`/approvals/by-token/${token}/${action}`);
-      setState(action === 'approve' ? 'approved' : 'rejected');
+      await api.post(`/approvals/by-token/${token}/${act}`, { notes });
+      setState(act === 'approve' ? 'approved' : 'rejected');
     } catch (e) {
       setErrorMsg(e?.response?.data?.detail || 'Action failed. Please try again.');
       setState('error');
@@ -154,24 +166,54 @@ export default function ApprovePage() {
             </div>
 
             {/* Action buttons */}
-            <div style={{ padding: '20px 28px', display: 'flex', gap: 12 }}>
-              <button
-                className="k-btn k-btn--primary"
-                onClick={() => decide('approve')}
-                disabled={state === 'deciding'}
-                style={{ flex: 1, justifyContent: 'center', fontSize: 15, padding: '12px 0' }}
-              >
-                {state === 'deciding' ? 'Processing…' : '✓ Approve'}
-              </button>
-              <button
-                className="k-btn k-btn--ghost"
-                onClick={() => decide('reject')}
-                disabled={state === 'deciding'}
-                style={{ flex: 1, justifyContent: 'center', fontSize: 15, padding: '12px 0', color: 'var(--k-danger)' }}
-              >
-                ✕ Reject
-              </button>
-            </div>
+            {!showReject ? (
+              <div style={{ padding: '20px 28px', display: 'flex', gap: 12 }}>
+                <button
+                  className="k-btn k-btn--primary"
+                  onClick={() => decide('approve')}
+                  disabled={state === 'deciding'}
+                  style={{ flex: 1, justifyContent: 'center', fontSize: 15, padding: '12px 0' }}
+                >
+                  {state === 'deciding' ? 'Processing…' : '✓ Approve'}
+                </button>
+                <button
+                  className="k-btn k-btn--ghost"
+                  onClick={() => setShowReject(true)}
+                  disabled={state === 'deciding'}
+                  style={{ flex: 1, justifyContent: 'center', fontSize: 15, padding: '12px 0', color: 'var(--k-danger)' }}
+                >
+                  ✕ Reject
+                </button>
+              </div>
+            ) : (
+              <div style={{ padding: '20px 28px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <textarea
+                  value={rejectNote}
+                  onChange={e => setRejectNote(e.target.value)}
+                  placeholder="Reason for rejection (required)…"
+                  rows={3}
+                  style={{ width: '100%', padding: '10px 12px', fontSize: 13, border: '1px solid var(--rule)', borderRadius: 'var(--r-md)', fontFamily: 'inherit', resize: 'vertical', outline: 'none', boxSizing: 'border-box' }}
+                />
+                <div style={{ display: 'flex', gap: 10 }}>
+                  <button
+                    className="k-btn k-btn--ghost"
+                    onClick={() => setShowReject(false)}
+                    disabled={state === 'deciding'}
+                    style={{ flex: 1, justifyContent: 'center' }}
+                  >
+                    ← Back
+                  </button>
+                  <button
+                    className="k-btn k-btn--ghost"
+                    onClick={() => rejectNote.trim() && decide('reject', rejectNote.trim())}
+                    disabled={state === 'deciding' || !rejectNote.trim()}
+                    style={{ flex: 2, justifyContent: 'center', fontSize: 15, padding: '12px 0', color: 'var(--k-danger)', borderColor: 'var(--k-danger)' }}
+                  >
+                    {state === 'deciding' ? 'Processing…' : '✕ Confirm Reject'}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
 

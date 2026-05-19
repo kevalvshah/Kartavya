@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { api } from '../lib/api';
+import { currentUser } from '../lib/auth';
 import FieldRenderer from './fields/FieldRenderer';
 import MentionTextarea from './MentionTextarea';
 import ActivityList from './ActivityList';
@@ -57,7 +58,22 @@ function FileChip({ file, onRemove }) {
   );
 }
 
+const APPROVAL_STATUS_LABEL = {
+  pending:        'Awaiting Approval',
+  pending_client: 'Awaiting Client Approval',
+  approved:       'Approved',
+  rejected:       'Rejected',
+};
+const APPROVAL_STATUS_COLOR = {
+  pending:        '#d97706',
+  pending_client: '#7c3aed',
+  approved:       '#16a34a',
+  rejected:       '#dc2626',
+};
+
 export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers = [] }) {
+  const me = currentUser();
+
   const [task,       setTask]       = useState(null);
   const [fields,     setFields]     = useState([]);
   const [fValues,    setFValues]    = useState({});
@@ -75,6 +91,17 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
   const [attachments, setAttachments] = useState([]);
   const [uploading,   setUploading]   = useState(false);
   const fileRef = useRef(null);
+
+  // Approval UI state
+  const [approvalLoading,  setApprovalLoading]  = useState(false);
+  const [approvalNotes,    setApprovalNotes]    = useState('');
+  const [sendToClient,     setSendToClient]     = useState(false);
+  const [clientEmail,      setClientEmail]      = useState('');
+  const [showRejectInput,  setShowRejectInput]  = useState(false);
+  const [rejectNote,       setRejectNote]       = useState('');
+  const [showApprovePanel, setShowApprovePanel] = useState(false);
+  const [requestNotes,     setRequestNotes]     = useState('');
+  const [showRequestPanel, setShowRequestPanel] = useState(false);
 
   const mentionMembers = teamMembers.map(m => ({
     user_id:      m.user_id,
@@ -188,6 +215,47 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
     const updated = attachments.filter((_, i) => i !== idx);
     setAttachments(updated);
     await saveTask({ attachments: updated.map(f => f.url) });
+  };
+
+  const isOwnerAdmin = me?.role === 'admin' || me?.role === 'owner';
+
+  const requestApproval = async () => {
+    setApprovalLoading(true);
+    try {
+      const res = await api.post(`/tasks/${taskId}/request-approval`, { notes: requestNotes });
+      setTask(t => ({ ...t, approval_status: res.data.approval_status }));
+      setShowRequestPanel(false); setRequestNotes('');
+    } catch (e) { console.error(e); }
+    finally { setApprovalLoading(false); }
+  };
+
+  const approveTask = async () => {
+    setApprovalLoading(true);
+    const approvalId = `task_approval::${taskId}`;
+    try {
+      const res = await api.post(`/approvals/${approvalId}/review`, {
+        status: 'approved',
+        notes: approvalNotes,
+        send_to_client: sendToClient,
+        client_email: sendToClient ? clientEmail : '',
+      });
+      setTask(t => ({ ...t, approval_status: res.data.status }));
+      setShowApprovePanel(false); setApprovalNotes(''); setSendToClient(false); setClientEmail('');
+      if (res.data.status !== 'pending_client') onSaved?.({ ...task, approval_status: res.data.status });
+    } catch (e) { console.error(e); }
+    finally { setApprovalLoading(false); }
+  };
+
+  const rejectTask = async () => {
+    if (!rejectNote.trim()) return;
+    setApprovalLoading(true);
+    const approvalId = `task_approval::${taskId}`;
+    try {
+      await api.post(`/approvals/${approvalId}/review`, { status: 'rejected', notes: rejectNote });
+      setTask(t => ({ ...t, approval_status: 'rejected' }));
+      setShowRejectInput(false); setRejectNote('');
+    } catch (e) { console.error(e); }
+    finally { setApprovalLoading(false); }
   };
 
   if (!open) return null;
@@ -307,6 +375,114 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
                       </div>
                     ))}
                   </div>
+                </div>
+              )}
+
+              {/* ── Approval section ── */}
+              {task.team_id && (
+                <div style={{ marginBottom: 20, padding: '14px 16px', background: 'var(--bg-soft)', border: '1px solid var(--rule)', borderRadius: 'var(--r-md)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: task.approval_status ? 10 : 0 }}>
+                    <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--ink-3)' }}>
+                      Approval <span style={{ fontFamily: 'var(--font-hindi)', textTransform: 'none', letterSpacing: 0, fontWeight: 400, fontSize: 12 }}>अनुमोदन</span>
+                    </span>
+                    {task.approval_status && (
+                      <span style={{
+                        fontSize: 11, fontWeight: 600, padding: '2px 9px', borderRadius: 99,
+                        color: APPROVAL_STATUS_COLOR[task.approval_status] || '#64748b',
+                        background: (APPROVAL_STATUS_COLOR[task.approval_status] || '#64748b') + '18',
+                        border: `1px solid ${(APPROVAL_STATUS_COLOR[task.approval_status] || '#64748b')}40`,
+                      }}>
+                        {APPROVAL_STATUS_LABEL[task.approval_status] || task.approval_status}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Request approval (anyone, if no pending approval) */}
+                  {!task.approval_status && !showRequestPanel && (
+                    <button className="k-btn k-btn--ghost k-btn--sm" onClick={() => setShowRequestPanel(true)}
+                      style={{ marginTop: 4, fontSize: 12 }}>
+                      ↑ Send for Approval
+                    </button>
+                  )}
+                  {showRequestPanel && (
+                    <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      <textarea value={requestNotes} onChange={e => setRequestNotes(e.target.value)}
+                        placeholder="Notes for the approver (optional)…" rows={2} className="k-input"
+                        style={{ width: '100%', resize: 'none', boxSizing: 'border-box', fontSize: 12 }} />
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        <button className="k-btn k-btn--ghost k-btn--sm" onClick={() => setShowRequestPanel(false)}>Cancel</button>
+                        <button className="k-btn k-btn--primary k-btn--sm" onClick={requestApproval} disabled={approvalLoading}>
+                          {approvalLoading ? '…' : '↑ Send for Approval'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Re-send if rejected */}
+                  {task.approval_status === 'rejected' && !showRequestPanel && (
+                    <button className="k-btn k-btn--ghost k-btn--sm" onClick={() => setShowRequestPanel(true)}
+                      style={{ marginTop: 6, fontSize: 12 }}>
+                      ↑ Re-send for Approval
+                    </button>
+                  )}
+
+                  {/* Admin: approve/reject when pending */}
+                  {isOwnerAdmin && task.approval_status === 'pending' && !showApprovePanel && !showRejectInput && (
+                    <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+                      <button className="k-btn k-btn--primary k-btn--sm" onClick={() => setShowApprovePanel(true)}>✓ Approve</button>
+                      <button className="k-btn k-btn--ghost k-btn--sm" onClick={() => setShowRejectInput(true)}
+                        style={{ color: 'var(--k-danger)' }}>✕ Reject</button>
+                    </div>
+                  )}
+
+                  {/* Admin: approve panel with client option */}
+                  {showApprovePanel && (
+                    <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      <textarea value={approvalNotes} onChange={e => setApprovalNotes(e.target.value)}
+                        placeholder="Notes (optional)…" rows={2} className="k-input"
+                        style={{ width: '100%', resize: 'none', boxSizing: 'border-box', fontSize: 12 }} />
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, cursor: 'pointer' }}>
+                        <input type="checkbox" checked={sendToClient} onChange={e => setSendToClient(e.target.checked)} />
+                        Send to client for approval
+                      </label>
+                      {sendToClient && (
+                        <input type="email" value={clientEmail} onChange={e => setClientEmail(e.target.value)}
+                          placeholder="client@example.com" className="k-input"
+                          style={{ fontSize: 12, boxSizing: 'border-box', width: '100%' }} />
+                      )}
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        <button className="k-btn k-btn--ghost k-btn--sm" onClick={() => setShowApprovePanel(false)}>Cancel</button>
+                        <button className="k-btn k-btn--primary k-btn--sm" onClick={approveTask}
+                          disabled={approvalLoading || (sendToClient && !clientEmail.trim())}>
+                          {approvalLoading ? '…' : sendToClient ? '✓ Approve & Send to Client' : '✓ Approve & Done'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Admin: reject panel */}
+                  {showRejectInput && (
+                    <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      <textarea value={rejectNote} onChange={e => setRejectNote(e.target.value)}
+                        placeholder="Reason for rejection (required)…" rows={2} className="k-input"
+                        style={{ width: '100%', resize: 'none', boxSizing: 'border-box', fontSize: 12 }} />
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        <button className="k-btn k-btn--ghost k-btn--sm" onClick={() => setShowRejectInput(false)}>Cancel</button>
+                        <button className="k-btn k-btn--ghost k-btn--sm" onClick={rejectTask}
+                          disabled={approvalLoading || !rejectNote.trim()}
+                          style={{ color: 'var(--k-danger)', borderColor: 'var(--k-danger)' }}>
+                          {approvalLoading ? '…' : '✕ Reject'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Awaiting client — no action for internal users */}
+                  {task.approval_status === 'pending_client' && (
+                    <p style={{ fontSize: 12, color: 'var(--ink-3)', margin: '8px 0 0' }}>
+                      Approval request sent to client. Waiting for their response.
+                    </p>
+                  )}
                 </div>
               )}
 

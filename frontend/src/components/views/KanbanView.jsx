@@ -11,6 +11,15 @@ const REQUESTED_COL = {
   _synthetic: true,
 };
 
+// Synthetic column for tasks awaiting client approval
+const CLIENT_APPROVAL_COL = {
+  column_id: '__pending_client__',
+  name: 'Awaiting Client Approval',
+  color: '#7c3aed',
+  _synthetic: true,
+  _hindi: 'क्लाइंट अनुमोदन',
+};
+
 export default function KanbanView({
   columns, tasks, fieldDefs, fieldValueMap, teamMembers,
   onTasksChange, onColumnChange,
@@ -21,6 +30,8 @@ export default function KanbanView({
   currentUserRole,
   // showRequested: inject "Requested" column (admins/owners on project board)
   showRequested = false,
+  // showClientApproval: inject "Awaiting Client Approval" column
+  showClientApproval = false,
 }) {
   const [dragging, setDragging]         = useState(null);
   const [over, setOver]                 = useState(null);
@@ -29,11 +40,13 @@ export default function KanbanView({
 
   const isClient = currentUserRole === 'client';
 
-  // Columns to render — prepend synthetic Requested col when showRequested
+  // Columns to render — prepend synthetic cols when enabled
   const visibleColumns = useMemo(() => {
-    if (!showRequested) return columns || [];
-    return [REQUESTED_COL, ...(columns || [])];
-  }, [columns, showRequested]);
+    let cols = columns || [];
+    if (showClientApproval) cols = [...cols, CLIENT_APPROVAL_COL];
+    if (showRequested) cols = [REQUESTED_COL, ...cols];
+    return cols;
+  }, [columns, showRequested, showClientApproval]);
 
   // Status → column fallback for tasks with missing/invalid column_id
   const statusFallbackCol = useMemo(() => {
@@ -53,6 +66,10 @@ export default function KanbanView({
     (tasks || []).forEach(t => {
       if (showRequested && t.status === 'requested') {
         m['__requested__'].push(t);
+        return;
+      }
+      if (showClientApproval && t.approval_status === 'pending_client') {
+        m['__pending_client__'].push(t);
         return;
       }
       // Use column_id if valid; otherwise fall back to a column matching the task's status
@@ -89,7 +106,7 @@ export default function KanbanView({
   };
 
   const handleDrop = useCallback(async (targetColId, targetIdx) => {
-    if (!dragging || targetColId === '__requested__') return;
+    if (!dragging || targetColId === '__requested__' || targetColId === '__pending_client__') return;
     const { taskId } = dragging;
     setDragging(null); setOver(null);
     const order = targetIdx ?? (byCol[targetColId]?.length ?? 0);
@@ -117,7 +134,12 @@ export default function KanbanView({
                 <span className="k-bcol__bar" style={{ background: col.color || 'var(--k-primary)' }} />
                 <span className="k-bcol__title">
                   {col.name}
-                  {isSynth && <span style={{ fontFamily: 'var(--font-hindi)', fontSize: 11, color: 'var(--ink-3)', marginLeft: 6 }}>अनुरोध</span>}
+                  {isSynth && col._hindi && (
+                    <span style={{ fontFamily: 'var(--font-hindi)', fontSize: 11, color: 'var(--ink-3)', marginLeft: 6 }}>{col._hindi}</span>
+                  )}
+                  {isSynth && !col._hindi && col.column_id === '__requested__' && (
+                    <span style={{ fontFamily: 'var(--font-hindi)', fontSize: 11, color: 'var(--ink-3)', marginLeft: 6 }}>अनुरोध</span>
+                  )}
                 </span>
                 <span className="k-bcol__count">{colTasks.length}</span>
               </div>

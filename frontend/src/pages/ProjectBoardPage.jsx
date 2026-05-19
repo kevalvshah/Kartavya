@@ -223,6 +223,7 @@ export default function ProjectBoardPage() {
           onTasksChange={setTasks}
           onColumnChange={handleColumnChange}
           showRequested={me?.role === 'admin' || me?.role === 'owner'}
+          showClientApproval={me?.role === 'admin' || me?.role === 'owner'}
           currentUserId={me?.user_id}
           currentUserRole={me?.role}
         />

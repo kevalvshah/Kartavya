@@ -441,31 +441,155 @@ async def client_request_task(payload:TaskCreate,pool=Depends(get_db),user=Depen
 
 @api_router.get("/approvals/pending")
 async def list_pending_approvals(pool=Depends(get_db),user=Depends(require_user)):
-    rows=await pool.fetch("""SELECT a.*,COALESCE(u.full_name,u.name,u.email) as requested_by_name,u.email as requested_by_email
+    uid = user["user_id"]
+    # Standard approvals table records (task creation requests)
+    rows = await pool.fetch("""
+        SELECT a.*, COALESCE(u.full_name,u.name,u.email) AS requester_name,
+               u.email AS requested_by_email
         FROM approvals a JOIN users u ON u.user_id=a.requested_by WHERE a.status='pending'
         AND EXISTS(SELECT 1 FROM project_assignments WHERE team_id=a.team_id AND user_id=$1 AND role IN('owner','admin'))
-        ORDER BY a.created_at DESC""",user["user_id"])
-    return [dict(r) for r in rows]
+        ORDER BY a.created_at DESC
+    """, uid)
+    # Task-level approvals (approval_status='pending')
+    task_rows = await pool.fetch("""
+        SELECT
+            CONCAT('task_approval::', t.task_id) AS approval_id,
+            t.task_id,
+            t.title AS task_title,
+            t.approval_notes AS notes,
+            t.approval_requested_at AS created_at,
+            t.team_id,
+            t.priority,
+            t.due_at AS task_due_at,
+            COALESCE(u.full_name, u.name, u.email) AS requester_name,
+            u.email AS requested_by_email,
+            'task_completion' AS request_type,
+            jsonb_build_object('title', t.title, 'description', t.description, 'priority', t.priority) AS request_data
+        FROM tasks t
+        JOIN users u ON u.user_id = t.created_by_user_id
+        WHERE t.approval_status = 'pending'
+        AND (
+            EXISTS (SELECT 1 FROM project_assignments pa WHERE pa.team_id=t.team_id AND pa.user_id=$1 AND pa.role IN ('owner','admin'))
+            OR EXISTS (SELECT 1 FROM team_members tm WHERE tm.team_id=t.team_id AND tm.user_id=$1 AND tm.role IN ('owner','admin') AND tm.status='active')
+        )
+        ORDER BY t.approval_requested_at DESC NULLS LAST
+    """, uid)
+    return [dict(r) for r in rows] + [dict(r) for r in task_rows]
+
+@api_router.get("/approvals/history")
+async def approval_history(pool=Depends(get_db), user=Depends(require_user)):
+    uid = user["user_id"]
+    task_rows = await pool.fetch("""
+        SELECT
+            CONCAT('task_approval::', t.task_id) AS approval_id,
+            t.task_id,
+            t.title AS task_title,
+            t.approval_status AS status,
+            t.approval_notes AS notes,
+            t.approval_decided_at AS updated_at,
+            COALESCE(u.full_name, u.name, u.email) AS requester_name
+        FROM tasks t
+        JOIN users u ON u.user_id = t.created_by_user_id
+        WHERE t.approval_status IN ('approved','rejected')
+        AND t.approval_decided_at IS NOT NULL
+        AND (
+            EXISTS (SELECT 1 FROM project_assignments pa WHERE pa.team_id=t.team_id AND pa.user_id=$1 AND pa.role IN ('owner','admin'))
+            OR EXISTS (SELECT 1 FROM team_members tm WHERE tm.team_id=t.team_id AND tm.user_id=$1 AND tm.role IN ('owner','admin') AND tm.status='active')
+        )
+        ORDER BY t.approval_decided_at DESC NULLS LAST
+        LIMIT 50
+    """, uid)
+    return [dict(r) for r in task_rows]
 
 @api_router.post("/approvals/{approval_id}/review")
 async def review_approval(approval_id:str,body:dict,pool=Depends(get_db),user=Depends(require_user)):
     status=body.get("status"); notes=body.get("notes","")
+    send_to_client = body.get("send_to_client", False)
+    client_email   = body.get("client_email", "")
     if status not in ("approved","rejected"): raise HTTPException(400,"status must be approved or rejected")
     if approval_id.startswith("task_approval::"):
         task_id = approval_id.split("::", 1)[1]
-        if not await client_can_access_task(pool, task_id, user["user_id"]):
-            raise HTTPException(403, "Not authorised to review this task")
-        new_as = "approved" if status == "approved" else "rejected"
-        await pool.execute(
-            "UPDATE tasks SET approval_status=$1, approved_by=$2, approval_decided_at=NOW(), updated_at=NOW() WHERE task_id=$3",
-            new_as, user["user_id"], task_id
+        # Must be owner/admin of the project
+        task = await pool.fetchrow("SELECT * FROM tasks WHERE task_id=$1", task_id)
+        if not task: raise HTTPException(404, "Task not found")
+        is_pa = await pool.fetchrow(
+            "SELECT 1 FROM project_assignments WHERE team_id=$1 AND user_id=$2 AND role IN ('owner','admin')",
+            task["team_id"], user["user_id"]
         )
-        task = await pool.fetchrow("SELECT title, created_by_user_id, team_id FROM tasks WHERE task_id=$1", task_id)
-        if task and task["created_by_user_id"] and task["created_by_user_id"] != user["user_id"]:
-            await create_notification(pool, task["created_by_user_id"], status,
-                f"Task {status} by client", f"{task['title']} was {status} by the client.",
-                task_id, task["team_id"], "/tasks")
-        return {"ok": True, "status": new_as}
+        is_tm = await pool.fetchrow(
+            "SELECT 1 FROM team_members WHERE team_id=$1 AND user_id=$2 AND role IN ('owner','admin') AND status='active'",
+            task["team_id"], user["user_id"]
+        )
+        user_data = await pool.fetchrow("SELECT role FROM users WHERE user_id=$1", user["user_id"])
+        is_admin = user_data and user_data["role"] == "admin"
+        if not (is_pa or is_tm or is_admin):
+            raise HTTPException(403, "Only project owner/admin can review task approvals")
+
+        if status == "rejected":
+            if not notes: raise HTTPException(400, "Rejection reason is required")
+            await pool.execute(
+                "UPDATE tasks SET approval_status='rejected', approved_by=$1, approval_notes=$2, approval_decided_at=NOW(), updated_at=NOW() WHERE task_id=$3",
+                user["user_id"], notes, task_id
+            )
+            if task["created_by_user_id"] and task["created_by_user_id"] != user["user_id"]:
+                await create_notification(pool, task["created_by_user_id"], "rejected",
+                    f"Task rejected: {task['title']}", notes or "",
+                    task_id, task["team_id"], "/tasks")
+            return {"ok": True, "status": "rejected"}
+
+        # Approved — send to client or move to done
+        if send_to_client and client_email:
+            client = await pool.fetchrow(
+                "SELECT user_id, COALESCE(full_name,name) AS name FROM users WHERE LOWER(email)=$1",
+                client_email.lower()
+            )
+            if not client: raise HTTPException(404, "Client user not found with that email")
+            # Link client to task
+            await pool.execute(
+                "INSERT INTO task_clients (id,task_id,user_id,invited_by) VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING",
+                f"tc_{uuid.uuid4().hex[:12]}", task_id, client["user_id"], user["user_id"]
+            )
+            # Generate magic-link token
+            import jwt as _jwt
+            token = _jwt.encode(
+                {"task_id": task_id, "client_user_id": client["user_id"], "type": "client_approval",
+                 "exp": datetime.now(timezone.utc).timestamp() + 86400 * 7},
+                os.environ["JWT_SECRET"], algorithm="HS256"
+            )
+            await pool.execute("""
+                UPDATE tasks SET approval_status='pending_client', approval_requested_at=NOW(),
+                    approval_notes=$1, updated_at=NOW() WHERE task_id=$2
+            """, notes, task_id)
+            # Send client approval email
+            try:
+                from email_service import send_approval_request_email
+                approver_name = user.get("full_name") or user.get("name") or user.get("email", "Team")
+                send_approval_request_email(
+                    client_email, client["name"] or client_email,
+                    approver_name, task["title"], task_id,
+                    notes=notes, approve_token=token
+                )
+            except Exception as exc:
+                import logging; logging.getLogger(__name__).warning(f"client approval email failed: {exc}")
+            return {"ok": True, "status": "pending_client"}
+        else:
+            # Move to done column
+            done_col = await pool.fetchrow(
+                "SELECT column_id FROM project_columns WHERE team_id=$1 AND is_done=TRUE ORDER BY sort_order DESC LIMIT 1",
+                task["team_id"]
+            )
+            new_col_id = done_col["column_id"] if done_col else task["column_id"]
+            await pool.execute("""
+                UPDATE tasks SET approval_status='approved', approved_by=$1, approval_notes=$2,
+                    approval_decided_at=NOW(), column_id=$3, status='done',
+                    completed_at=NOW(), completed_by_user_id=$1, updated_at=NOW()
+                WHERE task_id=$4
+            """, user["user_id"], notes, new_col_id, task_id)
+            if task["created_by_user_id"] and task["created_by_user_id"] != user["user_id"]:
+                await create_notification(pool, task["created_by_user_id"], "approved",
+                    f"Task approved: {task['title']}", notes or "",
+                    task_id, task["team_id"], "/tasks")
+            return {"ok": True, "status": "approved", "new_column_id": new_col_id}
     approval=await pool.fetchrow("SELECT * FROM approvals WHERE approval_id=$1",approval_id)
     if not approval: raise HTTPException(404)
     mem=await pool.fetchrow("SELECT role FROM project_assignments WHERE team_id=$1 AND user_id=$2",approval["team_id"],user["user_id"])
