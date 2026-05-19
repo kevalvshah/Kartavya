@@ -337,7 +337,8 @@ def send_invite_email(to_email: str, inviter_name: str, role: str,
     body = (
         _body_text(f'{greeting}<strong>{_h(inviter_name)}</strong> has invited you to collaborate '
                    f'on <strong>Kartavya</strong> — the task workspace where '
-                   f'{_h(workspace_name)}\'s team plans projects, files GST returns, and ships client work.')
+                   f'{_h(workspace_name)}\'s team plans projects, collaborates, and ships client work. '
+                   f'<span style="color:#03a1b6;">साथ मिलकर काम करें।</span>')
         + card
         + _cta_row(invite_url, "Accept invite", "primary", workspace_url, "View workspace")
         + _body_text(f'<span style="font-size:12.5px;color:{_INK3};">The invite link expires in '
