@@ -166,12 +166,19 @@ async def create_invite(body: InviteCreate, pool=Depends(get_pool), admin=Depend
     try:
         from email_service import send_invite_email
         inviter_name   = admin.get("full_name") or admin.get("name") or admin.get("email", "An admin")
-        workspace_name = admin.get("company_name") or "Kartavya"
+        inviter_role   = (admin.get("role") or "admin").capitalize()
+        workspace_name = admin.get("company_name")
+        if not workspace_name:
+            row = await pool.fetchrow(
+                "SELECT company_name FROM users WHERE company_name IS NOT NULL LIMIT 1"
+            )
+            workspace_name = (row["company_name"] if row else None) or "Kartavya"
         expires_label  = expires_at.strftime("%b %-d, %Y")
         send_invite_email(body.email.lower(), inviter_name, body.role, token,
                           workspace_name=workspace_name,
                           expires_label=expires_label,
-                          recipient_name=body.full_name or "")
+                          recipient_name=body.full_name or "",
+                          inviter_role=inviter_role)
     except Exception as exc:
         import logging
         logging.getLogger(__name__).warning(f"invite email failed: {exc}")

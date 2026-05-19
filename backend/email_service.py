@@ -283,7 +283,8 @@ def _info_card(rows: list[tuple[str, str]], hindi_sub: dict[str, str] = None) ->
 def send_invite_email(to_email: str, inviter_name: str, role: str,
                       invite_token: str, workspace_name: str = "Kartavya",
                       expires_label: str = "7 days", recipient_name: str = "",
-                      workspace_hindi: str = "मुख्य कार्यस्थल"):
+                      workspace_hindi: str = "मुख्य कार्यस्थल",
+                      inviter_role: str = "Admin"):
     invite_url    = f"{FRONTEND_URL}/accept-invite?token={invite_token}"
     workspace_url = f"{FRONTEND_URL}/dashboard"
     role_label    = role.capitalize()
@@ -295,7 +296,7 @@ def send_invite_email(to_email: str, inviter_name: str, role: str,
     card = _info_card(
         [
             ("WORKSPACE",  workspace_name),
-            ("INVITED BY", f"{inviter_name} · {role_label}"),
+            ("INVITED BY", f"{inviter_name} · {inviter_role}"),
             ("YOUR ROLE",  role_label),
             ("EXPIRES",    expires_label),
         ],
@@ -310,7 +311,7 @@ def send_invite_email(to_email: str, inviter_name: str, role: str,
         + card
         + _cta_row(invite_url, "Accept invite", _TEAL, workspace_url, "View workspace")
         + _body_text(f'<span style="font-size:12.5px;color:{_INK3};">The invite link expires in '
-                     f'{_h(expires_label)}. If you weren\'t expecting this email, you can safely ignore it.</span>')
+                     f'7 days. If you weren\'t expecting this email, you can safely ignore it.</span>')
     )
     return send_email(
         to_email,
