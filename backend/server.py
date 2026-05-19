@@ -92,27 +92,43 @@ def parse_dt(value):
 
 async def get_db(): return await get_pool()
 
-async def get_visible_team_ids(pool, user_id, role=None):
+async def get_visible_team_ids(pool, user_id, role=None, _user_dict=None):
     """Return team IDs visible to user_id.
 
-    FIX #4: Previously only queried project_assignments. Users who were
-    invited via team_members but registered after the invite had no
-    project_assignments row and couldn't see their teams.
-    Now UNIONs with team_members WHERE status='active' to cover both cases.
+    Caches result on the pool object keyed by user_id for the duration of
+    a single request (pool is request-scoped via Depends). This prevents the
+    2-query round-trip from firing on every sub-call within the same request
+    (list_tasks, get_task, update_task, dashboard_summary all call this).
+
+    FIX #4: UNIONs team_members so users invited before registering still see teams.
     """
-    user_row = await pool.fetchrow("SELECT role FROM users WHERE user_id=$1", user_id)
-    if user_row and user_row.get("role") == "admin":
+    cache_key = f"_team_ids_{user_id}"
+    cached = getattr(pool, cache_key, None)
+    if cached is not None:
+        return cached
+
+    # Use role from already-fetched user dict when available — avoids extra query
+    effective_role = role or (_user_dict and _user_dict.get("role"))
+    if effective_role != "admin":
+        user_row = await pool.fetchrow("SELECT role FROM users WHERE user_id=$1", user_id)
+        effective_role = user_row.get("role") if user_row else None
+
+    if effective_role == "admin":
         all_teams = await pool.fetch("SELECT team_id FROM teams")
-        return [r["team_id"] for r in all_teams]
-    rows = await pool.fetch(
-        """
-        SELECT team_id FROM project_assignments WHERE user_id=$1
-        UNION
-        SELECT team_id FROM team_members WHERE user_id=$1 AND status='active'
-        """,
-        user_id,
-    )
-    return [r["team_id"] for r in rows]
+        result = [r["team_id"] for r in all_teams]
+    else:
+        rows = await pool.fetch(
+            """
+            SELECT team_id FROM project_assignments WHERE user_id=$1
+            UNION
+            SELECT team_id FROM team_members WHERE user_id=$1 AND status='active'
+            """,
+            user_id,
+        )
+        result = [r["team_id"] for r in rows]
+
+    setattr(pool, cache_key, result)
+    return result
 
 async def is_project_member(pool, team_id: str, user: dict) -> dict | None:
     """Return membership record (or a synthetic one for admins) or None."""
@@ -624,7 +640,7 @@ async def delete_category(category_id:str,pool=Depends(get_db),user=Depends(requ
 async def list_tasks(status:Optional[str]=None,category_id:Optional[str]=None,q:Optional[str]=None,
                      team_id:Optional[str]=None,assigned_to_me:Optional[bool]=None,
                      pool=Depends(get_db),user=Depends(require_user)):
-    team_ids=await get_visible_team_ids(pool,user["user_id"])
+    team_ids=await get_visible_team_ids(pool,user["user_id"],_user_dict=user)
     conditions=["(t.user_id=$1 OR t.team_id=ANY($2::text[])"
                 " OR t.created_by_user_id=$1"
                 " OR EXISTS(SELECT 1 FROM task_clients tc WHERE tc.task_id=t.task_id AND tc.user_id=$1))"]
@@ -702,7 +718,7 @@ async def get_task(task_id:str,pool=Depends(get_db),user=Depends(require_user)):
     if row["created_by_user_id"]==user["user_id"]: return row_to_task(row)
     if user["user_id"] in (row["assignee_user_ids"] or []): return row_to_task(row)
     if row["team_id"]:
-        team_ids=await get_visible_team_ids(pool,user["user_id"])
+        team_ids=await get_visible_team_ids(pool,user["user_id"],_user_dict=user)
         if row["team_id"] in team_ids: return row_to_task(row)
     client_link=await pool.fetchrow("SELECT 1 FROM task_clients WHERE task_id=$1 AND user_id=$2",task_id,user["user_id"])
     if client_link: return row_to_task(row)
@@ -711,7 +727,7 @@ async def get_task(task_id:str,pool=Depends(get_db),user=Depends(require_user)):
 
 @api_router.put("/tasks/{task_id}",response_model=TaskOut)
 async def update_task(task_id:str,payload:TaskUpdate,pool=Depends(get_db),user=Depends(require_user)):
-    team_ids=await get_visible_team_ids(pool,user["user_id"])
+    team_ids=await get_visible_team_ids(pool,user["user_id"],_user_dict=user)
     existing=await pool.fetchrow(
         "SELECT * FROM tasks WHERE task_id=$1 AND (user_id=$2 OR team_id=ANY($3::text[]) OR created_by_user_id=$2)",
         task_id,user["user_id"],team_ids
@@ -767,7 +783,7 @@ async def patch_task(task_id:str,payload:TaskUpdate,pool=Depends(get_db),user=De
 
 @api_router.delete("/tasks/{task_id}")
 async def delete_task(task_id:str,pool=Depends(get_db),user=Depends(require_user)):
-    team_ids=await get_visible_team_ids(pool,user["user_id"])
+    team_ids=await get_visible_team_ids(pool,user["user_id"],_user_dict=user)
     doc=await pool.fetchrow(
         "SELECT * FROM tasks WHERE task_id=$1 AND (user_id=$2 OR team_id=ANY($3::text[]) OR created_by_user_id=$2)",
         task_id,user["user_id"],team_ids
@@ -778,7 +794,7 @@ async def delete_task(task_id:str,pool=Depends(get_db),user=Depends(require_user
 
 @api_router.patch("/tasks/{task_id}/toggle",response_model=TaskOut)
 async def toggle_task(task_id:str,pool=Depends(get_db),user=Depends(require_user)):
-    team_ids=await get_visible_team_ids(pool,user["user_id"])
+    team_ids=await get_visible_team_ids(pool,user["user_id"],_user_dict=user)
     doc=await pool.fetchrow("SELECT * FROM tasks WHERE task_id=$1 AND (user_id=$2 OR team_id=ANY($3::text[]))",task_id,user["user_id"],team_ids)
     if not doc: raise HTTPException(404)
     new_status="todo" if doc["status"]=="done" else "done"
@@ -788,7 +804,7 @@ async def toggle_task(task_id:str,pool=Depends(get_db),user=Depends(require_user
 
 @api_router.patch("/tasks/{task_id}/move",response_model=TaskOut)
 async def move_task(task_id:str,payload:TaskMoveIn,pool=Depends(get_db),user=Depends(require_user)):
-    team_ids=await get_visible_team_ids(pool,user["user_id"])
+    team_ids=await get_visible_team_ids(pool,user["user_id"],_user_dict=user)
     doc=await pool.fetchrow("SELECT * FROM tasks WHERE task_id=$1 AND (user_id=$2 OR team_id=ANY($3::text[]))",task_id,user["user_id"],team_ids)
     if not doc: raise HTTPException(404)
     col=await pool.fetchrow("SELECT * FROM project_columns WHERE column_id=$1",payload.column_id)
@@ -829,7 +845,7 @@ async def process_notifications(pool=Depends(get_db),user=Depends(require_user))
 
 @api_router.get("/dashboard/summary",response_model=DashboardSummaryOut)
 async def dashboard_summary(pool=Depends(get_db),user=Depends(require_user)):
-    team_ids=await get_visible_team_ids(pool,user["user_id"]); now=now_utc()
+    team_ids=await get_visible_team_ids(pool,user["user_id"],_user_dict=user); now=now_utc()
     base="(user_id=$1 OR team_id=ANY($2::text[]))"
     todo=await pool.fetchval(f"SELECT COUNT(*) FROM tasks WHERE {base} AND status='todo'",user["user_id"],team_ids)
     in_progress=await pool.fetchval(f"SELECT COUNT(*) FROM tasks WHERE {base} AND status='in_progress'",user["user_id"],team_ids)
@@ -837,6 +853,30 @@ async def dashboard_summary(pool=Depends(get_db),user=Depends(require_user)):
     overdue=await pool.fetchval(f"SELECT COUNT(*) FROM tasks WHERE {base} AND status!='done' AND due_at<$3",user["user_id"],team_ids,now)
     due_24h=await pool.fetchval(f"SELECT COUNT(*) FROM tasks WHERE {base} AND status!='done' AND due_at>=$3 AND due_at<$4",user["user_id"],team_ids,now,now+timedelta(hours=24))
     return DashboardSummaryOut(todo=todo,in_progress=in_progress,done=done,overdue=overdue,due_24h=due_24h)
+
+@api_router.get("/notifications/poll")
+async def poll_notifications(pool=Depends(get_db),user=Depends(require_user)):
+    """Single endpoint replacing the two-request (process + fetch) polling cycle.
+    Processes due reminders and returns unread count in one round-trip."""
+    team_ids=await get_visible_team_ids(pool,user["user_id"],_user_dict=user)
+    # Process reminders
+    rows=await pool.fetch(
+        "SELECT * FROM tasks WHERE (user_id=$1 OR team_id=ANY($2::text[])) AND status!='done'"
+        " AND reminder_at IS NOT NULL AND reminder_at<=$3 AND reminder_sent_at IS NULL",
+        user["user_id"],team_ids,now_utc()
+    )
+    for t in rows:
+        recipients=set(t["assignee_user_ids"] or [])
+        if not recipients and t["user_id"]: recipients.add(t["user_id"])
+        for uid in recipients:
+            await create_notification(pool,uid,"reminder","Task reminder",f"Due soon: {t['title']}",t["task_id"],t["team_id"],"/tasks")
+        await pool.execute("UPDATE tasks SET reminder_sent_at=NOW(),updated_at=NOW() WHERE task_id=$1",t["task_id"])
+    # Return unread count
+    unread=await pool.fetchval(
+        "SELECT COUNT(*) FROM notifications WHERE user_id=$1 AND read_at IS NULL",
+        user["user_id"]
+    )
+    return {"unread": unread or 0}
 
 @api_router.get("/push/vapid-public-key")
 async def get_vapid_public_key(user=Depends(require_user)): return {"public_key":"not-configured"}

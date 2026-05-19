@@ -39,13 +39,12 @@ export default function AppShell() {
     let live = true;
     const tick = async () => {
       try {
-        await api.post('/notifications/process');
-        const r = await api.get('/notifications', { params: { unread_only: true } });
-        if (live) setUnread(r.data.length);
+        const r = await api.get('/notifications/poll');
+        if (live) setUnread(r.data.unread ?? 0);
       } catch (_) {}
     };
     tick();
-    const id = setInterval(tick, 30_000);
+    const id = setInterval(tick, 60_000);
     return () => { live = false; clearInterval(id); };
   }, []);
 

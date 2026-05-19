@@ -48,6 +48,13 @@ def _decode_token(token: str) -> Optional[str]:
 
 
 async def require_user(request: Request, credentials: Optional[HTTPAuthorizationCredentials] = Depends(security)):
+    # Cache resolved user on the request state for this request's lifetime.
+    # Avoids a DB round-trip when multiple dependencies call require_user
+    # on the same request (e.g. require_admin → require_user).
+    cached = getattr(request.state, "_auth_user", None)
+    if cached is not None:
+        return cached
+
     token = credentials.credentials if credentials else request.cookies.get("session_token")
     if not token:
         raise HTTPException(status_code=401, detail="Not authenticated")
@@ -55,10 +62,16 @@ async def require_user(request: Request, credentials: Optional[HTTPAuthorization
     if not user_id:
         raise HTTPException(status_code=401, detail="Invalid or expired token")
     pool = await get_pool()
-    user = await pool.fetchrow("SELECT * FROM users WHERE user_id=$1", user_id)
+    user = await pool.fetchrow(
+        "SELECT user_id,email,name,full_name,role,avatar,position,company_name,"
+        "member_role,receives_approval_emails FROM users WHERE user_id=$1",
+        user_id,
+    )
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
-    return dict(user)
+    result = dict(user)
+    request.state._auth_user = result
+    return result
 
 
 async def require_admin(user=Depends(require_user)):
