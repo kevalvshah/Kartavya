@@ -46,7 +46,7 @@ function OnDemandTab({ teams }) {
 
   useEffect(() => {
     if (teams.length && !teamId) setTeamId(teams[0].team_id);
-  }, [teams]);
+  }, [teams, teamId]);
 
   const loadPreview = useCallback(async () => {
     if (!teamId) return;
@@ -235,7 +235,7 @@ function SchedulesTab({ teams }) {
 
   useEffect(() => {
     if (teams.length && !teamId) setTeamId(teams[0].team_id);
-  }, [teams]);
+  }, [teams, teamId]);
 
   useEffect(() => {
     if (!teamId) return;
