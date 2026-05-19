@@ -549,6 +549,126 @@ def send_approval_decision_email(user_email: str, user_name: str, reviewer_name:
     )
 
 
+# ── Report delivery email (MIME raw with attachments) ─────────────────────────
+def send_report_email(
+    to_email: str,
+    team_name: str,
+    frequency: str,
+    period_from: str,
+    period_to: str,
+    data_summary: dict = None,
+    total_minutes: int = 0,
+    pdf_bytes: bytes = None,
+    excel_bytes: bytes = None,
+):
+    import email as _email_lib
+    from email.mime.multipart import MIMEMultipart
+    from email.mime.text      import MIMEText
+    from email.mime.base      import MIMEBase
+    from email              import encoders
+
+    data_summary = data_summary or {}
+    total_h = f"{total_minutes // 60}h {total_minutes % 60}m" if total_minutes else "0h"
+    freq_cap = frequency.capitalize()
+
+    # Build attachment filenames
+    safe_name = team_name.lower().replace(" ", "-")
+    pdf_fname   = f"kartavya-{safe_name}-{period_from}-{period_to}.pdf"
+    excel_fname = f"kartavya-{safe_name}-{period_from}-{period_to}.xlsx"
+
+    preheader = f"{freq_cap} report for {team_name} — {period_from} to {period_to}."
+
+    stats_rows = (
+        f'<tr><td style="padding:10px 16px;font-family:{_FONT_UI};font-size:12px;letter-spacing:0.12em;'
+        f'text-transform:uppercase;color:{_INK3};font-weight:700;border-bottom:1px solid {_RULE_SOFT};width:38%;">TOTAL TIME</td>'
+        f'<td style="padding:10px 16px;font-family:{_FONT_UI};font-size:14px;color:{_INK};border-bottom:1px solid {_RULE_SOFT};">{total_h}</td></tr>'
+        f'<tr><td style="padding:10px 16px;font-family:{_FONT_UI};font-size:12px;letter-spacing:0.12em;'
+        f'text-transform:uppercase;color:{_INK3};font-weight:700;border-bottom:1px solid {_RULE_SOFT};">DONE</td>'
+        f'<td style="padding:10px 16px;font-family:{_FONT_UI};font-size:14px;color:{_TEAL};font-weight:600;border-bottom:1px solid {_RULE_SOFT};">{data_summary.get("done",0)} tasks</td></tr>'
+        f'<tr><td style="padding:10px 16px;font-family:{_FONT_UI};font-size:12px;letter-spacing:0.12em;'
+        f'text-transform:uppercase;color:{_INK3};font-weight:700;border-bottom:1px solid {_RULE_SOFT};">IN PROGRESS</td>'
+        f'<td style="padding:10px 16px;font-family:{_FONT_UI};font-size:14px;color:{_INK};border-bottom:1px solid {_RULE_SOFT};">{data_summary.get("in_progress",0)} tasks</td></tr>'
+        f'<tr><td style="padding:10px 16px;font-family:{_FONT_UI};font-size:12px;letter-spacing:0.12em;'
+        f'text-transform:uppercase;color:{_INK3};font-weight:700;">OVERDUE</td>'
+        f'<td style="padding:10px 16px;font-family:{_FONT_UI};font-size:14px;color:#dc2626;">{data_summary.get("overdue",0)} tasks</td></tr>'
+    )
+    stats_table = (
+        f'<tr><td style="padding:0 36px 28px;">'
+        f'<table class="em__card" width="100%" cellpadding="0" cellspacing="0" border="0"'
+        f' style="background:{_BG};border:1px solid {_RULE};border-radius:10px;overflow:hidden;">'
+        f'{stats_rows}</table></td></tr>'
+    )
+
+    attach_note = ""
+    fmts = []
+    if pdf_bytes:   fmts.append("PDF")
+    if excel_bytes: fmts.append("Excel")
+    if fmts:
+        attach_note = _body_text(
+            f'<span style="font-size:13px;color:{_INK3};">Attached: {", ".join(fmts)} report(s) for {_h(period_from)} – {_h(period_to)}.</span>'
+        )
+
+    body = (
+        _body_text(f'Your <strong>{freq_cap} project report</strong> for '
+                   f'<strong>{_h(team_name)}</strong> is ready. '
+                   f'Here\'s a snapshot of the period <strong>{_h(period_from)}</strong> to <strong>{_h(period_to)}</strong>.')
+        + stats_table
+        + attach_note
+    )
+    html_body = _base(
+        preheader,
+        f"{freq_cap.upper()} REPORT · प्रतिवेदन",
+        f"{team_name} Report",
+        "कार्य प्रतिवेदन",
+        f"{freq_cap} summary for your project.",
+        body,
+        show_gita=True,
+    )
+
+    def _send():
+        if not ses_client:
+            logger.info(f"[EMAIL-DEV] Report → {to_email} | {team_name} | {period_from}–{period_to}")
+            return
+        try:
+            msg = MIMEMultipart("mixed")
+            msg["Subject"] = f"{freq_cap} Report: {team_name} ({period_from} to {period_to})"
+            msg["From"]    = FROM_EMAIL
+            msg["To"]      = to_email
+
+            alt = MIMEMultipart("alternative")
+            alt.attach(MIMEText(html_body, "html", "utf-8"))
+            msg.attach(alt)
+
+            if pdf_bytes:
+                part = MIMEBase("application", "pdf")
+                part.set_payload(pdf_bytes)
+                encoders.encode_base64(part)
+                part.add_header("Content-Disposition", "attachment", filename=pdf_fname)
+                msg.attach(part)
+
+            if excel_bytes:
+                part = MIMEBase(
+                    "application",
+                    "vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                )
+                part.set_payload(excel_bytes)
+                encoders.encode_base64(part)
+                part.add_header("Content-Disposition", "attachment", filename=excel_fname)
+                msg.attach(part)
+
+            ses_client.send_raw_email(
+                Source=FROM_EMAIL,
+                Destinations=[to_email],
+                RawMessage={"Data": msg.as_bytes()},
+            )
+            logger.info(f"✅ Report email sent → {to_email}")
+        except Exception as exc:
+            logger.error(f"❌ Report email failed → {to_email}: {exc}")
+
+    threading.Thread(target=_send, daemon=True).start()
+    return True
+
+
 # ── Legacy aliases ─────────────────────────────────────────────────────────────
 def send_approval_notification_email(user_email: str, user_name: str, task_title: str,
                                      notification_type: str, notes: str = None,

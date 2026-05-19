@@ -40,6 +40,7 @@ const TeamsPage             = lazy(() => import('./pages/TeamsPage'));
 const ActivityFeedPage      = lazy(() => import('./pages/ActivityFeedPage'));
 const AutomationsPage       = lazy(() => import('./pages/AutomationsPage'));
 const TimeReportPage        = lazy(() => import('./pages/TimeReportPage'));
+const ReportsPage           = lazy(() => import('./pages/ReportsPage'));
 const ApprovalsPage         = lazy(() => import('./pages/ApprovalsPage'));
 const TemplatesPage         = lazy(() => import('./pages/TemplatesPage'));
 const CategoriesPage        = lazy(() => import('./pages/CategoriesPage'));
@@ -65,6 +66,7 @@ const DashboardWithContext    = withContext(DashboardPage,    ctx => ({ teams: c
 const ActivityWithContext     = withContext(ActivityFeedPage, 'teamId');
 const AutomationsWithContext  = withContext(AutomationsPage,  'teamId');
 const TimeWithContext         = withContext(TimeReportPage,   'teamId');
+const ReportsWithContext      = withContext(ReportsPage,      ctx => ({ teams: ctx.teams }));
 
 // ── Route tree ─────────────────────────────────────────────────────────────────
 function AppRouter() {
@@ -95,6 +97,7 @@ function AppRouter() {
           <Route path="activity"               element={<ActivityWithContext />} />
           <Route path="automations"            element={<AutomationsWithContext />} />
           <Route path="time"                   element={<TimeWithContext />} />
+          <Route path="reports"               element={<ReportsWithContext />} />
 
           {/* Settings */}
           <Route path="settings/categories"    element={<CategoriesPage />} />

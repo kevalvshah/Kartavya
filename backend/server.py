@@ -44,6 +44,7 @@ from routers.dashboards  import router as dashboards_router
 from routers.templates   import router as templates_router
 from routers.time_entries import router as time_router
 from routers.uploads     import router as uploads_router   # R2-backed upload
+from routers.reports     import router as reports_router
 from services.gita       import get_verse_of_the_day
 
 ROOT_DIR = Path(__file__).parent
@@ -862,6 +863,7 @@ app.include_router(dashboards_router)
 app.include_router(templates_router)
 app.include_router(time_router)
 app.include_router(uploads_router)   # R2-backed file upload (replaces old base64 /api/upload)
+app.include_router(reports_router)
 
 
 # ── Verse of the day (public) ────────────────────────────────────────────────
