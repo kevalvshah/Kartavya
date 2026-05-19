@@ -54,9 +54,9 @@ _WARN_BORD  = "#B06A00"
 _DANGER_BG  = "#F8E9E5"
 _DANGER_BOR = "#C0392B"
 
-_FONT_DISP  = '"Newsreader", Georgia, "Times New Roman", serif'
-_FONT_UI    = 'Inter, -apple-system, "Helvetica Neue", Arial, sans-serif'
-_FONT_HINDI = '"Tiro Devanagari Hindi", "Noto Serif Devanagari", "Newsreader", Georgia, serif'
+_FONT_DISP  = "'Newsreader', Georgia, 'Times New Roman', serif"
+_FONT_UI    = "Inter, -apple-system, 'Helvetica Neue', Arial, sans-serif"
+_FONT_HINDI = "'Tiro Devanagari Hindi', 'Noto Serif Devanagari', 'Newsreader', Georgia, serif"
 
 
 def _preheader(text: str) -> str:
@@ -201,24 +201,35 @@ def _cta_row(primary_url: str, primary_label: str, primary_style: str = "primary
         btn_bg     = _GRAD_PRIMARY
         btn_shadow = "0 4px 14px -4px rgba(0,130,198,.5),0 1px 0 rgba(255,255,255,.15) inset"
 
+    if primary_style == "approve":
+        btn_bg_color = "#0A7A6E"
+    else:
+        btn_bg_color = "#05b7aa"
+
     ghost_cell = ""
     if ghost_url:
         ghost_cell = (f'<td class="em__cta-cell" align="center" style="padding:0 0 0 12px;">'
+                      f'<table cellpadding="0" cellspacing="0" border="0">'
+                      f'<tr><td style="border:1px solid {_RULE_STRONG};border-radius:8px;">'
                       f'<a class="em__cta-btn" href="{ghost_url}" '
                       f'style="font-family:{_FONT_UI};font-size:14px;font-weight:600;'
-                      f'color:{_INK};text-decoration:none;border:1px solid {_RULE_STRONG};'
-                      f'border-radius:8px;padding:13px 22px;display:inline-block;'
-                      f'background:transparent;min-width:140px;text-align:center;letter-spacing:0.005em;">'
-                      f'{ghost_label}</a></td>')
+                      f'color:{_INK};text-decoration:none;'
+                      f'padding:13px 22px;display:inline-block;'
+                      f'min-width:140px;text-align:center;letter-spacing:0.005em;">'
+                      f'{ghost_label}</a></td></tr></table></td>')
     return (f'<tr><td style="padding:4px 36px 20px;"><table cellpadding="0" cellspacing="0" border="0">'
             f'<tr>'
             f'<td class="em__cta-cell" align="center">'
+            f'<table cellpadding="0" cellspacing="0" border="0">'
+            f'<tr><td style="background-color:{btn_bg_color};background:{btn_bg};'
+            f'border-radius:8px;box-shadow:{btn_shadow};">'
             f'<a class="em__cta-btn" href="{primary_url}" '
             f'style="font-family:{_FONT_UI};font-size:14px;font-weight:600;color:#ffffff;'
-            f'text-decoration:none;background:{btn_bg};border-radius:8px;'
-            f'padding:13px 22px;display:inline-block;min-width:140px;text-align:center;'
-            f'letter-spacing:0.005em;box-shadow:{btn_shadow};">'
-            f'{primary_label}</a></td>'
+            f'text-decoration:none;'
+            f'padding:13px 22px;display:block;min-width:140px;text-align:center;'
+            f'letter-spacing:0.005em;">'
+            f'{primary_label}</a></td></tr></table>'
+            f'</td>'
             f'{ghost_cell}'
             f'</tr></table></td></tr>')
 
@@ -273,7 +284,7 @@ def _info_card(rows: list[tuple[str, str]], hindi_sub: dict[str, str] = None) ->
         border = "" if is_last else f"border-bottom:1px dashed {_RULE};"
         sub = ""
         if label in hindi_sub:
-            sub = (f'<span style="display:block;font-family:{_FONT_HINDI};'
+            sub = (f'<br><span style="font-family:{_FONT_HINDI};'
                    f'font-size:13px;color:{_INK3};margin-top:2px;">{_h(hindi_sub[label])}</span>')
         return (
             f'<tr>'
