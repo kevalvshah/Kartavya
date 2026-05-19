@@ -32,9 +32,12 @@ def _client():
     try:
         import boto3
         from botocore.config import Config
-        account_id      = os.environ["R2_ACCOUNT_ID"]
-        access_key      = os.environ["R2_ACCESS_KEY_ID"]
-        secret_key      = os.environ["R2_SECRET_ACCESS_KEY"]
+        account_id      = os.environ.get("R2_ACCOUNT_ID", "")
+        access_key      = os.environ.get("R2_ACCESS_KEY_ID", "")
+        secret_key      = os.environ.get("R2_SECRET_ACCESS_KEY", "")
+        if not account_id or not access_key or not secret_key:
+            log.warning("R2 credentials not set — file uploads will fall back to base64")
+            return None
         _s3 = boto3.client(
             "s3",
             endpoint_url=f"https://{account_id}.r2.cloudflarestorage.com",
