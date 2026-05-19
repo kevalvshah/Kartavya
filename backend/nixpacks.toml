@@ -7,4 +7,6 @@ nixPkgs = [
   "fontconfig",
   "freetype",
   "harfbuzz",
+  "gobject-introspection",
+  "pkg-config",
 ]
