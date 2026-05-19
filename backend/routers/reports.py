@@ -109,9 +109,15 @@ async def _fetch_report_data(pool, team_id: str, from_date: str, to_date: str) -
         "SELECT COUNT(*) FROM tasks WHERE team_id=$1 AND status!='done' AND due_at < $2", team_id, now
     )
 
+    def _serialize(e):
+        d = dict(e)
+        if d.get("started_at") and hasattr(d["started_at"], "isoformat"):
+            d["started_at"] = d["started_at"].isoformat()
+        return d
+
     return {
         "total_minutes": total_mins,
-        "entries":       [dict(e) for e in entries],
+        "entries":       [_serialize(e) for e in entries],
         "tasks": {
             "todo":        todo or 0,
             "in_progress": in_progress or 0,
