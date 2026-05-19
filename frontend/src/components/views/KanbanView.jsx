@@ -80,7 +80,7 @@ export default function KanbanView({
     });
     Object.values(m).forEach(arr => arr.sort((a, b) => (a.order ?? a.sort_order ?? 0) - (b.order ?? b.sort_order ?? 0)));
     return m;
-  }, [visibleColumns, tasks, showRequested, statusFallbackCol]);
+  }, [visibleColumns, tasks, showRequested, showClientApproval, statusFallbackCol]);
 
   // Can this task be dragged by the current user?
   const canDrag = (task) => {
