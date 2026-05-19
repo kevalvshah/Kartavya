@@ -50,6 +50,9 @@ from services.gita       import get_verse_of_the_day
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env")
 
+# Per-request team_ids cache: keyed by user_id, cleared after each request via middleware.
+_team_ids_request_cache: dict = {}
+
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
@@ -78,6 +81,13 @@ app.add_middleware(
 )
 
 
+@app.middleware("http")
+async def clear_request_cache(request, call_next):
+    _team_ids_request_cache.clear()
+    return await call_next(request)
+
+
+
 # ── Helpers ───────────────────────────────────────────────────
 
 def now_utc(): return datetime.now(timezone.utc)
@@ -95,19 +105,13 @@ async def get_db(): return await get_pool()
 async def get_visible_team_ids(pool, user_id, role=None, _user_dict=None):
     """Return team IDs visible to user_id.
 
-    Caches result on the pool object keyed by user_id for the duration of
-    a single request (pool is request-scoped via Depends). This prevents the
-    2-query round-trip from firing on every sub-call within the same request
-    (list_tasks, get_task, update_task, dashboard_summary all call this).
-
+    Caches result in _team_ids_request_cache for the duration of a request.
     FIX #4: UNIONs team_members so users invited before registering still see teams.
     """
-    cache_key = f"_team_ids_{user_id}"
-    cached = getattr(pool, cache_key, None)
+    cached = _team_ids_request_cache.get(user_id)
     if cached is not None:
         return cached
 
-    # Use role from already-fetched user dict when available — avoids extra query
     effective_role = role or (_user_dict and _user_dict.get("role"))
     if effective_role != "admin":
         user_row = await pool.fetchrow("SELECT role FROM users WHERE user_id=$1", user_id)
@@ -127,7 +131,7 @@ async def get_visible_team_ids(pool, user_id, role=None, _user_dict=None):
         )
         result = [r["team_id"] for r in rows]
 
-    setattr(pool, cache_key, result)
+    _team_ids_request_cache[user_id] = result
     return result
 
 async def is_project_member(pool, team_id: str, user: dict) -> dict | None:
