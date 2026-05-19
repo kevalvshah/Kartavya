@@ -91,10 +91,9 @@ async def _fetch_report_data(pool, team_id: str, from_date: str, to_date: str) -
                COALESCE(u.full_name, u.name, u.email) AS user_name,
                t.title AS task_title
         FROM time_entries te
+        JOIN tasks t ON t.task_id = te.task_id AND t.team_id = $1
         LEFT JOIN users u ON u.user_id = te.user_id
-        LEFT JOIN tasks t ON t.task_id = te.task_id
-        WHERE te.team_id = $1
-          AND te.started_at >= $2::timestamptz
+        WHERE te.started_at >= $2::timestamptz
           AND te.started_at <= ($3::date + interval '1 day')::timestamptz
         ORDER BY te.started_at DESC
     """, team_id, from_date, to_date)
