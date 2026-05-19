@@ -73,29 +73,25 @@ async def upload_file(file_bytes: bytes, filename: str, content_type: str, user_
             "size": len(file_bytes),
         }
 
+    import asyncio
     ext = Path(filename).suffix
     key = f"uploads/{user_id}/{uuid.uuid4().hex}{ext}"
 
-    client.put_object(
-        Bucket=BUCKET,
-        Key=key,
-        Body=file_bytes,
-        ContentType=content_type,
-        # Tag files so a lifecycle rule can expire them after 60 days
-        # The actual expiry is enforced by the bucket lifecycle rule —
-        # this tag is optional metadata for auditing.
-        Tagging="ttl=60d",
+    await asyncio.get_event_loop().run_in_executor(
+        None,
+        lambda: client.put_object(
+            Bucket=BUCKET,
+            Key=key,
+            Body=file_bytes,
+            ContentType=content_type,
+        ),
     )
 
-    if PUB_URL:
-        url = f"{PUB_URL}/{key}"
-    else:
-        # Generate a 7-day presigned URL (max for R2)
-        url = client.generate_presigned_url(
-            "get_object",
-            Params={"Bucket": BUCKET, "Key": key},
-            ExpiresIn=7 * 24 * 3600,
-        )
+    url = f"{PUB_URL}/{key}" if PUB_URL else client.generate_presigned_url(
+        "get_object",
+        Params={"Bucket": BUCKET, "Key": key},
+        ExpiresIn=7 * 24 * 3600,
+    )
 
     return {"url": url, "name": filename, "key": key, "size": len(file_bytes)}
 
