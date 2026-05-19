@@ -105,29 +105,29 @@ def _base(preheader: str, kicker: str, headline: str, sanskrit: str,
 <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:{_BG};">
   <tr><td align="center" style="padding:32px 16px 40px;">
     <table class="em__envelope" width="600" cellpadding="0" cellspacing="0" border="0"
-      style="background:{_SURFACE};border:1px solid {_RULE};border-radius:16px;
-             box-shadow:0 30px 60px -40px rgba(10,20,40,.22);">
-      <tr><td style="padding:32px 36px 0;">
+      style="background:{_SURFACE};border:1px solid {_RULE};border-radius:18px;
+             box-shadow:0 1px 0 rgba(20,30,50,.04),0 30px 60px -40px rgba(10,20,40,.25);">
+      <tr><td style="padding:40px 36px 0;">
         <!-- brand bar -->
         <table width="100%" cellpadding="0" cellspacing="0" border="0"
-          style="border-bottom:1px solid {_RULE_SOFT};padding-bottom:20px;margin-bottom:28px;">
+          style="border-bottom:1px solid {_RULE_SOFT};padding-bottom:24px;margin-bottom:28px;">
           <tr>
-            <td style="font-family:{_FONT_DISP};font-size:20px;font-weight:500;
+            <td style="font-family:{_FONT_DISP};font-size:22px;font-weight:500;
                        color:{_INK};letter-spacing:0.005em;">Kartavya</td>
-            <td style="font-family:{_FONT_HINDI};font-size:15px;color:{_MID};padding-left:10px;">कर्तव्य</td>
+            <td style="font-family:{_FONT_HINDI};font-size:16px;color:{_MID};padding-left:10px;">कर्तव्य</td>
             <td align="right" style="font-family:{_FONT_UI};font-size:10px;
                 letter-spacing:0.2em;text-transform:uppercase;color:{_INK3};font-weight:700;">
-              by Aekam Inc</td>
+              By Aekam Inc</td>
           </tr>
         </table>
         <!-- kicker -->
-        <p style="margin:0 0 12px;font-family:{_FONT_UI};font-size:11px;letter-spacing:0.22em;
-                  text-transform:uppercase;color:{_TEAL};font-weight:700;">{kicker}</p>
+        <p style="margin:0 0 14px;font-family:{_FONT_UI};font-size:11px;letter-spacing:0.22em;
+                  text-transform:uppercase;color:{_MID};font-weight:700;">{kicker}</p>
         <!-- headline -->
-        <h1 class="em__h1" style="margin:0 0 4px;font-family:{_FONT_DISP};font-size:34px;
+        <h1 class="em__h1" style="margin:0 0 6px;font-family:{_FONT_DISP};font-size:36px;
                   font-weight:400;line-height:1.1;letter-spacing:-0.02em;color:{_INK};">{headline}</h1>
-        <p style="margin:0 0 24px;font-family:{_FONT_HINDI};font-size:17px;color:{_TEAL};font-weight:400;">{sanskrit}</p>
-        {f'<!-- lede --><p class="em__lede" style="margin:0 0 28px;font-family:{_FONT_UI};font-size:15px;line-height:1.65;color:{_INK2};">{lede}</p>' if lede else ''}
+        <p style="margin:0 0 24px;font-family:{_FONT_HINDI};font-size:18px;color:{_TEAL};font-weight:400;">{sanskrit}</p>
+        {f'<!-- lede --><p class="em__lede" style="margin:0 0 24px;font-family:{_FONT_UI};font-size:16px;line-height:1.65;color:{_INK2};">{lede}</p>' if lede else ''}
       </td></tr>
       <!-- body rows -->
       {body_rows}
@@ -188,24 +188,36 @@ def _task_card(task_title: str, project: str = None, priority: str = None,
             f'border:1px solid {_RULE};border-radius:10px;overflow:hidden;">{rows}</table></td></tr>')
 
 
-def _cta_row(primary_url: str, primary_label: str, primary_color: str = _DEEP,
+_GRAD_PRIMARY = "linear-gradient(90deg,#0082c6,#03a1b6,#05b7aa)"
+_GRAD_APPROVE = "linear-gradient(135deg,#0A7A6E,#13a895)"
+_RULE_STRONG  = "#C8C0AA"
+
+def _cta_row(primary_url: str, primary_label: str, primary_style: str = "primary",
              ghost_url: str = None, ghost_label: str = None) -> str:
+    if primary_style == "approve":
+        btn_bg     = _GRAD_APPROVE
+        btn_shadow = "0 4px 14px -4px rgba(10,122,110,.5)"
+    else:
+        btn_bg     = _GRAD_PRIMARY
+        btn_shadow = "0 4px 14px -4px rgba(0,130,198,.5),0 1px 0 rgba(255,255,255,.15) inset"
+
     ghost_cell = ""
     if ghost_url:
         ghost_cell = (f'<td class="em__cta-cell" align="center" style="padding:0 0 0 12px;">'
                       f'<a class="em__cta-btn" href="{ghost_url}" '
                       f'style="font-family:{_FONT_UI};font-size:14px;font-weight:600;'
-                      f'color:{_INK2};text-decoration:none;border:1.5px solid {_RULE};'
+                      f'color:{_INK};text-decoration:none;border:1px solid {_RULE_STRONG};'
                       f'border-radius:8px;padding:13px 22px;display:inline-block;'
-                      f'background:{_SURFACE};min-width:140px;text-align:center;">'
+                      f'background:transparent;min-width:140px;text-align:center;letter-spacing:0.005em;">'
                       f'{ghost_label}</a></td>')
-    return (f'<tr><td style="padding:4px 36px 28px;"><table cellpadding="0" cellspacing="0" border="0">'
+    return (f'<tr><td style="padding:28px 36px 20px;"><table cellpadding="0" cellspacing="0" border="0">'
             f'<tr>'
             f'<td class="em__cta-cell" align="center">'
             f'<a class="em__cta-btn" href="{primary_url}" '
             f'style="font-family:{_FONT_UI};font-size:14px;font-weight:600;color:#ffffff;'
-            f'text-decoration:none;background:{primary_color};border-radius:8px;'
-            f'padding:13px 24px;display:inline-block;min-width:140px;text-align:center;">'
+            f'text-decoration:none;background:{btn_bg};border-radius:8px;'
+            f'padding:13px 22px;display:inline-block;min-width:140px;text-align:center;'
+            f'letter-spacing:0.005em;box-shadow:{btn_shadow};">'
             f'{primary_label}</a></td>'
             f'{ghost_cell}'
             f'</tr></table></td></tr>')
@@ -252,26 +264,28 @@ def _info_card(rows: list[tuple[str, str]], hindi_sub: dict[str, str] = None) ->
     """
     hindi_sub = hindi_sub or {}
 
-    def _row(label, value, is_last=False):
+    n = len(rows)
+    def _row(i, label, value):
+        is_first = (i == 0)
+        is_last  = (i == n - 1)
+        pt = "0"   if is_first else "8px"
+        pb = "0"   if is_last  else "8px"
         border = "" if is_last else f"border-bottom:1px dashed {_RULE};"
         sub = ""
         if label in hindi_sub:
             sub = (f'<span style="display:block;font-family:{_FONT_HINDI};'
-                   f'font-size:12px;color:{_INK3};margin-top:2px;">{_h(hindi_sub[label])}</span>')
+                   f'font-size:13px;color:{_INK3};margin-top:2px;">{_h(hindi_sub[label])}</span>')
         return (
             f'<tr>'
-            f'<td style="padding:8px 0;font-family:{_FONT_UI};font-size:10.5px;'
+            f'<td style="padding:{pt} 0 {pb};font-family:{_FONT_UI};font-size:10.5px;'
             f'letter-spacing:0.16em;text-transform:uppercase;color:{_INK3};font-weight:700;'
             f'vertical-align:top;{border}white-space:nowrap;">{label}</td>'
-            f'<td style="padding:8px 0;font-family:{_FONT_UI};font-size:14px;color:{_INK};'
+            f'<td style="padding:{pt} 0 {pb};font-family:{_FONT_UI};font-size:14px;color:{_INK};'
             f'font-weight:500;text-align:right;vertical-align:top;{border}">{_h(value)}{sub}</td>'
             f'</tr>'
         )
 
-    inner = "".join(
-        _row(lbl, val, is_last=(i == len(rows) - 1))
-        for i, (lbl, val) in enumerate(rows)
-    )
+    inner = "".join(_row(i, lbl, val) for i, (lbl, val) in enumerate(rows))
     return (
         f'<tr><td style="padding:0 36px 28px;">'
         f'<table width="100%" cellpadding="0" cellspacing="0" border="0"'
@@ -309,7 +323,7 @@ def send_invite_email(to_email: str, inviter_name: str, role: str,
                    f'on <strong>Kartavya</strong> — the task workspace where '
                    f'{_h(workspace_name)}\'s team plans projects, files GST returns, and ships client work.')
         + card
-        + _cta_row(invite_url, "Accept invite", _TEAL, workspace_url, "View workspace")
+        + _cta_row(invite_url, "Accept invite", "primary", workspace_url, "View workspace")
         + _body_text(f'<span style="font-size:12.5px;color:{_INK3};">The invite link expires in '
                      f'7 days. If you weren\'t expecting this email, you can safely ignore it.</span>')
     )
@@ -373,7 +387,7 @@ def send_welcome_email(user_email: str, user_name: str,
                    f'Here\'s the shortest path to doing <em style="font-family:{_FONT_DISP};'
                    f'font-style:italic;color:{_DEEP};">what must be done</em> on day one.')
         + steps
-        + _cta_row(f"{FRONTEND_URL}/dashboard", "Open Kartavya", _TEAL,
+        + _cta_row(f"{FRONTEND_URL}/dashboard", "Open Kartavya", "primary",
                    f"{FRONTEND_URL}/dashboard", "Read the quickstart")
         + gita_block
     )
@@ -414,7 +428,7 @@ def send_approval_request_email(user_email: str, user_name: str,
                    f'<strong>{_h(requester_name)}</strong> has submitted a new request that needs your approval.')
         + card
         + note_html
-        + _cta_row(approve_url, "Approve &amp; queue", _OK_BORDER,
+        + _cta_row(approve_url, "Approve &amp; queue", "approve",
                    reject_url, "Decline with reason")
         + _body_text(f'<span style="font-size:12.5px;color:{_INK3};">Approving moves this task to '
                      f'<strong>To do</strong> and notifies the assignees. {_h(requester_name.split()[0])} gets an email either way.</span>')
@@ -448,7 +462,7 @@ def send_request_approved_email(user_email: str, user_name: str,
         + _body_text(f'<span style="font-size:14.5px;color:{_INK2};">'
                      f'<strong>What happens next:</strong> work starts within one business day. '
                      f'You\'ll get another email when it\'s marked complete and ready for your review.</span>')
-        + _cta_row(task_url, "View task", _TEAL, f"{FRONTEND_URL}/client/projects", "Open portal")
+        + _cta_row(task_url, "View task", "primary", f"{FRONTEND_URL}/client/projects", "Open portal")
     )
     return send_email(
         user_email,
@@ -501,7 +515,7 @@ def send_task_done_email(user_email: str, user_name: str,
         + card
         + note_html
         + attach_html
-        + _cta_row(approve_url, "Approve &amp; close", _OK_BORDER,
+        + _cta_row(approve_url, "Approve &amp; close", "approve",
                    reject_url, "Send back with notes")
     )
     return send_email(
@@ -522,7 +536,7 @@ def send_task_assignment_email(user_email: str, user_name: str,
     body = (
         _body_text(f'Hi <strong>{first_name}</strong>, you have been assigned a new task{team_info}.')
         + _task_card(task_title)
-        + _cta_row(task_url, "View Task", _DEEP)
+        + _cta_row(task_url, "View Task", "primary")
     )
     return send_email(
         user_email,
@@ -545,7 +559,7 @@ def send_comment_email(user_email: str, user_name: str, actor_name: str,
            f' style="background:{_BG};border-left:3px solid {_RULE};border-radius:0 8px 8px 0;">'
            f'<tr><td style="padding:14px 18px;font-family:{_FONT_UI};font-size:14px;'
            f'color:{_INK2};font-style:italic;line-height:1.6;">{preview}</td></tr></table></td></tr>')
-        + _cta_row(task_url, "View Comment", _DEEP)
+        + _cta_row(task_url, "View Comment", "primary")
     )
     return send_email(
         user_email,
@@ -568,7 +582,7 @@ def send_mention_email(user_email: str, user_name: str, actor_name: str,
            f' style="background:{_BG};border-left:3px solid {_TEAL};border-radius:0 8px 8px 0;">'
            f'<tr><td style="padding:14px 18px;font-family:{_FONT_UI};font-size:14px;'
            f'color:{_INK2};font-style:italic;line-height:1.6;">{preview}</td></tr></table></td></tr>')
-        + _cta_row(task_url, "View Task", _TEAL)
+        + _cta_row(task_url, "View Task", "primary")
     )
     return send_email(
         user_email,
@@ -586,7 +600,7 @@ def send_task_reminder_email(user_email: str, user_name: str,
     body = (
         _body_text(f'Hi <strong>{first_name}</strong>, your task is due soon:')
         + _task_card(task_title, due_date=due_date)
-        + _cta_row(task_url, "View Task", _WARN_BORD)
+        + _cta_row(task_url, "View Task", "primary")
     )
     return send_email(
         user_email,
@@ -606,7 +620,7 @@ def send_team_sync_email(user_email: str, user_name: str, client_name: str,
                    f'<strong>{_h(client_name)}</strong> has approved the task. '
                    f'It has been moved to Done.')
         + _task_card(task_title)
-        + _cta_row(task_url, "View Task", _OK_BORDER)
+        + _cta_row(task_url, "View Task", "approve")
     )
     return send_email(
         user_email,
@@ -630,7 +644,7 @@ def send_approval_decision_email(user_email: str, user_name: str, reviewer_name:
         _body_text(f'Hi <strong>{first_name}</strong>, '
                    f'<strong>{_h(reviewer_name)}</strong> has <strong>{verb}</strong> your task:')
         + _task_card(task_title, note=notes)
-        + _cta_row(task_url, "View Task", color)
+        + _cta_row(task_url, "View Task", "approve" if approved else "primary")
     )
     return send_email(
         user_email,
