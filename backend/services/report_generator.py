@@ -373,7 +373,10 @@ def _build_html(data: dict, team_name: str, period_from: str, period_to: str) ->
 
 
 def generate_pdf(data: dict, team_name: str, period_from: str, period_to: str) -> bytes:
-    from weasyprint import HTML, CSS
+    try:
+        from weasyprint import HTML
+    except ImportError as e:
+        raise RuntimeError("WeasyPrint is not available on this server") from e
     html = _build_html(data, team_name, period_from, period_to)
     return HTML(string=html, base_url=None).write_pdf()
 
