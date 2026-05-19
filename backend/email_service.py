@@ -288,10 +288,11 @@ def send_invite_email(to_email: str, inviter_name: str, role: str,
     invite_url    = f"{FRONTEND_URL}/accept-invite?token={invite_token}"
     workspace_url = f"{FRONTEND_URL}/dashboard"
     role_label    = role.capitalize()
-    inviter_first = inviter_name.split()[0] if inviter_name else "Someone"
-    recip_first   = recipient_name.split()[0] if recipient_name else ""
-    greeting      = f'Hi <strong>{_h(recip_first)}</strong>, ' if recip_first else ''
-    preheader     = f"{inviter_name} invited you to {workspace_name} on Kartavya — accept within {expires_label}."
+    inviter_first    = inviter_name.split()[0] if inviter_name else "Someone"
+    workspace_short  = workspace_name.split()[0] if workspace_name else workspace_name
+    recip_first      = recipient_name.split()[0] if recipient_name else ""
+    greeting         = f'Hi <strong>{_h(recip_first)}</strong>, ' if recip_first else ''
+    preheader        = f"{inviter_name} invited you to {workspace_name} on Kartavya — accept within {expires_label}."
 
     card = _info_card(
         [
@@ -306,8 +307,7 @@ def send_invite_email(to_email: str, inviter_name: str, role: str,
     body = (
         _body_text(f'{greeting}<strong>{_h(inviter_name)}</strong> has invited you to collaborate '
                    f'on <strong>Kartavya</strong> — the task workspace where '
-                   f'{_h(workspace_name)}\'s team plans projects, tracks deadlines, and ships client work. '
-                   f'Accept below to get started.')
+                   f'{_h(workspace_name)}\'s team plans projects, files GST returns, and ships client work.')
         + card
         + _cta_row(invite_url, "Accept invite", _TEAL, workspace_url, "View workspace")
         + _body_text(f'<span style="font-size:12.5px;color:{_INK3};">The invite link expires in '
@@ -317,7 +317,7 @@ def send_invite_email(to_email: str, inviter_name: str, role: str,
         to_email,
         f"{inviter_name} invited you to {workspace_name} on Kartavya",
         _base(preheader, "YOU'RE INVITED",
-              f"{_h(inviter_first)} invited you to {_h(workspace_name)} Workspace.",
+              f"{_h(inviter_first)} invited you to {_h(workspace_short)} Workspace.",
               "आपका स्वागत है", "", body),
         reply_to=None,
     )
