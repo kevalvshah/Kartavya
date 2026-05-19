@@ -691,6 +691,21 @@ async def get_team(team_id:str,pool=Depends(get_db),user=Depends(require_user)):
         WHERE tm.team_id=$1 ORDER BY tm.created_at ASC""",team_id)
     return {"team":dict(team),"members":[dict(m) for m in members],"your_role":mem["role"]}
 
+@api_router.get("/teams/{team_id}/clients")
+async def list_team_clients(team_id:str,pool=Depends(get_db),user=Depends(require_user)):
+    """Returns users with role='client' in the team — for the send-to-client dropdown."""
+    mem=await is_project_member(pool,team_id,user)
+    if not mem: raise HTTPException(403,"Not a team member")
+    rows=await pool.fetch("""
+        SELECT tm.user_id, COALESCE(u.full_name,u.name,u.email) AS display_name, u.email
+        FROM team_members tm
+        LEFT JOIN users u ON u.user_id=tm.user_id
+        WHERE tm.team_id=$1 AND tm.status='active' AND tm.user_id IS NOT NULL
+          AND tm.role='client'
+        ORDER BY display_name ASC
+    """,team_id)
+    return [dict(r) for r in rows]
+
 @api_router.get("/teams/{team_id}/members")
 async def list_team_members(team_id:str,pool=Depends(get_db),user=Depends(require_user)):
     """Returns member list for @mention autocomplete. Accessible to all project members incl. clients."""

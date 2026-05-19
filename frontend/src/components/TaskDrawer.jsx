@@ -96,7 +96,8 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
   const [approvalLoading,  setApprovalLoading]  = useState(false);
   const [approvalNotes,    setApprovalNotes]    = useState('');
   const [sendToClient,     setSendToClient]     = useState(false);
-  const [clientEmail,      setClientEmail]      = useState('');
+  const [clientList,       setClientList]       = useState([]);
+  const [clientUserId,     setClientUserId]     = useState('');
   const [showRejectInput,  setShowRejectInput]  = useState(false);
   const [rejectNote,       setRejectNote]       = useState('');
   const [showApprovePanel, setShowApprovePanel] = useState(false);
@@ -229,18 +230,29 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
     finally { setApprovalLoading(false); }
   };
 
+  const openApprovePanel = () => {
+    setShowApprovePanel(true);
+    setClientList([]); setClientUserId('');
+    if (task?.team_id) {
+      api.get(`/teams/${task.team_id}/clients`)
+        .then(r => setClientList(r.data || []))
+        .catch(() => {});
+    }
+  };
+
   const approveTask = async () => {
     setApprovalLoading(true);
     const approvalId = `task_approval::${taskId}`;
+    const selected = clientList.find(c => c.user_id === clientUserId);
     try {
       const res = await api.post(`/approvals/${approvalId}/review`, {
         status: 'approved',
         notes: approvalNotes,
-        send_to_client: sendToClient,
-        client_email: sendToClient ? clientEmail : '',
+        send_to_client: !!selected,
+        client_email: selected ? selected.email : '',
       });
       setTask(t => ({ ...t, approval_status: res.data.status }));
-      setShowApprovePanel(false); setApprovalNotes(''); setSendToClient(false); setClientEmail('');
+      setShowApprovePanel(false); setApprovalNotes(''); setSendToClient(false); setClientUserId('');
       if (res.data.status !== 'pending_client') onSaved?.({ ...task, approval_status: res.data.status });
     } catch (e) { console.error(e); }
     finally { setApprovalLoading(false); }
@@ -429,7 +441,7 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
                   {/* Admin: approve/reject when pending */}
                   {isOwnerAdmin && task.approval_status === 'pending' && !showApprovePanel && !showRejectInput && (
                     <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
-                      <button className="k-btn k-btn--primary k-btn--sm" onClick={() => setShowApprovePanel(true)}>✓ Approve</button>
+                      <button className="k-btn k-btn--primary k-btn--sm" onClick={openApprovePanel}>✓ Approve</button>
                       <button className="k-btn k-btn--ghost k-btn--sm" onClick={() => setShowRejectInput(true)}
                         style={{ color: 'var(--k-danger)' }}>✕ Reject</button>
                     </div>
@@ -441,20 +453,26 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
                       <textarea value={approvalNotes} onChange={e => setApprovalNotes(e.target.value)}
                         placeholder="Notes (optional)…" rows={2} className="k-input"
                         style={{ width: '100%', resize: 'none', boxSizing: 'border-box', fontSize: 12 }} />
-                      <label style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, cursor: 'pointer' }}>
-                        <input type="checkbox" checked={sendToClient} onChange={e => setSendToClient(e.target.checked)} />
-                        Send to client for approval
-                      </label>
-                      {sendToClient && (
-                        <input type="email" value={clientEmail} onChange={e => setClientEmail(e.target.value)}
-                          placeholder="client@example.com" className="k-input"
-                          style={{ fontSize: 12, boxSizing: 'border-box', width: '100%' }} />
-                      )}
+                      <div>
+                        <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--ink-3)', marginBottom: 5 }}>Send to client for approval?</div>
+                        {clientList.length === 0 ? (
+                          <div style={{ fontSize: 11, color: 'var(--ink-3)', fontStyle: 'italic' }}>No clients on this project.</div>
+                        ) : (
+                          <select value={clientUserId} onChange={e => setClientUserId(e.target.value)}
+                            className="k-input" style={{ width: '100%', fontSize: 12, boxSizing: 'border-box' }}>
+                            <option value="">— Skip, mark as Done —</option>
+                            {clientList.map(c => (
+                              <option key={c.user_id} value={c.user_id}>
+                                {c.display_name}{c.email ? ` (${c.email})` : ''}
+                              </option>
+                            ))}
+                          </select>
+                        )}
+                      </div>
                       <div style={{ display: 'flex', gap: 6 }}>
                         <button className="k-btn k-btn--ghost k-btn--sm" onClick={() => setShowApprovePanel(false)}>Cancel</button>
-                        <button className="k-btn k-btn--primary k-btn--sm" onClick={approveTask}
-                          disabled={approvalLoading || (sendToClient && !clientEmail.trim())}>
-                          {approvalLoading ? '…' : sendToClient ? '✓ Approve & Send to Client' : '✓ Approve & Done'}
+                        <button className="k-btn k-btn--primary k-btn--sm" onClick={approveTask} disabled={approvalLoading}>
+                          {approvalLoading ? '…' : clientUserId ? '✓ Approve & Send to Client' : '✓ Approve & Done'}
                         </button>
                       </div>
                     </div>

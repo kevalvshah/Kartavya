@@ -19,9 +19,10 @@ export default function ApprovalsPage() {
   const [loading,     setLoading]     = useState(true);
   const [deciding,    setDeciding]    = useState({});
   // Client-send modal state
-  const [clientModal, setClientModal] = useState(null); // { approvalId } | null
-  const [clientEmail, setClientEmail] = useState('');
-  const [sendNotes,   setSendNotes]   = useState('');
+  const [clientModal,   setClientModal]   = useState(null); // { approvalId, team_id } | null
+  const [clientList,    setClientList]    = useState([]);
+  const [clientUserId,  setClientUserId]  = useState('');
+  const [sendNotes,     setSendNotes]     = useState('');
   const [rejectModal, setRejectModal] = useState(null); // { approvalId } | null
   const [rejectNote,  setRejectNote]  = useState('');
   const user     = currentUser();
@@ -58,11 +59,16 @@ export default function ApprovalsPage() {
     }
   };
 
-  const openApproveFlow = (approvalId) => {
+  const openApproveFlow = (approvalId, teamId) => {
     // Only task-level approvals get the client-send choice
     if (approvalId.startsWith('task_approval::')) {
-      setClientEmail(''); setSendNotes('');
-      setClientModal({ approvalId });
+      setClientUserId(''); setSendNotes(''); setClientList([]);
+      setClientModal({ approvalId, teamId });
+      if (teamId) {
+        api.get(`/teams/${teamId}/clients`)
+          .then(r => setClientList(r.data || []))
+          .catch(() => {});
+      }
     } else {
       decide(approvalId, 'approved');
     }
@@ -75,9 +81,10 @@ export default function ApprovalsPage() {
 
   const confirmApproveWithClient = async () => {
     const { approvalId } = clientModal;
+    const selected = clientList.find(c => c.user_id === clientUserId);
     setClientModal(null);
-    if (clientEmail.trim()) {
-      await decide(approvalId, 'approved', { send_to_client: true, client_email: clientEmail.trim(), notes: sendNotes });
+    if (selected) {
+      await decide(approvalId, 'approved', { send_to_client: true, client_email: selected.email, notes: sendNotes });
     } else {
       await decide(approvalId, 'approved', { send_to_client: false, notes: sendNotes });
     }
@@ -174,7 +181,7 @@ export default function ApprovalsPage() {
                     <div className="k-approval-row__actions">
                       <button
                         className="k-btn k-btn--primary k-btn--sm"
-                        onClick={() => openApproveFlow(r.approval_id)}
+                        onClick={() => openApproveFlow(r.approval_id, r.team_id)}
                         disabled={isDeciding}
                       >
                         {isDeciding ? '…' : '✓ Approve'}
@@ -257,24 +264,35 @@ export default function ApprovalsPage() {
             </div>
 
             <div style={{ padding: '14px 16px', background: 'var(--bg-soft)', borderRadius: 'var(--r-md)', border: '1px solid var(--rule)', marginBottom: 20 }}>
-              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink-2)', marginBottom: 8 }}>Send for client approval?</div>
+              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink-2)', marginBottom: 6 }}>Send for client approval?</div>
               <div style={{ fontSize: 12, color: 'var(--ink-3)', marginBottom: 10 }}>
-                Leave blank to move task to Done. Enter a client email to send them an approval link.
+                Select a client to send them an approval link, or leave blank to mark as Done.
               </div>
-              <input
-                type="email"
-                value={clientEmail}
-                onChange={e => setClientEmail(e.target.value)}
-                placeholder="client@example.com (optional)"
-                className="k-input"
-                style={{ width: '100%', boxSizing: 'border-box', fontSize: 13 }}
-              />
+              {clientList.length === 0 ? (
+                <div style={{ fontSize: 12, color: 'var(--ink-3)', fontStyle: 'italic' }}>
+                  No clients added to this project yet.
+                </div>
+              ) : (
+                <select
+                  value={clientUserId}
+                  onChange={e => setClientUserId(e.target.value)}
+                  className="k-input"
+                  style={{ width: '100%', boxSizing: 'border-box', fontSize: 13 }}
+                >
+                  <option value="">— Skip client approval —</option>
+                  {clientList.map(c => (
+                    <option key={c.user_id} value={c.user_id}>
+                      {c.display_name}{c.email ? ` (${c.email})` : ''}
+                    </option>
+                  ))}
+                </select>
+              )}
             </div>
 
             <div style={{ display: 'flex', gap: 10 }}>
               <button className="k-btn k-btn--ghost" onClick={() => setClientModal(null)} style={{ flex: 1 }}>Cancel</button>
               <button className="k-btn k-btn--primary" onClick={confirmApproveWithClient} style={{ flex: 2 }}>
-                {clientEmail.trim() ? '✓ Approve & Send to Client' : '✓ Approve & Mark Done'}
+                {clientUserId ? '✓ Approve & Send to Client' : '✓ Approve & Mark Done'}
               </button>
             </div>
           </div>
