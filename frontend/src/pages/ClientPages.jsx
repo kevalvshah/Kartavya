@@ -1,33 +1,112 @@
 /** ClientProjectsPage, ClientProjectBoardPage, ClientPortal */
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { api } from '../lib/api';
 import { K, KLogo, KWordmark } from '../lib/brand';
-import { apiLogout, formatDue } from '../lib/auth';
+import { apiLogout, currentUser } from '../lib/auth';
 import { useToast } from '../components/ui/toast';
-import { PageHeader, DueChip, StatusChip } from '../components/editorial';
+import { PageHeader, StatTile } from '../components/editorial';
+import KanbanView from '../components/views/KanbanView';
+import TaskEditor from '../components/TaskEditor';
+import { useRealtimeTasks } from '../hooks/useRealtimeTasks';
+import { useFields } from '../hooks/useFields';
+
+const STATUS_LABEL = { requested: 'Requested', todo: 'To Do', in_progress: 'In Progress', in_review: 'In Review', done: 'Done', rejected: 'Declined' };
+const STATUS_COLOR = { requested: '#f59e0b', todo: '#0082c6', in_progress: '#05b7aa', in_review: '#8b5cf6', done: '#10b981', rejected: '#ef4444' };
+
+function relTime(ts) {
+  if (!ts) return '';
+  const d = Math.round((Date.now() - new Date(ts)) / 60000);
+  if (d < 60) return `${d}m ago`;
+  if (d < 1440) return `${Math.round(d/60)}h ago`;
+  return `${Math.round(d/1440)}d ago`;
+}
 
 export function ClientProjectsPage() {
-  const [projects, setProjects] = useState([]);
+  const [projects,    setProjects]    = useState([]);
+  const [allTasks,    setAllTasks]    = useState([]);
+  const [clientApprovals, setClientApprovals] = useState([]);
+  const [newTaskEditor, setNewTaskEditor] = useState({ open: false });
   const navigate     = useNavigate();
   const { pushToast } = useToast();
 
   useEffect(() => {
-    api.get('/client/projects').then(r => setProjects(r.data)).catch(() => {
-      pushToast({ type: 'error', title: 'Failed to load projects' });
+    Promise.all([
+      api.get('/client/projects'),
+      api.get('/client/tasks'),
+      api.get('/client/approvals'),
+    ]).then(([pr, t, a]) => {
+      setProjects(pr.data || []);
+      setAllTasks(t.data || []);
+      setClientApprovals(a.data || []);
+    }).catch(() => {
+      pushToast({ type: 'error', title: 'Failed to load' });
     });
   }, [pushToast]);
+
+  const myRequests     = allTasks.filter(t => t.status === 'requested' || t.status === 'rejected');
+  const activeTasks    = allTasks.filter(t => ['todo','in_progress','in_review'].includes(t.status));
+  const pendingApprovals = clientApprovals.filter(a => a.approval_id?.startsWith('task_approval::') && a.approval_status === 'pending_client');
+  const doneThisWeek   = allTasks.filter(t => {
+    if (t.status !== 'done' || !t.updated_at) return false;
+    return (Date.now() - new Date(t.updated_at)) < 7 * 86400000;
+  });
 
   return (
     <div className="k-screen">
       <PageHeader
-        kicker="CLIENT"
+        kicker="WORK"
         title="My Projects"
-        sanskrit="परियोजना"
-        lede="Projects shared with you — track progress and approvals."
+        sanskrit="परियोजनाएँ"
+        lede="Projects you're collaborating on with the team."
+        right={
+          <button className="k-btn k-btn--primary k-btn--sm" onClick={() => setNewTaskEditor({ open: true })}>
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2"><path d="M8 3v10M3 8h10"/></svg>
+            New request
+          </button>
+        }
       />
 
-      {projects.length === 0 && (
+      {/* Stat row */}
+      <div className="k-stats">
+        <StatTile variant="blue"  label="OPEN REQUESTS"         value={myRequests.filter(t => t.status === 'requested').length} sub="awaiting team approval" />
+        <StatTile variant="teal"  label="IN PROGRESS"           value={activeTasks.length}      sub="across all projects" />
+        <StatTile variant="amber" label="AWAITING YOUR APPROVAL" value={pendingApprovals.length} sub="work to review" />
+        <StatTile variant="ok"    label="DONE THIS WEEK"        value={doneThisWeek.length}     sub="completed for you" />
+      </div>
+
+      {/* My requests card */}
+      {myRequests.length > 0 && (
+        <section className="k-card" style={{ padding: 0, overflow: 'hidden', marginBottom: 24 }}>
+          <header className="k-card__head" style={{ padding: '16px 24px' }}>
+            <div className="k-card__titles">
+              <h3 className="k-card__title">My requests</h3>
+              <span className="k-card__sans">मेरे अनुरोध</span>
+            </div>
+          </header>
+          <div className="k-card__body" style={{ padding: 0 }}>
+            {myRequests.map((t, i) => (
+              <div key={t.task_id} className="k-approval-row" style={i < myRequests.length - 1 ? { borderBottom: '1px solid var(--rule-soft)' } : {}}>
+                <div className="k-approval-row__main">
+                  <div className="k-approval-row__body">
+                    <div className="k-approval-row__title">{t.title}</div>
+                    {t.description && <div className="k-approval-row__desc">{t.description}</div>}
+                    <div className="k-approval-row__meta">
+                      <span className="k-mute">{relTime(t.created_at || t.updated_at)}</span>
+                    </div>
+                  </div>
+                </div>
+                <span className="k-statuschip" style={{ '--c': STATUS_COLOR[t.status] || '#888' }}>
+                  <span className="k-statuschip__dot" />
+                  {STATUS_LABEL[t.status] || t.status}
+                </span>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {projects.length === 0 && myRequests.length === 0 && (
         <div className="k-empty">
           <div className="k-empty__icon">📂</div>
           <div className="k-empty__title">No projects yet</div>
@@ -53,39 +132,71 @@ export function ClientProjectsPage() {
           </div>
         ))}
       </div>
+
+      <TaskEditor
+        open={newTaskEditor.open}
+        onOpenChange={(v) => { if (!v) setNewTaskEditor({ open: false }); }}
+        editing={null}
+        teams={projects}
+        defaultTeamId={projects[0]?.team_id || ''}
+        lockToProject={false}
+        clientMode
+        onSaved={() => {
+          setNewTaskEditor({ open: false });
+          api.get('/client/tasks').then(r => setAllTasks(r.data || [])).catch(() => {});
+        }}
+      />
     </div>
   );
 }
 
 export function ClientProjectBoardPage() {
-  const { projectId } = useParams();
+  const { projectId }  = useParams();
   const navigate       = useNavigate();
   const { pushToast }  = useToast();
-  const [project,  setProject]  = useState(null);
-  const [tasks,    setTasks]    = useState([]);
-  const [columns,  setColumns]  = useState([]);
+  const me             = currentUser();
 
-  useEffect(() => {
-    Promise.all([
-      api.get(`/teams/${projectId}`),
-      api.get('/tasks', { params: { team_id: projectId } }),
-      api.get(`/projects/${projectId}/columns`),
-    ]).then(([pr, t, c]) => {
-      setProject(pr.data); setTasks(t.data); setColumns(c.data);
-    }).catch(() => {
+  const [project,     setProject]     = useState(null);
+  const [rawTasks,    setRawTasks]    = useState([]);
+  const [columns,     setColumns]     = useState([]);
+  const [teamMembers, setTeamMembers] = useState([]);
+  const [loading,     setLoading]     = useState(true);
+  const [newTaskEditor, setNewTaskEditor] = useState({ open: false, columnId: null });
+
+  const { fieldDefs }       = useFields(projectId);
+  const { tasks, setTasks } = useRealtimeTasks(projectId, rawTasks);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [pr, c, t] = await Promise.all([
+        api.get(`/teams/${projectId}`),
+        api.get(`/projects/${projectId}/columns`),
+        api.get('/tasks', { params: { team_id: projectId } }),
+      ]);
+      setProject(pr.data);
+      setColumns(c.data || []);
+      setRawTasks(t.data || []);
+      setTeamMembers(pr.data.members || []);
+    } catch {
       pushToast({ type: 'error', title: 'Failed to load project' });
       navigate('/client/projects');
-    });
+    } finally {
+      setLoading(false);
+    }
   }, [projectId, navigate, pushToast]);
 
-  const grouped = useMemo(() => {
-    const g = {};
-    columns.forEach(c => { g[c.column_id] = []; });
-    tasks.forEach(t => { if (g[t.column_id]) g[t.column_id].push(t); });
-    return g;
-  }, [tasks, columns]);
+  useEffect(() => { load(); }, [load]);
 
   const projectName = project?.team?.name || project?.name || '…';
+
+  if (loading) return (
+    <div className="k-screen">
+      <div style={{ padding: '40px 0', textAlign: 'center', color: 'var(--ink-3)', fontFamily: 'var(--font-display)', fontStyle: 'italic' }}>
+        Loading board…
+      </div>
+    </div>
+  );
 
   return (
     <div className="k-screen">
@@ -93,45 +204,54 @@ export function ClientProjectBoardPage() {
         kicker="CLIENT"
         title={projectName}
         sanskrit=""
-        lede="Your tasks — read-only view."
+        lede="Collaborate on tasks — request new work, approve items sent to you."
         right={
-          <button className="k-link" style={{ fontSize: 13 }} onClick={() => navigate('/client/projects')}>
-            ← Projects
-          </button>
+          <div className="k-headerright">
+            <button
+              className="k-btn k-btn--primary k-btn--sm"
+              onClick={() => setNewTaskEditor({ open: true, columnId: columns[0]?.column_id || null })}
+            >
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M8 3v10M3 8h10"/>
+              </svg>
+              Request task
+            </button>
+            <button className="k-link" style={{ fontSize: 13 }} onClick={() => navigate('/client/projects')}>
+              ← Projects
+            </button>
+          </div>
         }
       />
 
-      {/* Kanban columns scroll */}
-      <div style={{ display: 'flex', gap: 16, overflowX: 'auto', paddingBottom: 16 }}>
-        {columns.map(col => (
-          <div
-            key={col.column_id}
-            className="k-card"
-            style={{ minWidth: 260, maxWidth: 280, flexShrink: 0, padding: 0, overflow: 'hidden', borderTopWidth: 3, borderTopColor: col.color || 'var(--k-primary)' }}
-          >
-            <div className="k-card__head" style={{ padding: '12px 16px' }}>
-              <div className="k-card__titles">
-                <h3 className="k-card__title" style={{ fontSize: 14 }}>{col.name}</h3>
-                <span className="k-segctrl__count">{(grouped[col.column_id] || []).length}</span>
-              </div>
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '8px 12px 12px' }}>
-              {(grouped[col.column_id] || []).map(t => (
-                <div key={t.task_id} style={{ background: 'var(--bg-soft)', borderRadius: 'var(--r-md)', padding: '10px 14px', border: '1px solid var(--rule-soft)' }}>
-                  <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--ink)', marginBottom: 4 }}>{t.title}</div>
-                  {t.description && (
-                    <div style={{ fontSize: 12, color: 'var(--ink-3)', marginBottom: 6, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{t.description}</div>
-                  )}
-                  {t.due_at && <DueChip date={t.due_at} />}
-                </div>
-              ))}
-              {(grouped[col.column_id] || []).length === 0 && (
-                <div style={{ fontSize: 12, color: 'var(--ink-faint)', fontStyle: 'italic', padding: '4px 2px' }}>Empty</div>
-              )}
-            </div>
-          </div>
-        ))}
-      </div>
+      <KanbanView
+        columns={columns}
+        tasks={tasks}
+        fieldDefs={fieldDefs}
+        teamMembers={teamMembers}
+        onTasksChange={setTasks}
+        onColumnChange={(action, colId) => {
+          if (action === 'new_task') setNewTaskEditor({ open: true, columnId: colId });
+        }}
+        showRequested
+        showClientApproval
+        currentUserId={me?.user_id}
+        currentUserRole={me?.role}
+      />
+
+      <TaskEditor
+        open={newTaskEditor.open}
+        onOpenChange={(v) => { if (!v) setNewTaskEditor({ open: false, columnId: null }); }}
+        editing={null}
+        teams={[]}
+        defaultTeamId={projectId}
+        defaultColumnId={newTaskEditor.columnId}
+        lockToProject
+        clientMode
+        onSaved={() => {
+          setNewTaskEditor({ open: false, columnId: null });
+          load();
+        }}
+      />
     </div>
   );
 }

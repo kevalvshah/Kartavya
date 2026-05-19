@@ -18,6 +18,7 @@ export default function ApprovalsPage() {
   const [history,     setHistory]     = useState([]);
   const [loading,     setLoading]     = useState(true);
   const [deciding,    setDeciding]    = useState({});
+  const [adminTab,    setAdminTab]    = useState('requests'); // 'requests' | 'work'
   // Client-send modal state
   const [clientModal,   setClientModal]   = useState(null); // { approvalId, team_id } | null
   const [clientList,    setClientList]    = useState([]);
@@ -93,12 +94,38 @@ export default function ApprovalsPage() {
   const confirmReject = async () => {
     const { approvalId } = rejectModal;
     setRejectModal(null);
-    await decide(approvalId, 'rejected', { notes: rejectNote });
+    if (isClient && approvalId?.startsWith('task_approval::')) {
+      await clientDecideTask(approvalId, 'rejected', rejectNote);
+    } else {
+      await decide(approvalId, 'rejected', { notes: rejectNote });
+    }
+  };
+
+  const clientDecideTask = async (approvalId, status, notes = '') => {
+    const taskId = approvalId.replace('task_approval::', '');
+    setDeciding(d => ({ ...d, [approvalId]: true }));
+    try {
+      const endpoint = status === 'approved'
+        ? `/tasks/${taskId}/client-approve`
+        : `/tasks/${taskId}/client-reject`;
+      await api.post(endpoint, { notes });
+      pushToast({ type: 'success', title: status === 'approved' ? 'Approved ✓' : 'Rejected' });
+      load();
+    } catch (e) {
+      pushToast({ type: 'error', title: 'Action failed', message: e?.response?.data?.detail || 'Try again' });
+    } finally {
+      setDeciding(d => { const n = { ...d }; delete n[approvalId]; return n; });
+    }
   };
 
   const today   = new Date(); today.setHours(0,0,0,0);
   const approved = history.filter(h => h.status === 'approved' && new Date(h.updated_at) >= today).length;
   const rejected = history.filter(h => h.status === 'rejected' && new Date(h.updated_at) >= today).length;
+
+  // Split admin requests into task-creation requests vs work approvals
+  const taskRequestRows = requests.filter(r => !r.approval_id?.startsWith('task_approval::'));
+  const workApprovalRows = requests.filter(r => r.approval_id?.startsWith('task_approval::'));
+  const activeTab = adminTab === 'requests' ? taskRequestRows : workApprovalRows;
 
   return (
     <div className="k-screen">
@@ -106,7 +133,7 @@ export default function ApprovalsPage() {
         kicker="REVIEW"
         title={isClient ? 'My Approvals' : 'Approvals'}
         sanskrit="अनुमोदन"
-        lede={isClient ? 'Track your requests and their status.' : 'Items waiting on you. Review, approve, or send back.'}
+        lede={isClient ? 'Tasks sent to you for approval + your submitted requests.' : 'Items waiting on you. Review, approve, or send back.'}
         right={
           !isClient && (
             <div className="k-approvals__counter">
@@ -126,13 +153,35 @@ export default function ApprovalsPage() {
         </div>
       )}
 
+      {/* Admin tabs */}
+      {!isClient && (
+        <div className="k-segctrl" style={{ marginBottom: 16 }}>
+          <button
+            className={'k-segctrl__btn' + (adminTab === 'requests' ? ' is-active' : '')}
+            onClick={() => setAdminTab('requests')}
+          >
+            Task requests
+            {taskRequestRows.length > 0 && <span className="k-segctrl__count">{taskRequestRows.length}</span>}
+            <span style={{ fontFamily: 'var(--font-hindi)', fontSize: 11, marginLeft: 4, color: 'var(--ink-faint)' }}>अनुरोध</span>
+          </button>
+          <button
+            className={'k-segctrl__btn' + (adminTab === 'work' ? ' is-active' : '')}
+            onClick={() => setAdminTab('work')}
+          >
+            Work approvals
+            {workApprovalRows.length > 0 && <span className="k-segctrl__count">{workApprovalRows.length}</span>}
+            <span style={{ fontFamily: 'var(--font-hindi)', fontSize: 11, marginLeft: 4, color: 'var(--ink-faint)' }}>कार्य</span>
+          </button>
+        </div>
+      )}
+
       {loading && (
         <div style={{ padding: '40px 0', textAlign: 'center', color: 'var(--ink-3)', fontFamily: 'var(--font-display)', fontStyle: 'italic' }}>
           Loading approvals…
         </div>
       )}
 
-      {!loading && requests.length === 0 && (
+      {!loading && (isClient ? requests : activeTab).length === 0 && (
         <div className="k-empty">
           <div className="k-empty__icon">✓</div>
           <div className="k-empty__title">All caught up</div>
@@ -141,16 +190,16 @@ export default function ApprovalsPage() {
       )}
 
       {/* Pending approvals card */}
-      {!loading && requests.length > 0 && (
+      {!loading && (isClient ? requests : activeTab).length > 0 && (
         <section className="k-card" style={{ padding: 0, overflow: 'hidden' }}>
           <header className="k-card__head" style={{ padding: '16px 24px' }}>
             <div className="k-card__titles">
-              <h3 className="k-card__title">Pending approval</h3>
+              <h3 className="k-card__title">{isClient ? 'Pending approval' : adminTab === 'requests' ? 'Pending task requests' : 'Pending work approvals'}</h3>
               <span className="k-card__sans">लंबित अनुमोदन</span>
             </div>
           </header>
           <div className="k-card__body" style={{ padding: 0 }}>
-            {requests.map((r) => {
+            {(isClient ? requests : activeTab).map((r) => {
               const data      = typeof r.request_data === 'string' ? JSON.parse(r.request_data) : (r.request_data || {});
               const title     = data?.title || r.task_title || 'Untitled task';
               const desc      = data?.description || r.notes || '';
@@ -196,10 +245,29 @@ export default function ApprovalsPage() {
                       </button>
                     </div>
                   )}
-                  {isClient && (
+                  {isClient && r.approval_id?.startsWith('task_approval::') && r.approval_status === 'pending_client' && (
+                    <div className="k-approval-row__actions">
+                      <button
+                        className="k-btn k-btn--primary k-btn--sm"
+                        onClick={() => clientDecideTask(r.approval_id, 'approved')}
+                        disabled={isDeciding}
+                      >
+                        {isDeciding ? '…' : '✓ Approve'}
+                      </button>
+                      <button
+                        className="k-btn k-btn--ghost k-btn--sm"
+                        onClick={() => openRejectFlow(r.approval_id)}
+                        disabled={isDeciding}
+                        style={{ color: 'var(--danger)' }}
+                      >
+                        ✕ Reject
+                      </button>
+                    </div>
+                  )}
+                  {isClient && !r.approval_id?.startsWith('task_approval::') && (
                     <span className="k-statuschip" style={{ '--c': '#f59e0b' }}>
                       <span className="k-statuschip__dot" />
-                      Pending
+                      Pending admin review
                     </span>
                   )}
                 </div>

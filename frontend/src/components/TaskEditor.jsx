@@ -17,6 +17,8 @@ export default function TaskEditor({
   defaultColumnId = null,
   lockToProject = false,
   onSaved,
+  // clientMode: POSTs to /client/tasks/request — task goes to admin for approval
+  clientMode = false,
 }) {
   const { pushToast } = useToast();
   const titleRef = useRef(null);
@@ -55,10 +57,15 @@ export default function TaskEditor({
     };
     if (!editing && defaultColumnId) payload.column_id = defaultColumnId;
     try {
-      const r = editing
-        ? await api.put(`/tasks/${editing.task_id}`, payload)
-        : await api.post('/tasks', payload);
-      pushToast({ type: 'success', title: editing ? 'Task updated' : 'Task created' });
+      let r;
+      if (editing) {
+        r = await api.put(`/tasks/${editing.task_id}`, payload);
+      } else if (clientMode) {
+        r = await api.post('/client/tasks/request', payload);
+      } else {
+        r = await api.post('/tasks', payload);
+      }
+      pushToast({ type: 'success', title: editing ? 'Task updated' : clientMode ? 'Task submitted for approval' : 'Task created' });
       onSaved(r.data);
       onOpenChange(false);
     } catch (e) {
@@ -76,7 +83,7 @@ export default function TaskEditor({
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 4 }}>
             <div>
               <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--k-primary)', marginBottom: 2 }}>
-                {editing ? 'EDIT TASK · संपादन' : 'NEW TASK · नया कार्य'}
+                {editing ? 'EDIT TASK · संपादन' : clientMode ? 'REQUEST TASK · अनुरोध' : 'NEW TASK · नया कार्य'}
               </div>
               <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 400, color: 'var(--ink)' }}>
                 {editing ? 'Edit task' : 'What needs doing?'}

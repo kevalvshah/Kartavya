@@ -427,15 +427,32 @@ async def remove_client_from_task(task_id:str,target_user_id:str,pool=Depends(ge
     await pool.execute("DELETE FROM task_clients WHERE task_id=$1 AND user_id=$2",task_id,target_user_id)
     return {"ok":True}
 
-@api_router.post("/client/tasks/request")
+@api_router.post("/client/tasks/request", response_model=TaskOut)
 async def client_request_task(payload:TaskCreate,pool=Depends(get_db),user=Depends(require_user)):
     if not payload.team_id: raise HTTPException(400,"team_id required")
     assignment=await pool.fetchrow("SELECT role FROM project_assignments WHERE team_id=$1 AND user_id=$2",payload.team_id,user["user_id"])
     if not assignment: raise HTTPException(403,"Not a project member")
+    # Create approval record first
     approval_id=f"approval_{uuid.uuid4().hex[:12]}"
     await pool.execute("INSERT INTO approvals (approval_id,team_id,requested_by,status,request_type,request_data) VALUES ($1,$2,$3,'pending','create',$4)",
         approval_id,payload.team_id,user["user_id"],json.dumps(payload.model_dump()))
-    return {"approval_id":approval_id,"status":"pending","message":"Task submitted for approval"}
+    # Create actual task with status='requested' so it appears on the board
+    first_col=await pool.fetchrow("SELECT column_id FROM project_columns WHERE team_id=$1 ORDER BY sort_order ASC LIMIT 1",payload.team_id)
+    column_id=first_col["column_id"] if first_col else None
+    max_row=await pool.fetchrow("SELECT MAX(sort_order) AS mo FROM tasks WHERE team_id=$1 AND column_id=$2",payload.team_id,column_id)
+    next_order=(max_row["mo"] or -1)+1; task_id=f"task_{uuid.uuid4().hex[:12]}"
+    actor_name=user.get("full_name") or user.get("name") or user.get("email","")
+    row=await pool.fetchrow("""
+        INSERT INTO tasks (task_id,team_id,column_id,created_by_user_id,created_by_name,
+            title,description,status,priority,approval_id,attachments,custom_fields,subtasks,sort_order)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,'requested',$8,$9,'[]'::jsonb,'{}' ::jsonb,'[]'::jsonb,$10)
+        RETURNING *""",
+        task_id,payload.team_id,column_id,user["user_id"],actor_name,
+        payload.title,payload.description,payload.priority or "medium",approval_id,next_order)
+    # Link approval to task
+    await pool.execute("UPDATE approvals SET request_data=$1 WHERE approval_id=$2",
+        json.dumps({**payload.model_dump(),"task_id":task_id}),approval_id)
+    return row_to_task(row)
 
 # ── Approvals ───────────────────────────────────────────────────
 
@@ -600,11 +617,24 @@ async def review_approval(approval_id:str,body:dict,pool=Depends(get_db),user=De
     if not (is_owner_admin or is_system_admin or is_client_member):
         raise HTTPException(403, "Not authorised to review this approval")
     await pool.execute("UPDATE approvals SET status=$1,reviewed_by=$2,reviewed_at=NOW(),review_notes=$3 WHERE approval_id=$4",status,user["user_id"],notes,approval_id)
-    if status=="approved" and approval["request_type"]=="create":
-        data=json.loads(approval["request_data"]); task_id=f"task_{uuid.uuid4().hex[:12]}"
-        col=await pool.fetchval("SELECT column_id FROM project_columns WHERE team_id=$1 ORDER BY sort_order LIMIT 1",approval["team_id"])
-        await pool.execute("INSERT INTO tasks (task_id,team_id,column_id,created_by_user_id,title,description,status,priority,approval_id) VALUES ($1,$2,$3,$4,$5,$6,'todo',$7,$8)",
-            task_id,approval["team_id"],col,approval["requested_by"],data["title"],data.get("description"),data.get("priority","medium"),approval_id)
+    if approval["request_type"]=="create":
+        data=json.loads(approval["request_data"])
+        existing_task_id=data.get("task_id")
+        if status=="approved":
+            if existing_task_id:
+                # Task already exists with status='requested' — promote to 'todo'
+                first_col=await pool.fetchrow("SELECT column_id FROM project_columns WHERE team_id=$1 ORDER BY sort_order LIMIT 1",approval["team_id"])
+                col=first_col["column_id"] if first_col else None
+                await pool.execute("UPDATE tasks SET status='todo',column_id=COALESCE($1,column_id),updated_at=NOW() WHERE task_id=$2",col,existing_task_id)
+            else:
+                # Legacy: no task yet — create it
+                task_id=f"task_{uuid.uuid4().hex[:12]}"
+                col=await pool.fetchval("SELECT column_id FROM project_columns WHERE team_id=$1 ORDER BY sort_order LIMIT 1",approval["team_id"])
+                await pool.execute("INSERT INTO tasks (task_id,team_id,column_id,created_by_user_id,title,description,status,priority,approval_id) VALUES ($1,$2,$3,$4,$5,$6,'todo',$7,$8)",
+                    task_id,approval["team_id"],col,approval["requested_by"],data["title"],data.get("description"),data.get("priority","medium"),approval_id)
+        elif status=="rejected" and existing_task_id:
+            # Remove the 'requested' task since it was declined
+            await pool.execute("DELETE FROM tasks WHERE task_id=$1 AND status='requested'",existing_task_id)
     return {"ok":True,"status":status}
 
 # ── Comments ────────────────────────────────────────────────────
