@@ -78,14 +78,19 @@ export default function AppShell() {
             <Menu size={18} />
           </button>
           <span style={{ fontFamily: 'var(--font-display)', fontSize: 16, color: 'var(--ink)', fontWeight: 500 }}>Kartavya</span>
-          <button className="k-iconbtn" style={{ position: 'relative' }} onClick={() => setNotifOpen(true)} aria-label="Notifications">
-            <Bell size={18} />
-            {unread > 0 && (
-              <span style={{ position: 'absolute', top: -4, right: -4, height: 16, minWidth: 16, padding: '0 4px', borderRadius: 99, fontSize: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#dc2626', color: '#fff', fontWeight: 700 }}>
-                {unread > 9 ? '9+' : unread}
-              </span>
-            )}
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <button className="k-iconbtn" style={{ position: 'relative' }} onClick={() => setNotifOpen(true)} aria-label="Notifications">
+              <Bell size={18} />
+              {unread > 0 && (
+                <span style={{ position: 'absolute', top: -4, right: -4, height: 16, minWidth: 16, padding: '0 4px', borderRadius: 99, fontSize: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#dc2626', color: '#fff', fontWeight: 700 }}>
+                  {unread > 9 ? '9+' : unread}
+                </span>
+              )}
+            </button>
+            <button className="k-btn k-btn--primary k-btn--sm" onClick={() => setNewTaskOpen(true)} style={{ padding: '6px 12px', fontSize: 12 }}>
+              + New task
+            </button>
+          </div>
         </div>
 
         {/* Desktop topbar */}

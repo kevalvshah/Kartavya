@@ -1922,7 +1922,7 @@ input, textarea, select { font-family: inherit; color: inherit; }
 .k-boards-head__right {
   display: flex; align-items: center; gap: 12px; flex-shrink: 0;
 }
-.k-boards-body { flex: 1; overflow: hidden; }
+.k-boards-body { overflow-x: auto; overflow-y: visible; padding: 24px 32px 40px; }
 
 /* ── Project switcher ───────────────────────────────────────────────────── */
 .k-proj-switcher { position: relative; }

@@ -82,7 +82,7 @@ export default function BoardsPage() {
   const onlineAvatars = onlineUsers.map((u, i) => ({ name: u.name || u.email || '?', color: AVATAR_COLORS[i % AVATAR_COLORS.length] }));
 
   return (
-    <div className="k-screen k-screen--boards" style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+    <div className="k-screen k-screen--boards" style={{ display: 'flex', flexDirection: 'column' }}>
 
       {/* Page header */}
       <div className="k-boards-head">
@@ -161,7 +161,7 @@ export default function BoardsPage() {
       </div>
 
       {/* Board */}
-      <div className="k-boards-body" style={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
+      <div className="k-boards-body">
         {loading ? (
           <div style={{ padding: '60px 0', textAlign: 'center', color: 'var(--ink-3)', fontFamily: 'var(--font-display)', fontStyle: 'italic' }}>
             Loading board…
