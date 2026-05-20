@@ -27,7 +27,12 @@ import { currentUser }            from '../lib/auth';
 import KanbanView    from '../components/views/KanbanView';
 import TableView     from '../components/views/TableView';
 import CalendarView  from '../components/views/CalendarView';
+import TimelineView  from '../components/views/TimelineView';
+import WorkloadView  from '../components/views/WorkloadView';
+import PriorityView  from '../components/views/PriorityView';
+import MyTasksView   from '../components/views/MyTasksView';
 import TaskEditor    from '../components/TaskEditor';
+import { AVATAR_COLORS } from '../lib/utils';
 import { useFields }          from '../hooks/useFields';
 import { useViews }           from '../hooks/useViews';
 import { useRealtimeTasks }   from '../hooks/useRealtimeTasks';
@@ -35,9 +40,20 @@ import { usePresence }        from '../hooks/usePresence';
 import { PageHeader, AvatarStack } from '../components/editorial';
 
 const VIEWS = [
-  { id: 'kanban',   label: 'Board' },
-  { id: 'table',    label: 'Table' },
-  { id: 'calendar', label: 'Calendar' },
+  { id: 'kanban',   label: 'Board',
+    icon: <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="1" y="3" width="4" height="10" rx="1"/><rect x="6" y="3" width="4" height="10" rx="1"/><rect x="11" y="3" width="4" height="10" rx="1"/></svg> },
+  { id: 'table',    label: 'List',
+    icon: <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M2 4h12M2 8h12M2 12h12"/></svg> },
+  { id: 'calendar', label: 'Calendar',
+    icon: <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="2" y="3" width="12" height="11" rx="1.5"/><path d="M5 2v2M11 2v2M2 7h12"/></svg> },
+  { id: 'timeline', label: 'Timeline',
+    icon: <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M2 5h5M2 8h9M2 11h6"/><circle cx="9" cy="5" r="1.5" fill="currentColor" stroke="none"/><circle cx="13" cy="8" r="1.5" fill="currentColor" stroke="none"/><circle cx="10" cy="11" r="1.5" fill="currentColor" stroke="none"/></svg> },
+  { id: 'workload', label: 'Workload',
+    icon: <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="6" cy="5" r="2.5"/><circle cx="11" cy="5" r="2"/><path d="M1 13c0-2.2 2-4 5-4s5 1.8 5 4"/><path d="M11 9c2 .5 3 1.8 3 3"/></svg> },
+  { id: 'priority', label: 'Priority',
+    icon: <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M2 3l12 0M2 7l8 0M2 11l5 0"/></svg> },
+  { id: 'mytasks',  label: 'My Tasks',
+    icon: <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="8" cy="5" r="3"/><path d="M2 14c0-3 2.7-5 6-5s6 2 6 5"/><path d="M6 10.5l1.5 1.5 3-3" strokeWidth="1.8"/></svg> },
 ];
 
 export default function ProjectBoardPage() {
@@ -129,7 +145,7 @@ export default function ProjectBoardPage() {
   );
 
   const projectName = project?.team?.name || project?.name || '…';
-  const presenceUsers = onlineUsers.map(u => ({ name: u.name, initials: u.initials, color: u.color }));
+  const presenceUsers = onlineUsers.map((u, i) => ({ name: u.name || u.email || '?', color: AVATAR_COLORS[i % AVATAR_COLORS.length] }));
 
   return (
     <div className="k-screen">
@@ -140,23 +156,9 @@ export default function ProjectBoardPage() {
         lede="Move work across the board. Click any card to open."
         right={
           <div className="k-headerright">
-            {/* Presence */}
             {onlineUsers.length > 0 && (
-              <AvatarStack users={presenceUsers} size={26} max={5} />
+              <AvatarStack users={presenceUsers} size={24} max={4} />
             )}
-            {/* View switcher */}
-            <div className="k-segctrl">
-              {VIEWS.map(v => (
-                <button
-                  key={v.id}
-                  className={'k-segctrl__btn' + (view === v.id ? ' is-active' : '')}
-                  onClick={() => setView(v.id)}
-                >
-                  {v.label}
-                </button>
-              ))}
-            </div>
-            {/* Fields + Save view */}
             <button className="k-btn k-btn--ghost k-btn--sm" onClick={() => setShowFieldMgr(v => !v)}>
               ⚙ Fields
             </button>
@@ -166,12 +168,29 @@ export default function ProjectBoardPage() {
             >
               + Save view
             </button>
-            <button className="k-link" style={{ fontSize: 13 }} onClick={() => navigate('/projects')}>
+            <button className="k-link" onClick={() => navigate('/projects')}>
               ← Projects
             </button>
           </div>
         }
       />
+
+      {/* View switcher bar */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, borderBottom: '1px solid var(--rule-soft)', paddingBottom: 0, marginBottom: 4 }}>
+        <div className="k-segctrl">
+          {VIEWS.map(v => (
+            <button
+              key={v.id}
+              className={'k-segctrl__btn' + (view === v.id ? ' is-active' : '')}
+              onClick={() => setView(v.id)}
+              style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+            >
+              {v.icon}
+              {v.label}
+            </button>
+          ))}
+        </div>
+      </div>
 
       {/* Field manager panel */}
       {showFieldMgr && (
@@ -239,7 +258,19 @@ export default function ProjectBoardPage() {
         />
       )}
       {view === 'calendar' && (
-        <CalendarView tasks={tasks} onTaskClick={t => console.log('open', t)} />
+        <CalendarView tasks={tasks} teamMembers={teamMembers} onTasksChange={setTasks} />
+      )}
+      {view === 'timeline' && (
+        <TimelineView tasks={tasks} columns={columns} teamMembers={teamMembers} onTasksChange={setTasks} />
+      )}
+      {view === 'workload' && (
+        <WorkloadView tasks={tasks} teamMembers={teamMembers} />
+      )}
+      {view === 'priority' && (
+        <PriorityView tasks={tasks} columns={columns} teamMembers={teamMembers} onTasksChange={setTasks} />
+      )}
+      {view === 'mytasks' && (
+        <MyTasksView tasks={tasks} teamMembers={teamMembers} onTasksChange={setTasks} />
       )}
 
       {/* ── Task editor (new task from column button) ─────────────── */}
