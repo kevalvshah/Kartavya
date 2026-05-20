@@ -2,7 +2,7 @@
  * BoardsPage.jsx — dedicated Boards page with project switcher in top-right.
  * Route: /boards  (separate from /projects which is the grid view)
  */
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api }          from '../lib/api';
 import { currentUser }  from '../lib/auth';
@@ -10,7 +10,7 @@ import KanbanView       from '../components/views/KanbanView';
 import { useFields }    from '../hooks/useFields';
 import { useRealtimeTasks } from '../hooks/useRealtimeTasks';
 import { usePresence }  from '../hooks/usePresence';
-import { AvatarStack }  from '../components/editorial';
+import { PageHeader, AvatarStack } from '../components/editorial';
 import { AVATAR_COLORS } from '../lib/utils';
 
 const PROJECT_COLORS = ['#0082c6','#05b7aa','#8b5cf6','#ec4899','#f59e0b','#10b981','#6366f1'];
@@ -27,8 +27,6 @@ export default function BoardsPage() {
   const [rawTasks,      setRawTasks]      = useState([]);
   const [teamMembers,   setTeamMembers]   = useState([]);
   const [loading,    setLoading]    = useState(true);
-  const [pickerOpen, setPickerOpen] = useState(false);
-  const pickerRef = useRef(null);
 
   const { fieldDefs } = useFields(activeId);
   const { tasks, setTasks } = useRealtimeTasks(activeId, rawTasks);
@@ -82,103 +80,56 @@ export default function BoardsPage() {
   const onlineAvatars = onlineUsers.map((u, i) => ({ name: u.name || u.email || '?', color: AVATAR_COLORS[i % AVATAR_COLORS.length] }));
 
   return (
-    <div className="k-screen k-screen--boards" style={{ display: 'flex', flexDirection: 'column' }}>
+    <div className="k-screen">
 
-      {/* Page header */}
-      <div className="k-boards-head">
-        <div className="k-boards-head__left">
-          <div className="k-boards-head__kicker">BOARDS · फ़लक</div>
-          <div className="k-boards-head__title" style={{ borderLeft: `3px solid ${activeColor}`, paddingLeft: 12 }}>
-            {project?.name || 'Loading…'}
-          </div>
-        </div>
-
-        <div className="k-boards-head__right">
-          {/* Online presence */}
-          {onlineAvatars.length > 0 && (
-            <AvatarStack users={onlineAvatars} size={24} max={4} />
-          )}
-
-          {/* Project switcher */}
-          <div className="k-proj-switcher" ref={pickerRef}>
-            <button
-              className="k-proj-switcher__btn"
-              onClick={() => setPickerOpen(v => !v)}
-            >
-              <span className="k-proj-switcher__dot" style={{ background: activeColor }} />
-              <span className="k-proj-switcher__name">{activeProject?.name || 'Select project'}</span>
-              <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8">
-                <path d="M4 6l4 4 4-4"/>
-              </svg>
-            </button>
-
-            {pickerOpen && (
-              <div className="k-proj-switcher__menu">
-                <div className="k-proj-switcher__label">Switch project</div>
-                {projects.map((p, idx) => {
-                  const c = PROJECT_COLORS[idx % PROJECT_COLORS.length];
-                  return (
-                    <button
-                      key={p.team_id}
-                      className={'k-proj-switcher__item' + (p.team_id === activeId ? ' is-active' : '')}
-                      onClick={() => { setActiveId(p.team_id); setPickerOpen(false); }}
-                    >
-                      <span className="k-proj-switcher__dot" style={{ background: c }} />
-                      <span>{p.name}</span>
-                      {p.team_id === activeId && (
-                        <svg style={{ marginLeft: 'auto' }} width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
-                          <path d="M3 8l3.5 3.5L13 5"/>
-                        </svg>
-                      )}
-                    </button>
-                  );
-                })}
-                <div className="k-proj-switcher__sep" />
-                <button className="k-proj-switcher__item" onClick={() => navigate('/projects')}>
-                  <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-                    <rect x="2" y="2" width="5" height="5" rx="1"/>
-                    <rect x="9" y="2" width="5" height="5" rx="1"/>
-                    <rect x="2" y="9" width="5" height="5" rx="1"/>
-                    <rect x="9" y="9" width="5" height="5" rx="1"/>
-                  </svg>
-                  <span>All projects</span>
-                </button>
-              </div>
+      <PageHeader
+        kicker={activeProject ? `${activeProject.name.toUpperCase()} · फ़लक` : 'BOARDS · फ़लक'}
+        title={activeProject?.name || 'Loading…'}
+        lede="Move work across the board. Click any card to open."
+        right={
+          <div className="k-headerright">
+            {onlineAvatars.length > 0 && (
+              <AvatarStack users={onlineAvatars} size={24} max={4} />
             )}
+            <div className="k-projectpicker">
+              {projects.map((p, idx) => {
+                const c = PROJECT_COLORS[idx % PROJECT_COLORS.length];
+                return (
+                  <button
+                    key={p.team_id}
+                    className={'k-projectpicker__chip' + (p.team_id === activeId ? ' is-active' : '')}
+                    onClick={() => setActiveId(p.team_id)}
+                  >
+                    <span className="k-projectpicker__dot" style={{ background: c }} />
+                    {p.name}
+                  </button>
+                );
+              })}
+            </div>
+            <button className="k-link" onClick={() => activeId && navigate(`/projects/${activeId}`)}>
+              Open project →
+            </button>
           </div>
-
-          {/* New task */}
-          <button
-            className="k-btn k-btn--primary k-btn--sm"
-            onClick={() => navigate(`/projects/${activeId}`)}
-          >
-            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M8 3v10M3 8h10"/>
-            </svg>
-            New task
-          </button>
-        </div>
-      </div>
+        }
+      />
 
       {/* Board */}
-      <div className="k-boards-body">
-        {loading ? (
-          <div style={{ padding: '60px 0', textAlign: 'center', color: 'var(--ink-3)', fontFamily: 'var(--font-display)', fontStyle: 'italic' }}>
-            Loading board…
-          </div>
-        ) : (
-          <KanbanView
-            columns={columns}
-            tasks={tasks}
-            teamMembers={teamMembers}
-            fieldDefs={fieldDefs}
-            currentUserId={me?.user_id}
-            currentUserRole={me?.role}
-            showRequested={me?.role !== 'client'}
-            onTasksChange={handleTasksChange}
-          />
-        )}
-      </div>
+      {loading ? (
+        <div style={{ padding: '60px 0', textAlign: 'center', color: 'var(--ink-3)', fontFamily: 'var(--font-display)', fontStyle: 'italic' }}>
+          Loading board…
+        </div>
+      ) : (
+        <KanbanView
+          columns={columns}
+          tasks={tasks}
+          teamMembers={teamMembers}
+          fieldDefs={fieldDefs}
+          currentUserId={me?.user_id}
+          currentUserRole={me?.role}
+          showRequested={me?.role !== 'client'}
+          onTasksChange={handleTasksChange}
+        />
+      )}
 
     </div>
   );
