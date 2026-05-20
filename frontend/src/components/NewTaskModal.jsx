@@ -30,6 +30,8 @@ export default function NewTaskModal({ open, onClose, onCreated }) {
   const [uploading,   setUploading]   = useState(false);
   const [projects,    setProjects]    = useState([]);
   const [members,     setMembers]     = useState([]);
+  const [categoryId,  setCategoryId]  = useState('');
+  const [categories,  setCategories]  = useState([]);
   const [saving,      setSaving]      = useState(false);
   const [titleError,  setTitleError]  = useState(false);
   const fileRef = useRef(null);
@@ -39,7 +41,8 @@ export default function NewTaskModal({ open, onClose, onCreated }) {
   useEffect(() => {
     if (!open) return;
     setTitle(''); setProjectId(''); setStatus('todo'); setPriority('medium');
-    setDueAt(''); setEstimate(''); setDescription(''); setAssignees([]); setFiles([]);
+    setDueAt(''); setEstimate(''); setDescription(''); setAssignees([]); setFiles([]); setCategoryId('');
+    api.get('/categories').then(r => setCategories(r.data || [])).catch(() => {});
     api.get('/teams').then(r => setProjects(r.data)).catch(() => {});
     api.get('/teams').then(r => {
       const allMembers = [];
@@ -88,6 +91,7 @@ export default function NewTaskModal({ open, onClose, onCreated }) {
         description: description.trim() || null,
       };
       if (projectId)             payload.team_id             = projectId;
+      if (categoryId)            payload.category_id         = categoryId;
       if (dueAt)                 payload.due_at              = new Date(dueAt).toISOString();
       if (estimate)              payload.estimate_hours      = parseFloat(estimate);
       if (assignees.length)      payload.assignee_user_ids   = assignees;
@@ -206,6 +210,19 @@ export default function NewTaskModal({ open, onClose, onCreated }) {
               </div>
             </div>
           </div>
+
+          {/* CATEGORY */}
+          {categories.length > 0 && (
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--ink-3)', marginBottom: 6 }}>
+                CATEGORY · <span className="k-hi" style={{ fontFamily: 'var(--font-hindi)', textTransform: 'none', letterSpacing: 0 }}>श्रेणी</span>
+              </div>
+              <select className="k-select" style={{ width: '100%' }} value={categoryId} onChange={e => setCategoryId(e.target.value)}>
+                <option value="">— None —</option>
+                {categories.map(c => <option key={c.category_id} value={c.category_id}>{c.name}</option>)}
+              </select>
+            </div>
+          )}
 
           {/* ASSIGNEES */}
           {members.length > 0 && (
