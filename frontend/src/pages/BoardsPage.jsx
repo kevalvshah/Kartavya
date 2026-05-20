@@ -9,6 +9,10 @@ import { currentUser }  from '../lib/auth';
 import KanbanView    from '../components/views/KanbanView';
 import TableView     from '../components/views/TableView';
 import CalendarView  from '../components/views/CalendarView';
+import TimelineView  from '../components/views/TimelineView';
+import WorkloadView  from '../components/views/WorkloadView';
+import PriorityView  from '../components/views/PriorityView';
+import MyTasksView   from '../components/views/MyTasksView';
 import { useFields }    from '../hooks/useFields';
 import { useRealtimeTasks } from '../hooks/useRealtimeTasks';
 import { usePresence }  from '../hooks/usePresence';
@@ -24,6 +28,14 @@ const VIEWS = [
     icon: <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M2 4h12M2 8h12M2 12h12"/></svg> },
   { id: 'calendar', label: 'Calendar',
     icon: <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="2" y="3" width="12" height="11" rx="1.5"/><path d="M5 2v2M11 2v2M2 7h12"/></svg> },
+  { id: 'timeline', label: 'Timeline',
+    icon: <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M2 5h5M2 8h9M2 11h6"/><circle cx="9" cy="5" r="1.5" fill="currentColor" stroke="none"/><circle cx="13" cy="8" r="1.5" fill="currentColor" stroke="none"/><circle cx="10" cy="11" r="1.5" fill="currentColor" stroke="none"/></svg> },
+  { id: 'workload', label: 'Workload',
+    icon: <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="6" cy="5" r="2.5"/><circle cx="11" cy="5" r="2"/><path d="M1 13c0-2.2 2-4 5-4s5 1.8 5 4"/><path d="M11 9c2 .5 3 1.8 3 3"/></svg> },
+  { id: 'priority', label: 'Priority',
+    icon: <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M2 3l12 0M2 7l8 0M2 11l5 0"/></svg> },
+  { id: 'mytasks',  label: 'My Tasks',
+    icon: <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="8" cy="5" r="3"/><path d="M2 14c0-3 2.7-5 6-5s6 2 6 5"/><path d="M6 10.5l1.5 1.5 3-3" strokeWidth="1.8"/></svg> },
 ];
 
 export default function BoardsPage() {
@@ -158,6 +170,35 @@ export default function BoardsPage() {
           )}
           {view === 'calendar' && (
             <CalendarView
+              tasks={tasks}
+              teamMembers={teamMembers}
+              onTasksChange={handleTasksChange}
+            />
+          )}
+          {view === 'timeline' && (
+            <TimelineView
+              tasks={tasks}
+              columns={columns}
+              teamMembers={teamMembers}
+              onTasksChange={handleTasksChange}
+            />
+          )}
+          {view === 'workload' && (
+            <WorkloadView
+              tasks={tasks}
+              teamMembers={teamMembers}
+            />
+          )}
+          {view === 'priority' && (
+            <PriorityView
+              tasks={tasks}
+              columns={columns}
+              teamMembers={teamMembers}
+              onTasksChange={handleTasksChange}
+            />
+          )}
+          {view === 'mytasks' && (
+            <MyTasksView
               tasks={tasks}
               teamMembers={teamMembers}
               onTasksChange={handleTasksChange}
