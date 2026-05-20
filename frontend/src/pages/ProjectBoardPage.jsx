@@ -176,7 +176,7 @@ export default function ProjectBoardPage() {
       />
 
       {/* View switcher bar */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, borderBottom: '1px solid var(--rule-soft)', paddingBottom: 0, marginBottom: 4 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, borderBottom: '1px solid var(--rule-soft)', paddingBottom: 0, marginBottom: 4, overflowX: 'auto' }}>
         <div className="k-segctrl">
           {VIEWS.map(v => (
             <button
