@@ -201,6 +201,7 @@ class TeamCreate(BaseModel):
     name:str
 class TeamOut(BaseModel):
     team_id:str; name:str; created_by:str; created_at:datetime; updated_at:datetime
+    task_count:int=0; done_count:int=0
 class TeamMemberAdd(BaseModel):
     email:str; role:str="member"
 class TeamMemberUpdate(BaseModel):
@@ -683,7 +684,15 @@ async def add_comment(task_id:str,body:CommentCreate,pool=Depends(get_db),user=D
 async def list_teams(pool=Depends(get_db),user=Depends(require_user)):
     team_ids=await get_visible_team_ids(pool,user["user_id"])
     if not team_ids: return []
-    rows=await pool.fetch("SELECT * FROM teams WHERE team_id=ANY($1::text[]) ORDER BY updated_at DESC",team_ids)
+    rows=await pool.fetch("""
+        SELECT t.*,
+          COALESCE(tc.cnt,0) AS task_count,
+          COALESCE(dc.cnt,0) AS done_count
+        FROM teams t
+        LEFT JOIN (SELECT team_id,COUNT(*) cnt FROM tasks GROUP BY team_id) tc ON tc.team_id=t.team_id
+        LEFT JOIN (SELECT team_id,COUNT(*) cnt FROM tasks WHERE status='done' GROUP BY team_id) dc ON dc.team_id=t.team_id
+        WHERE t.team_id=ANY($1::text[]) ORDER BY t.updated_at DESC
+    """, team_ids)
     return [TeamOut(**dict(r)) for r in rows]
 
 @api_router.post("/teams",response_model=TeamOut)
