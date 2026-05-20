@@ -2,10 +2,10 @@
  * InboxPage.jsx — editorial Inbox: mentions, assignments, approvals.
  */
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
 import { PageHeader } from '../components/editorial';
 import { AVATAR_COLORS, relTime, userInitials } from '../lib/utils';
+import TaskDrawer from '../components/TaskDrawer';
 
 const KIND_MAP = {
   mention:  { bg: 'color-mix(in srgb, var(--k-deep) 14%, transparent)',   color: 'var(--k-deep)',   label: 'MENTION',  sans: 'उल्लेख' },
@@ -28,7 +28,7 @@ function getKind(notif) {
 export default function InboxPage() {
   const [notifications, setNotifications] = useState([]);
   const [loading,       setLoading]       = useState(true);
-  const navigate = useNavigate();
+  const [drawerTaskId,  setDrawerTaskId]  = useState(null);
 
   useEffect(() => {
     setLoading(true);
@@ -53,8 +53,9 @@ export default function InboxPage() {
 
   const openNotif = async (n) => {
     await markRead(n.notification_id);
-    const dest = n.url || '/tasks';
-    navigate(dest);
+    if (n.task_id) {
+      setDrawerTaskId(n.task_id);
+    }
   };
 
   const unread = notifications.filter(n => !n.read_at).length;
@@ -135,18 +136,27 @@ export default function InboxPage() {
                 </div>
 
                 {/* Open action */}
-                <button
-                  className="k-btn k-btn--ghost k-btn--sm"
-                  style={{ flexShrink: 0 }}
-                  onClick={e => { e.stopPropagation(); openNotif(n); }}
-                >
-                  Open
-                </button>
+                {n.task_id && (
+                  <button
+                    className="k-btn k-btn--ghost k-btn--sm"
+                    style={{ flexShrink: 0 }}
+                    onClick={e => { e.stopPropagation(); openNotif(n); }}
+                  >
+                    Open
+                  </button>
+                )}
               </div>
             );
           })}
         </div>
       )}
+
+      <TaskDrawer
+        taskId={drawerTaskId}
+        open={!!drawerTaskId}
+        onClose={() => setDrawerTaskId(null)}
+        onSaved={() => setDrawerTaskId(null)}
+      />
     </div>
   );
 }
