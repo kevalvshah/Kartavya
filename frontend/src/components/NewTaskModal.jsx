@@ -72,7 +72,7 @@ export default function NewTaskModal({ open, onClose, onCreated }) {
       for (const file of picked) {
         const fd = new FormData();
         fd.append('file', file);
-        const res = await api.post('/upload', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+        const res = await api.post('/upload', fd);
         setFiles(prev => [...prev, { name: file.name, url: res.data.url }]);
       }
     } catch (_) {}
@@ -93,9 +93,9 @@ export default function NewTaskModal({ open, onClose, onCreated }) {
       if (projectId)             payload.team_id             = projectId;
       if (categoryId)            payload.category_id         = categoryId;
       if (dueAt)                 payload.due_at              = new Date(dueAt).toISOString();
-      if (estimate)              payload.estimate_hours      = parseFloat(estimate);
+      if (estimate)              payload.estimated_minutes   = Math.round(parseFloat(estimate) * 60);
       if (assignees.length)      payload.assignee_user_ids   = assignees;
-      if (files.length)          payload.attachments         = files.map(f => f.url);
+      if (files.length)          payload.attachments         = files.map(f => ({ name: f.name, url: f.url }));
       await api.post('/tasks', payload);
       onCreated?.();
       onClose();

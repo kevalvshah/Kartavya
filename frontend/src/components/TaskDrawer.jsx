@@ -205,7 +205,7 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
       for (const file of picked) {
         const fd = new FormData();
         fd.append('file', file);
-        const res = await api.post('/upload', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+        const res = await api.post('/upload', fd);
         newFiles.push({ name: file.name, url: res.data.url });
       }
       const updated = [...attachments, ...newFiles];
