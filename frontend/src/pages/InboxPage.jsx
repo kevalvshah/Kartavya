@@ -2,6 +2,7 @@
  * InboxPage.jsx — editorial Inbox: mentions, assignments, approvals.
  */
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
 import { PageHeader } from '../components/editorial';
 import { AVATAR_COLORS, relTime, userInitials } from '../lib/utils';
@@ -27,6 +28,7 @@ function getKind(notif) {
 export default function InboxPage() {
   const [notifications, setNotifications] = useState([]);
   const [loading,       setLoading]       = useState(true);
+  const navigate = useNavigate();
 
   useEffect(() => {
     setLoading(true);
@@ -34,22 +36,28 @@ export default function InboxPage() {
   }, []);
 
   const markRead = async (id) => {
-    const already = notifications.find(n => n.notification_id === id && n.read);
+    const already = notifications.find(n => n.notification_id === id && n.read_at);
     if (already) return;
     try {
-      await api.post(`/notifications/${id}/read`);
-      setNotifications(prev => prev.map(n => n.notification_id === id ? { ...n, read: true } : n));
+      await api.post('/notifications/mark-read', { notification_ids: [id] });
+      setNotifications(prev => prev.map(n => n.notification_id === id ? { ...n, read_at: new Date().toISOString() } : n));
     } catch (_) {}
   };
 
   const markAllRead = async () => {
     try {
-      await api.post('/notifications/read-all');
-      setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+      await api.post('/notifications/mark-read', { mark_all: true });
+      setNotifications(prev => prev.map(n => ({ ...n, read_at: new Date().toISOString() })));
     } catch (_) {}
   };
 
-  const unread = notifications.filter(n => !n.read).length;
+  const openNotif = async (n) => {
+    await markRead(n.notification_id);
+    const dest = n.url || '/tasks';
+    navigate(dest);
+  };
+
+  const unread = notifications.filter(n => !n.read_at).length;
 
   return (
     <div className="k-screen">
@@ -88,12 +96,12 @@ export default function InboxPage() {
             const initials = userInitials(n.actor_name || n.from_name || '');
             const color    = AVATAR_COLORS[idx % AVATAR_COLORS.length];
             const when     = relTime(n.created_at || n.timestamp);
-            const isUnread = !n.read;
+            const isUnread = !n.read_at;
             return (
               <div
                 key={n.notification_id || idx}
                 className={'k-inbox__row' + (isUnread ? ' is-unread' : '')}
-                onClick={() => markRead(n.notification_id)}
+                onClick={() => openNotif(n)}
               >
                 {/* Unread indicator */}
                 {isUnread && <span className="k-inbox__dot" />}
@@ -130,7 +138,7 @@ export default function InboxPage() {
                 <button
                   className="k-btn k-btn--ghost k-btn--sm"
                   style={{ flexShrink: 0 }}
-                  onClick={e => { e.stopPropagation(); markRead(n.notification_id); }}
+                  onClick={e => { e.stopPropagation(); openNotif(n); }}
                 >
                   Open
                 </button>
