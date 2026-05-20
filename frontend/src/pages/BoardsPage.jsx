@@ -63,13 +63,6 @@ export default function BoardsPage() {
 
   useEffect(() => { loadBoard(); }, [loadBoard]);
 
-  // Close picker on outside click
-  useEffect(() => {
-    const handler = (e) => { if (pickerRef.current && !pickerRef.current.contains(e.target)) setPickerOpen(false); };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, []);
-
   const handleTasksChange = useCallback((updatedTasks) => {
     setTasks(updatedTasks);
   }, [setTasks]);
@@ -83,8 +76,8 @@ export default function BoardsPage() {
     <div className="k-screen">
 
       <PageHeader
-        kicker={activeProject ? `${activeProject.name.toUpperCase()} · फ़लक` : 'BOARDS · फ़लक'}
-        title={activeProject?.name || 'Loading…'}
+        kicker={`AEKAM INC · फ़लक`}
+        title={project?.name || activeProject?.name || 'Select a project'}
         lede="Move work across the board. Click any card to open."
         right={
           <div className="k-headerright">
