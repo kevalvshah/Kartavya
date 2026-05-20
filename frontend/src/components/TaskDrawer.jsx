@@ -86,6 +86,7 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
   const [tab,        setTab]        = useState('details');
   const [saving,     setSaving]     = useState(false);
   const [draft,      setDraft]      = useState({});
+  const [categories, setCategories] = useState([]);
   const [manualMin,  setManualMin]  = useState('');
   const [manualDesc, setManualDesc] = useState('');
   const [attachments, setAttachments] = useState([]);
@@ -116,13 +117,15 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
     setTask(null); setFields([]); setFValues({});
     setComments([]); setActivity([]); setEntries([]); setTimer(null); setAttachments([]);
 
+    api.get('/categories').then(r => setCategories(r.data || [])).catch(() => {});
+
     Promise.all([
       api.get(`/tasks/${taskId}`),
       api.get(`/tasks/${taskId}/comments`),
     ]).then(([tRes, cRes]) => {
       const t = tRes.data;
       setTask(t);
-      setDraft({ title: t.title, description: t.description, priority: t.priority, due_at: t.due_at, status: t.status });
+      setDraft({ title: t.title, description: t.description, priority: t.priority, due_at: t.due_at, status: t.status, category_id: t.category_id || '' });
       setComments(cRes.data);
       // Parse existing attachments
       const att = t.attachments || [];
@@ -340,6 +343,19 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
                 value={draft.due_at ? draft.due_at.slice(0, 10) : ''}
                 onChange={e => { const v = e.target.value ? new Date(e.target.value).toISOString() : null; setDraft(d => ({ ...d, due_at: v })); saveTask({ due_at: v }); }}
               />
+            </div>
+            <div className="k-prop">
+              <span className="k-prop__lbl">Category <span className="k-prop__sans">श्रेणी</span></span>
+              <select
+                value={draft.category_id || ''}
+                onChange={e => { const v = e.target.value || null; setDraft(d => ({ ...d, category_id: v })); saveTask({ category_id: v }); }}
+                className="k-input"
+              >
+                <option value="">— None —</option>
+                {categories.map(c => (
+                  <option key={c.category_id} value={c.category_id}>{c.name}</option>
+                ))}
+              </select>
             </div>
           </div>
         )}
