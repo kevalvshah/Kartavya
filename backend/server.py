@@ -757,7 +757,7 @@ async def list_teams(pool=Depends(get_db),user=Depends(require_user)):
         FROM teams t
         LEFT JOIN (SELECT team_id,COUNT(*) cnt FROM tasks GROUP BY team_id) tc ON tc.team_id=t.team_id
         LEFT JOIN (SELECT team_id,COUNT(*) cnt FROM tasks WHERE status='done' GROUP BY team_id) dc ON dc.team_id=t.team_id
-        WHERE t.team_id=ANY($1::text[]) ORDER BY t.updated_at DESC
+        WHERE t.team_id=ANY($1::text[]) AND t.deleted_at IS NULL ORDER BY t.updated_at DESC
     """, team_ids)
     return [TeamOut(**dict(r)) for r in rows]
 
@@ -858,12 +858,57 @@ async def update_team_member(team_id:str,member_id:str,payload:TeamMemberUpdate,
 
 @api_router.delete("/teams/{team_id}")
 async def delete_team(team_id:str,pool=Depends(get_db),user=Depends(require_admin)):
-    await pool.execute("DELETE FROM tasks WHERE team_id=$1",team_id)
-    await pool.execute("DELETE FROM project_assignments WHERE team_id=$1",team_id)
-    await pool.execute("DELETE FROM team_members WHERE team_id=$1",team_id)
-    await pool.execute("DELETE FROM project_columns WHERE team_id=$1",team_id)
-    await pool.execute("DELETE FROM teams WHERE team_id=$1",team_id)
-    return {"ok":True}
+    """Soft-delete: move project to bin. Hard-purged after 30 days."""
+    team = await pool.fetchrow("SELECT team_id FROM teams WHERE team_id=$1 AND deleted_at IS NULL", team_id)
+    if not team: raise HTTPException(404, "Project not found")
+    await pool.execute(
+        "UPDATE teams SET deleted_at=NOW(), deleted_by=$1 WHERE team_id=$2",
+        user["user_id"], team_id
+    )
+    return {"ok": True, "soft_deleted": True}
+
+@api_router.get("/teams/bin")
+async def list_deleted_teams(pool=Depends(get_db),user=Depends(require_admin)):
+    """List soft-deleted projects still within 30-day restore window."""
+    rows = await pool.fetch("""
+        SELECT t.*,
+               COALESCE(u.full_name, u.name, u.email) AS deleted_by_name,
+               EXTRACT(EPOCH FROM (NOW() - t.deleted_at)) / 86400 AS days_deleted
+        FROM teams t
+        LEFT JOIN users u ON u.user_id = t.deleted_by
+        WHERE t.deleted_at IS NOT NULL
+          AND t.deleted_at > NOW() - INTERVAL '30 days'
+        ORDER BY t.deleted_at DESC
+    """)
+    return [dict(r) for r in rows]
+
+@api_router.post("/teams/{team_id}/restore")
+async def restore_team(team_id:str,pool=Depends(get_db),user=Depends(require_admin)):
+    """Restore a soft-deleted project from the bin."""
+    team = await pool.fetchrow(
+        "SELECT team_id FROM teams WHERE team_id=$1 AND deleted_at IS NOT NULL AND deleted_at > NOW() - INTERVAL '30 days'",
+        team_id
+    )
+    if not team: raise HTTPException(404, "Project not found in bin or restore window expired")
+    await pool.execute("UPDATE teams SET deleted_at=NULL, deleted_by=NULL WHERE team_id=$1", team_id)
+    return {"ok": True}
+
+@api_router.delete("/teams/{team_id}/purge")
+async def purge_team(team_id:str,pool=Depends(get_db),user=Depends(require_admin)):
+    """Permanently delete a project from the bin."""
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            await conn.execute("DELETE FROM activity_events WHERE team_id=$1", team_id)
+            await conn.execute("DELETE FROM time_entries WHERE task_id IN (SELECT task_id FROM tasks WHERE team_id=$1)", team_id)
+            await conn.execute("DELETE FROM tasks WHERE team_id=$1", team_id)
+            await conn.execute("DELETE FROM project_assignments WHERE team_id=$1", team_id)
+            await conn.execute("DELETE FROM team_members WHERE team_id=$1", team_id)
+            await conn.execute("DELETE FROM project_columns WHERE team_id=$1", team_id)
+            await conn.execute("DELETE FROM automations WHERE team_id=$1", team_id)
+            try: await conn.execute("DELETE FROM approvals WHERE team_id=$1", team_id)
+            except Exception: pass
+            await conn.execute("DELETE FROM teams WHERE team_id=$1", team_id)
+    return {"ok": True}
 
 @api_router.delete("/teams/{team_id}/members/{member_id}")
 async def remove_team_member(team_id:str,member_id:str,pool=Depends(get_db),user=Depends(require_user)):
@@ -1229,7 +1274,10 @@ async def startup():
                 created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
             )
         """)
-        logger.info("Startup migrations: activity_events + time_entries OK")
+        # Soft-delete columns on teams
+        await pool.execute("ALTER TABLE teams ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ")
+        await pool.execute("ALTER TABLE teams ADD COLUMN IF NOT EXISTS deleted_by TEXT")
+        logger.info("Startup migrations: activity_events + time_entries + teams soft-delete OK")
     except Exception as e:
         logger.warning(f"Startup migration warning (non-fatal): {e}")
 

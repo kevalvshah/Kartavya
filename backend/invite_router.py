@@ -148,10 +148,28 @@ async def remove_user(user_id: str, pool=Depends(get_pool), admin=Depends(requir
                 await conn.execute("DELETE FROM comments       WHERE author_id=$1", user_id)
             except Exception:
                 pass
-            # Nullify tasks created/assigned by user rather than hard-delete
-            await conn.execute(
-                "UPDATE tasks SET created_by_user_id=NULL WHERE created_by_user_id=$1", user_id
+            # Reassign tasks created by this user to their project owner/admin
+            # Find all teams the user belongs to and get first owner/admin per team
+            task_teams = await conn.fetch(
+                "SELECT DISTINCT team_id FROM tasks WHERE created_by_user_id=$1", user_id
             )
+            for tt in task_teams:
+                tid = tt["team_id"]
+                replacement = await conn.fetchval("""
+                    SELECT user_id FROM project_assignments
+                    WHERE team_id=$1 AND role IN ('owner','admin') AND user_id != $2
+                    ORDER BY CASE role WHEN 'owner' THEN 0 ELSE 1 END ASC LIMIT 1
+                """, tid, user_id)
+                if replacement:
+                    await conn.execute(
+                        "UPDATE tasks SET created_by_user_id=$1 WHERE created_by_user_id=$2 AND team_id=$3",
+                        replacement, user_id, tid
+                    )
+                else:
+                    await conn.execute(
+                        "UPDATE tasks SET created_by_user_id=NULL WHERE created_by_user_id=$1 AND team_id=$2",
+                        user_id, tid
+                    )
             # Remove assignee links (junction table pattern)
             try:
                 await conn.execute("DELETE FROM task_assignees WHERE user_id=$1", user_id)
