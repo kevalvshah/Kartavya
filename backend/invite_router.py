@@ -127,7 +127,53 @@ async def change_user_role(user_id: str, body: dict, pool=Depends(get_pool), adm
 async def remove_user(user_id: str, pool=Depends(get_pool), admin=Depends(require_admin)):
     if user_id == admin["user_id"]:
         raise HTTPException(status_code=400, detail="Cannot remove yourself")
-    await pool.execute("DELETE FROM users WHERE user_id=$1", user_id)
+    # Cascade-delete all user data in dependency order
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            # Remove from team/project memberships
+            await conn.execute("DELETE FROM team_members       WHERE user_id=$1", user_id)
+            await conn.execute("DELETE FROM project_assignments WHERE user_id=$1", user_id)
+            # Remove task client links
+            await conn.execute("DELETE FROM task_clients       WHERE user_id=$1", user_id)
+            # Remove activity authored by user
+            await conn.execute("DELETE FROM activity_events    WHERE actor_id=$1", user_id)
+            # Remove time entries
+            await conn.execute("DELETE FROM time_entries       WHERE user_id=$1", user_id)
+            # Remove comments (try — table may use different column name)
+            try:
+                await conn.execute("DELETE FROM task_comments  WHERE user_id=$1", user_id)
+            except Exception:
+                pass
+            try:
+                await conn.execute("DELETE FROM comments       WHERE author_id=$1", user_id)
+            except Exception:
+                pass
+            # Nullify tasks created/assigned by user rather than hard-delete
+            await conn.execute(
+                "UPDATE tasks SET created_by_user_id=NULL WHERE created_by_user_id=$1", user_id
+            )
+            # Remove assignee links (junction table pattern)
+            try:
+                await conn.execute("DELETE FROM task_assignees WHERE user_id=$1", user_id)
+            except Exception:
+                pass
+            # Remove report schedules
+            try:
+                await conn.execute("DELETE FROM report_schedules WHERE created_by=$1", user_id)
+            except Exception:
+                pass
+            # Remove automations created by user
+            try:
+                await conn.execute("DELETE FROM automations WHERE created_by=$1", user_id)
+            except Exception:
+                pass
+            # Remove invites
+            try:
+                await conn.execute("DELETE FROM invites WHERE invited_by=$1 OR email=(SELECT email FROM users WHERE user_id=$1)", user_id)
+            except Exception:
+                pass
+            # Finally remove the user
+            await conn.execute("DELETE FROM users WHERE user_id=$1", user_id)
     return {"ok": True}
 
 
