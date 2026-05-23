@@ -683,69 +683,307 @@ def send_report_email(
     total_minutes: int = 0,
     pdf_bytes: bytes = None,
     excel_bytes: bytes = None,
+    by_member_tasks: list = None,
+    daily_throughput: list = None,
 ):
-    import email as _email_lib
     from email.mime.multipart import MIMEMultipart
     from email.mime.text      import MIMEText
     from email.mime.base      import MIMEBase
     from email              import encoders
 
-    data_summary = data_summary or {}
-    total_h = f"{total_minutes // 60}h {total_minutes % 60}m" if total_minutes else "0h"
+    data_summary     = data_summary or {}
+    by_member_tasks  = by_member_tasks or []
+    daily_throughput = daily_throughput or []
+    total_h  = f"{total_minutes // 60}h {total_minutes % 60}m" if total_minutes else "0h"
     freq_cap = frequency.capitalize()
 
-    # Build attachment filenames
-    safe_name = team_name.lower().replace(" ", "-")
-    pdf_fname   = f"kartavya-{safe_name}-{period_from}-{period_to}.pdf"
+    safe_name   = team_name.lower().replace(" ", "-")
     excel_fname = f"kartavya-{safe_name}-{period_from}-{period_to}.xlsx"
+    pdf_fname   = f"kartavya-{safe_name}-{period_from}-{period_to}.pdf"
 
-    preheader = f"{freq_cap} report for {team_name} — {period_from} to {period_to}."
+    # ── Kicker / headline copy ─���────────────────────────────────────
+    done_count = data_summary.get("done", 0)
+    overdue    = data_summary.get("overdue", 0)
+    in_prog    = data_summary.get("in_progress", 0)
+    todo_count = data_summary.get("todo", 0)
+    if frequency == "daily":
+        kicker   = f"DAILY REPORT · {period_from}"
+        headline = f"{_h(team_name)} — yesterday's pulse."
+        sanskrit = "दैनिक प्रतिवेदन"
+        lede     = (f'Here\'s the rollup for <strong>{_h(team_name)}</strong> over the last 24 hours. '
+                    f'The Excel below has per-task detail.')
+    elif frequency == "weekly":
+        kicker   = f"WEEKLY REPORT · {period_from} to {period_to}"
+        headline = f"{_h(team_name)} closed {done_count} tasks this week."
+        sanskrit = "साप्ताहिक प्रतिवेदन"
+        lede     = (f'Here\'s the weekly rollup for <strong>{_h(team_name)}</strong>. '
+                    f'Full per-task detail is in the attached Excel.')
+    else:
+        kicker   = f"MONTHLY REPORT · {period_from} to {period_to}"
+        headline = f"{done_count} tasks shipped in {period_from[:7]}."
+        sanskrit = "मासिक प्रतिवेदन"
+        lede     = (f'Monthly summary for <strong>{_h(team_name)}</strong>. '
+                    f'Full per-task detail is in the attached Excel.')
 
-    stats_rows = (
-        f'<tr><td style="padding:10px 16px;font-family:{_FONT_UI};font-size:12px;letter-spacing:0.12em;'
-        f'text-transform:uppercase;color:{_INK3};font-weight:700;border-bottom:1px solid {_RULE_SOFT};width:38%;">TOTAL TIME</td>'
-        f'<td style="padding:10px 16px;font-family:{_FONT_UI};font-size:14px;color:{_INK};border-bottom:1px solid {_RULE_SOFT};">{total_h}</td></tr>'
-        f'<tr><td style="padding:10px 16px;font-family:{_FONT_UI};font-size:12px;letter-spacing:0.12em;'
-        f'text-transform:uppercase;color:{_INK3};font-weight:700;border-bottom:1px solid {_RULE_SOFT};">DONE</td>'
-        f'<td style="padding:10px 16px;font-family:{_FONT_UI};font-size:14px;color:{_TEAL};font-weight:600;border-bottom:1px solid {_RULE_SOFT};">{data_summary.get("done",0)} tasks</td></tr>'
-        f'<tr><td style="padding:10px 16px;font-family:{_FONT_UI};font-size:12px;letter-spacing:0.12em;'
-        f'text-transform:uppercase;color:{_INK3};font-weight:700;border-bottom:1px solid {_RULE_SOFT};">IN PROGRESS</td>'
-        f'<td style="padding:10px 16px;font-family:{_FONT_UI};font-size:14px;color:{_INK};border-bottom:1px solid {_RULE_SOFT};">{data_summary.get("in_progress",0)} tasks</td></tr>'
-        f'<tr><td style="padding:10px 16px;font-family:{_FONT_UI};font-size:12px;letter-spacing:0.12em;'
-        f'text-transform:uppercase;color:{_INK3};font-weight:700;">OVERDUE</td>'
-        f'<td style="padding:10px 16px;font-family:{_FONT_UI};font-size:14px;color:#dc2626;">{data_summary.get("overdue",0)} tasks</td></tr>'
-    )
-    stats_table = (
-        f'<tr><td style="padding:0 36px 28px;">'
-        f'<table class="em__card" width="100%" cellpadding="0" cellspacing="0" border="0"'
-        f' style="background:{_BG};border:1px solid {_RULE};border-radius:10px;overflow:hidden;">'
-        f'{stats_rows}</table></td></tr>'
-    )
+    preheader = f"{freq_cap} report for {team_name} ({period_from} to {period_to}) — {done_count} done, {overdue} overdue."
 
-    attach_note = ""
-    fmts = []
-    if pdf_bytes:   fmts.append("PDF")
-    if excel_bytes: fmts.append("Excel")
-    if fmts:
-        attach_note = _body_text(
-            f'<span style="font-size:13px;color:{_INK3};">Attached: {", ".join(fmts)} report(s) for {_h(period_from)} – {_h(period_to)}.</span>'
+    # Helper: stat tile (table cell, 25% width)
+    _S = "#FCFAF5"  # surface
+    def _stat_tile(k, v, hint, tone="neutral"):
+        if tone == "ok":
+            bg, border, vc = "#E8F5F3", "#0A7A6E", "#0A7A6E"
+        elif tone == "warn":
+            bg, border, vc = "#FEF3E2", "#B06A00", "#B06A00"
+        elif tone == "bad":
+            bg, border, vc = "#F8E9E5", "#C0392B", "#C0392B"
+        else:
+            bg, border, vc = "#FFFFFF", _RULE, _INK
+        return (
+            f'<td width="25%" style="padding:4px;">'
+            f'<table width="100%" cellpadding="0" cellspacing="0" border="0"'
+            f' style="background:{bg};border:1px solid {border};border-radius:12px;">'
+            f'<tr><td style="padding:14px 14px 12px;">'
+            f'<div style="font-family:{_FONT_UI};font-size:9.5px;letter-spacing:0.18em;'
+            f'text-transform:uppercase;color:{_INK3};font-weight:700;">{k}</div>'
+            f'<div style="font-family:{_FONT_DISP};font-size:34px;font-weight:400;'
+            f'line-height:1;letter-spacing:-0.02em;color:{vc};margin-top:2px;">{v}</div>'
+            f'<div style="font-family:{_FONT_UI};font-size:11px;color:{_INK3};margin-top:4px;">{hint}</div>'
+            f'</td></tr></table></td>'
         )
 
-    body = (
-        _body_text(f'Your <strong>{freq_cap} project report</strong> for '
-                   f'<strong>{_h(team_name)}</strong> is ready. '
-                   f'Here\'s a snapshot of the period <strong>{_h(period_from)}</strong> to <strong>{_h(period_to)}</strong>.')
-        + stats_table
-        + attach_note
+    stats_row = (
+        f'<tr><td style="padding:0 36px 8px;">'
+        f'<table width="100%" cellpadding="0" cellspacing="0" border="0">'
+        f'<tr>'
+        + _stat_tile("Completed", done_count, f"period total", "ok")
+        + _stat_tile("In progress", in_prog, "active tasks")
+        + _stat_tile("To do", todo_count, "queued")
+        + _stat_tile("Overdue", overdue, "needs attention", "bad" if overdue > 0 else "neutral")
+        + f'</tr></table></td></tr>'
     )
+
+    # ── Section header helper ──────────��────────────────────────────
+    def _sec_h(title, hindi):
+        return (
+            f'<tr><td style="padding:20px 36px 10px;">'
+            f'<table width="100%" cellpadding="0" cellspacing="0" border="0"'
+            f' style="border-bottom:1px solid {_RULE_SOFT};">'
+            f'<tr>'
+            f'<td style="padding-bottom:8px;font-family:{_FONT_DISP};font-size:18px;'
+            f'font-weight:500;color:{_INK};">{title}</td>'
+            f'<td align="right" style="padding-bottom:8px;font-family:{_FONT_HINDI};'
+            f'font-size:14px;color:{_INK3};">{hindi}</td>'
+            f'</tr></table></td></tr>'
+        )
+
+    # ── Task summary table (single project row) ─────────────────────
+    proj_table = (
+        _sec_h("Task summary", "कार्य सारांश")
+        + f'<tr><td style="padding:0 36px 8px;">'
+        f'<table width="100%" cellpadding="0" cellspacing="0" border="0"'
+        f' style="font-size:13.5px;">'
+        f'<thead><tr>'
+        f'<th style="text-align:left;font-size:10px;letter-spacing:0.18em;text-transform:uppercase;'
+        f'color:{_INK3};font-weight:700;padding:8px;border-bottom:1px solid {_RULE};">Project</th>'
+        f'<th style="text-align:right;font-size:10px;letter-spacing:0.18em;text-transform:uppercase;'
+        f'color:{_INK3};font-weight:700;padding:8px;border-bottom:1px solid {_RULE};">Done</th>'
+        f'<th style="text-align:right;font-size:10px;letter-spacing:0.18em;text-transform:uppercase;'
+        f'color:{_INK3};font-weight:700;padding:8px;border-bottom:1px solid {_RULE};">In Progress</th>'
+        f'<th style="text-align:right;font-size:10px;letter-spacing:0.18em;text-transform:uppercase;'
+        f'color:{_INK3};font-weight:700;padding:8px;border-bottom:1px solid {_RULE};">To Do</th>'
+        f'<th style="text-align:right;font-size:10px;letter-spacing:0.18em;text-transform:uppercase;'
+        f'color:{_DANGER_BOR};font-weight:700;padding:8px;border-bottom:1px solid {_RULE};">Overdue</th>'
+        f'</tr></thead>'
+        f'<tbody><tr>'
+        f'<td style="padding:14px 8px;border-bottom:1px dashed {_RULE};">'
+        f'<div style="display:inline-block;width:8px;height:8px;border-radius:2px;'
+        f'background:{_TEAL};vertical-align:middle;margin-right:8px;"></div>'
+        f'<strong style="color:{_INK};font-size:14px;">{_h(team_name)}</strong>'
+        f'</td>'
+        f'<td style="text-align:right;padding:14px 8px;border-bottom:1px dashed {_RULE};'
+        f'font-family:{_FONT_DISP};font-size:18px;color:{_INK};">{done_count}</td>'
+        f'<td style="text-align:right;padding:14px 8px;border-bottom:1px dashed {_RULE};'
+        f'font-family:{_FONT_DISP};font-size:18px;color:{_INK};">{in_prog}</td>'
+        f'<td style="text-align:right;padding:14px 8px;border-bottom:1px dashed {_RULE};'
+        f'font-family:{_FONT_DISP};font-size:18px;color:{_INK};">{todo_count}</td>'
+        f'<td style="text-align:right;padding:14px 8px;border-bottom:1px dashed {_RULE};'
+        f'font-family:{_FONT_DISP};font-size:18px;'
+        f'color:{"#C0392B" if overdue > 0 else _INK};">{overdue}</td>'
+        f'</tr></tbody></table></td></tr>'
+    )
+
+    # ── Champion callout ────────────────────��───────────────────────
+    champ_block = ""
+    if by_member_tasks:
+        top = by_member_tasks[0]
+        nm   = top.get("user_name", "Team")
+        cnt  = top.get("tasks_done", 0)
+        init = "".join(p[0].upper() for p in nm.split()[:2])
+        av_colors = ["#0082c6", "#0A7A6E", "#6366f1", "#ec4899", "#B06A00"]
+        av_bg = av_colors[hash(nm) % len(av_colors)]
+        if frequency == "daily":
+            champ_label = "CHAMPION OF THE DAY"
+            champ_hi    = "दिन का नायक"
+        elif frequency == "weekly":
+            champ_label = "CHAMPION OF THE WEEK"
+            champ_hi    = "सप्ताह का नाय��"
+        else:
+            champ_label = "CHAMPION OF THE MONTH"
+            champ_hi    = "माह का नायक"
+        total_h_entry = f"{total_minutes // 60}h {total_minutes % 60}m" if total_minutes else ""
+        champ_block = (
+            f'<tr><td style="padding:4px 36px 16px;">'
+            f'<table width="100%" cellpadding="0" cellspacing="0" border="0"'
+            f' style="background:#F0F9FF;border:1px solid #BAD9F5;border-radius:14px;">'
+            f'<tr><td style="padding:18px 20px;">'
+            f'<div style="font-family:{_FONT_UI};font-size:10px;letter-spacing:0.24em;'
+            f'text-transform:uppercase;color:{_MID};font-weight:700;margin-bottom:12px;">'
+            f'{champ_label}'
+            f'<span style="font-family:{_FONT_HINDI};font-size:12px;color:{_INK3};'
+            f'font-weight:400;letter-spacing:0;text-transform:none;margin-left:10px;">{champ_hi}</span>'
+            f'</div>'
+            f'<table width="100%" cellpadding="0" cellspacing="0" border="0"><tr>'
+            f'<td width="52" style="vertical-align:middle;">'
+            f'<div style="width:48px;height:48px;border-radius:50%;background:{av_bg};'
+            f'color:#fff;font-weight:700;font-size:16px;text-align:center;line-height:48px;">{init}</div>'
+            f'</td>'
+            f'<td style="vertical-align:middle;padding-left:14px;">'
+            f'<div style="font-family:{_FONT_DISP};font-size:22px;font-weight:500;color:{_INK};">{_h(nm)}</div>'
+            f'<div style="font-family:{_FONT_UI};font-size:12.5px;color:{_INK3};margin-top:2px;">'
+            f'Top contributor · {_h(team_name)}</div>'
+            f'</td>'
+            f'<td align="right" style="vertical-align:middle;font-family:{_FONT_DISP};'
+            f'font-size:15px;color:{_INK};">'
+            f'<strong style="font-size:22px;">{cnt}</strong> tasks closed'
+            f'{"<br><span style=\"font-family:" + _FONT_UI + ";font-size:11.5px;color:" + _INK3 + ";\">" + total_h_entry + " total time</span>" if total_h_entry else ""}'
+            f'</td>'
+            f'</tr></table>'
+            f'</td></tr></table></td></tr>'
+        )
+
+    # ── Sparkline (throughput bars) ─��───────────────────────────────
+    spark_block = ""
+    if daily_throughput and frequency in ("weekly", "monthly"):
+        max_val = max((r.get("done_count", 0) for r in daily_throughput), default=1) or 1
+        bar_cells = ""
+        for r in daily_throughput[-7:]:  # cap at 7 bars
+            day_label = str(r.get("day", ""))[-5:]  # MM-DD
+            val       = int(r.get("done_count", 0))
+            bar_h     = max(4, int(val / max_val * 80))
+            bar_cells += (
+                f'<td align="center" style="vertical-align:bottom;padding:0 5px;">'
+                f'<div style="width:28px;height:{bar_h}px;background:linear-gradient(135deg,#0082c6,#05b7aa);'
+                f'border-radius:3px 3px 0 0;margin:0 auto;"></div>'
+                f'<div style="font-family:{_FONT_UI};font-size:9.5px;letter-spacing:0.12em;'
+                f'text-transform:uppercase;color:{_INK3};font-weight:700;margin-top:5px;">{day_label}</div>'
+                f'<div style="font-family:{_FONT_DISP};font-size:13px;color:{_INK};">{val}</div>'
+                f'</td>'
+            )
+        spark_block = (
+            _sec_h("Throughput trend", "गति")
+            + f'<tr><td style="padding:4px 36px 8px;">'
+            f'<table width="100%" cellpadding="0" cellspacing="0" border="0"'
+            f' style="background:{_BG_SOFT};border:1px solid {_RULE};border-radius:12px;">'
+            f'<tr><td style="padding:18px 18px 14px;">'
+            f'<table width="100%" cellpadding="0" cellspacing="0" border="0">'
+            f'<tr style="vertical-align:bottom;">{bar_cells}</tr>'
+            f'</table></td></tr></table></td></tr>'
+        )
+
+    # ── Leaderboard (monthly only) ────────────────────────��─────────
+    board_block = ""
+    if frequency == "monthly" and by_member_tasks:
+        max_t = max((r.get("tasks_done", 0) for r in by_member_tasks), default=1) or 1
+        board_rows = ""
+        av_colors = ["#0082c6", "#0A7A6E", "#6366f1", "#ec4899", "#B06A00"]
+        for i, r in enumerate(by_member_tasks[:5]):
+            nm_b  = r.get("user_name", "")
+            cnt_b = r.get("tasks_done", 0)
+            pct   = int(cnt_b / max_t * 100)
+            color = av_colors[i % len(av_colors)]
+            board_rows += (
+                f'<tr style="border-bottom:1px dashed {_RULE};">'
+                f'<td style="padding:8px 0;font-family:{_FONT_DISP};font-size:16px;'
+                f'color:{_INK3};width:28px;">{i+1}</td>'
+                f'<td style="padding:8px 0;font-family:{_FONT_UI};font-size:13.5px;'
+                f'color:{_INK};font-weight:600;width:140px;">{_h(nm_b)}</td>'
+                f'<td style="padding:8px 12px;">'
+                f'<table width="100%" cellpadding="0" cellspacing="0" border="0">'
+                f'<tr><td style="background:{_RULE_SOFT};border-radius:99px;height:8px;overflow:hidden;">'
+                f'<div style="width:{pct}%;height:8px;background:{color};border-radius:99px;min-width:6px;"></div>'
+                f'</td></tr></table></td>'
+                f'<td align="right" style="padding:8px 0;font-family:{_FONT_DISP};'
+                f'font-size:16px;color:{_INK};width:36px;">{cnt_b}</td>'
+                f'</tr>'
+            )
+        board_block = (
+            _sec_h("Leaderboard", "वरीयता क्रम")
+            + f'<tr><td style="padding:4px 36px 16px;">'
+            f'<table width="100%" cellpadding="0" cellspacing="0" border="0"'
+            f' style="background:{_BG_SOFT};border:1px solid {_RULE};border-radius:12px;">'
+            f'<tr><td style="padding:18px 20px;">'
+            f'<table width="100%" cellpadding="0" cellspacing="0" border="0">'
+            f'{board_rows}'
+            f'</table></td></tr></table></td></tr>'
+        )
+
+    # ── Excel attachment row ───────────────────────��────────────────
+    attach_block = ""
+    if excel_bytes or pdf_bytes:
+        import os as _os
+        xl_size = f"{len(excel_bytes) // 1024} KB" if excel_bytes else ""
+        attach_block = (
+            f'<tr><td style="padding:8px 36px 12px;">'
+            f'<table width="100%" cellpadding="0" cellspacing="0" border="0"'
+            f' style="background:#FFFFFF;border:1px solid {_RULE};border-radius:10px;">'
+            f'<tr><td style="padding:14px 16px;">'
+            f'<table cellpadding="0" cellspacing="0" border="0"><tr>'
+            f'<td style="vertical-align:middle;width:52px;">'
+            f'<div style="width:44px;height:54px;border-radius:4px;'
+            f'background:linear-gradient(180deg,#1e6e3c,#146a35);'
+            f'text-align:center;color:#fff;font-family:monospace;font-size:10px;'
+            f'font-weight:700;letter-spacing:0.06em;line-height:54px;">XLS</div>'
+            f'</td>'
+            f'<td style="vertical-align:middle;padding-left:14px;">'
+            f'<div style="font-family:monospace;font-size:13px;color:{_INK};'
+            f'font-weight:500;">{excel_fname}</div>'
+            f'<div style="font-family:{_FONT_UI};font-size:11.5px;color:{_INK3};margin-top:3px;">'
+            f'Attached to this email · also downloadable for 30 days'
+            f'{"  ·  " + xl_size if xl_size else ""}'
+            f'</div>'
+            f'</td>'
+            f'</tr></table>'
+            f'</td></tr></table></td></tr>'
+        )
+
+    # ── Meta footer line ──────────────────────────────────��─────────
+    meta_line = (
+        f'<tr><td style="padding:12px 36px 0;border-top:1px dashed {_RULE};">'
+        f'<p style="margin:0;font-family:{_FONT_UI};font-size:12.5px;color:{_INK3};">'
+        f"You're getting this because you're an <strong>admin</strong> or "
+        f"<strong>team owner</strong> on <strong>{_h(team_name)}</strong>."
+        f'</p></td></tr>'
+    )
+
+    body = (
+        _body_text(
+            f'Hi — here\'s the <strong>{freq_cap} report</strong> for '
+            f'<strong>{_h(team_name)}</strong>, covering '
+            f'<strong>{_h(period_from)}</strong> to <strong>{_h(period_to)}</strong>.'
+        )
+        + stats_row
+        + proj_table
+        + champ_block
+        + spark_block
+        + board_block
+        + attach_block
+        + _cta_row(f"{FRONTEND_URL}/dashboard", "Open dashboard", "primary",
+                   f"{FRONTEND_URL}/dashboard", "Download Excel" if excel_bytes else None)
+        + meta_line
+    )
+
     html_body = _base(
-        preheader,
-        f"{freq_cap.upper()} REPORT · प्रतिवेदन",
-        f"{team_name} Report",
-        "कार्य प्रतिवेदन",
-        f"{freq_cap} summary for your project.",
-        body,
-        show_gita=True,
+        preheader, kicker, headline, sanskrit, lede, body, show_gita=(frequency == "monthly"),
     )
 
     def _send():

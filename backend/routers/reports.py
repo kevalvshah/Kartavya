@@ -356,6 +356,8 @@ async def dispatch_reports(request_secret: str = Query(""), pool=Depends(get_poo
                     total_minutes=data.get("total_minutes", 0),
                     pdf_bytes=pdf_bytes,
                     excel_bytes=excel_bytes,
+                    by_member_tasks=data.get("by_member_tasks", []),
+                    daily_throughput=data.get("daily_throughput", []),
                 )
 
             next_run = _next_run(
