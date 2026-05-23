@@ -14,7 +14,15 @@ from db import get_pool
 
 router = APIRouter(prefix="/api/fields", tags=["fields"])
 
-FIELD_TYPES = {"status", "person", "date", "number", "dropdown", "files", "text"}
+FIELD_TYPES = {
+    "text", "textarea", "number", "date",
+    "select", "dropdown",          # dropdown is alias for select
+    "checkbox",
+    "url",
+    "person",
+    "files",
+    "status",
+}
 
 
 class FieldDefCreate(BaseModel):
@@ -36,13 +44,26 @@ class FieldValueSet(BaseModel):
     value: Any
 
 
+import json as _json
+
+def _norm_field(r):
+    row = dict(r)
+    cfg = row.get("config")
+    if isinstance(cfg, str):
+        try: row["config"] = _json.loads(cfg)
+        except Exception: row["config"] = {}
+    elif cfg is None:
+        row["config"] = {}
+    return row
+
+
 @router.get("/team/{team_id}")
 async def list_field_definitions(team_id: str, pool=Depends(get_pool), user=Depends(require_user)):
     rows = await pool.fetch(
         "SELECT * FROM field_definitions WHERE team_id=$1 ORDER BY sort_order, created_at",
         team_id
     )
-    return [dict(r) for r in rows]
+    return [_norm_field(r) for r in rows]
 
 
 @router.post("/")

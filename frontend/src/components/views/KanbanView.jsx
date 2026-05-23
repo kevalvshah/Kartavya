@@ -2,6 +2,7 @@ import React, { useState, useRef, useCallback, useMemo } from 'react';
 import { api } from '../../lib/api';
 import KanbanCard from './KanbanCard';
 import TaskDrawer from '../TaskDrawer';
+import { useToast } from '../ui/toast';
 
 // Synthetic column injected at position 0 for admins/owners
 const REQUESTED_COL = {
@@ -22,7 +23,8 @@ const CLIENT_APPROVAL_COL = {
 
 export default function KanbanView({
   columns, tasks, fieldDefs, fieldValueMap, teamMembers,
-  onTasksChange, onColumnChange,
+  onTasksChange, onColumnChange, onColumnsChange,
+  teamId,
   // readOnly: disables ALL drag + hides "Add task" buttons
   readOnly = false,
   // currentUserId / currentUserRole: used to enforce client drag rules
@@ -33,10 +35,60 @@ export default function KanbanView({
   // showClientApproval: inject "Awaiting Client Approval" column
   showClientApproval = false,
 }) {
+  const { pushToast } = useToast();
   const [dragging, setDragging]         = useState(null);
   const [over, setOver]                 = useState(null);
   const [drawerTaskId, setDrawerTaskId] = useState(null);
   const dragIdx = useRef(null);
+
+  // ── Column rename state ───────────────────────────────────────────────────
+  const [renamingColId, setRenamingColId] = useState(null);
+  const [renameVal,     setRenameVal]     = useState('');
+  const renameRef = useRef(null);
+
+  // ── Add column state ──────────────────────────────────────────────────────
+  const [addingCol,   setAddingCol]   = useState(false);
+  const [newColName,  setNewColName]  = useState('');
+  const [newColColor, setNewColColor] = useState('#6366f1');
+  const [newColDone,  setNewColDone]  = useState(false);
+  const addColRef = useRef(null);
+
+  const canManageCols = !readOnly && !!teamId && ['admin','owner'].includes(currentUserRole);
+
+  const startRename = (col) => {
+    if (!canManageCols || col._synthetic) return;
+    setRenamingColId(col.column_id);
+    setRenameVal(col.name);
+    setTimeout(() => renameRef.current?.select(), 30);
+  };
+
+  const commitRename = async (col) => {
+    const name = renameVal.trim();
+    setRenamingColId(null);
+    if (!name || name === col.name) return;
+    try {
+      await api.put(`/projects/${teamId}/columns/${col.column_id}`, { name });
+      onColumnsChange?.(prev => prev.map(c => c.column_id === col.column_id ? { ...c, name } : c));
+    } catch {
+      pushToast({ type: 'error', title: 'Could not rename column' });
+    }
+  };
+
+  const commitAddCol = async () => {
+    const name = newColName.trim();
+    if (!name) { setAddingCol(false); return; }
+    try {
+      const res = await api.post(`/projects/${teamId}/columns`, { name, color: newColColor, is_done: newColDone });
+      onColumnsChange?.(prev => [...prev, res.data]);
+      pushToast({ type: 'success', title: `"${name}" column added` });
+    } catch {
+      pushToast({ type: 'error', title: 'Could not add column' });
+    }
+    setAddingCol(false);
+    setNewColName('');
+    setNewColColor('#6366f1');
+    setNewColDone(false);
+  };
 
   const isClient = currentUserRole === 'client';
 
@@ -132,15 +184,36 @@ export default function KanbanView({
             >
               <div className="k-bcol__head">
                 <span className="k-bcol__bar" style={{ background: col.color || 'var(--k-primary)' }} />
-                <span className="k-bcol__title">
-                  {col.name}
-                  {isSynth && col._hindi && (
-                    <span style={{ fontFamily: 'var(--font-hindi)', fontSize: 11, color: 'var(--ink-3)', marginLeft: 6 }}>{col._hindi}</span>
-                  )}
-                  {isSynth && !col._hindi && col.column_id === '__requested__' && (
-                    <span style={{ fontFamily: 'var(--font-hindi)', fontSize: 11, color: 'var(--ink-3)', marginLeft: 6 }}>अनुरोध</span>
-                  )}
-                </span>
+                {renamingColId === col.column_id ? (
+                  <input
+                    ref={renameRef}
+                    className="k-input"
+                    value={renameVal}
+                    onChange={e => setRenameVal(e.target.value)}
+                    onBlur={() => commitRename(col)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') commitRename(col);
+                      if (e.key === 'Escape') setRenamingColId(null);
+                    }}
+                    style={{ flex: 1, fontSize: 12, fontWeight: 600, padding: '2px 6px', height: 26 }}
+                    autoFocus
+                  />
+                ) : (
+                  <span
+                    className="k-bcol__title"
+                    onDoubleClick={() => startRename(col)}
+                    title={canManageCols && !isSynth ? 'Double-click to rename' : undefined}
+                    style={canManageCols && !isSynth ? { cursor: 'text' } : undefined}
+                  >
+                    {col.name}
+                    {isSynth && col._hindi && (
+                      <span style={{ fontFamily: 'var(--font-hindi)', fontSize: 11, color: 'var(--ink-3)', marginLeft: 6 }}>{col._hindi}</span>
+                    )}
+                    {isSynth && !col._hindi && col.column_id === '__requested__' && (
+                      <span style={{ fontFamily: 'var(--font-hindi)', fontSize: 11, color: 'var(--ink-3)', marginLeft: 6 }}>अनुरोध</span>
+                    )}
+                  </span>
+                )}
                 <span className="k-bcol__count">{colTasks.length}</span>
               </div>
               <div className="k-bcol__body">
@@ -175,6 +248,46 @@ export default function KanbanView({
             </div>
           );
         })}
+
+        {/* Add column */}
+        {canManageCols && (
+          <div className="k-bcol k-bcol--add" style={{ minWidth: 220, maxWidth: 240, flexShrink: 0 }}>
+            {addingCol ? (
+              <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <input
+                  ref={addColRef}
+                  className="k-input"
+                  value={newColName}
+                  onChange={e => setNewColName(e.target.value)}
+                  placeholder="Column name…"
+                  onKeyDown={e => { if (e.key === 'Enter') commitAddCol(); if (e.key === 'Escape') { setAddingCol(false); setNewColName(''); } }}
+                  autoFocus
+                  style={{ fontSize: 13 }}
+                />
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <input type="color" value={newColColor} onChange={e => setNewColColor(e.target.value)}
+                    style={{ width: 28, height: 28, border: 'none', background: 'none', cursor: 'pointer', padding: 0 }} title="Column colour" />
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: 'var(--ink-3)', cursor: 'pointer' }}>
+                    <input type="checkbox" checked={newColDone} onChange={e => setNewColDone(e.target.checked)} />
+                    Mark as Done
+                  </label>
+                </div>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <button className="k-btn k-btn--primary k-btn--sm" onClick={commitAddCol} style={{ flex: 1 }}>Add</button>
+                  <button className="k-btn k-btn--ghost k-btn--sm" onClick={() => { setAddingCol(false); setNewColName(''); }}>Cancel</button>
+                </div>
+              </div>
+            ) : (
+              <button
+                onClick={() => setAddingCol(true)}
+                style={{ width: '100%', height: '100%', minHeight: 80, background: 'transparent', border: '2px dashed var(--rule)', borderRadius: 'var(--r-md)', cursor: 'pointer', color: 'var(--ink-3)', fontSize: 13, fontFamily: 'inherit', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4 }}
+              >
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2"><path d="M8 3v10M3 8h10"/></svg>
+                Add column
+              </button>
+            )}
+          </div>
+        )}
       </div>
       <TaskDrawer taskId={drawerTaskId} open={!!drawerTaskId} onClose={() => setDrawerTaskId(null)}
         teamMembers={teamMembers} onSaved={u => onTasksChange?.(p => p.map(t => t.task_id === u.task_id ? u : t))} />

@@ -194,7 +194,15 @@ export default function BoardsPage() {
                 onKeyDown={e => e.key === 'Enter' && addField()}
               />
               <select className="k-select" value={newFieldType} onChange={e => setNewFieldType(e.target.value)}>
-                {['text','number','date','select','checkbox','url','person'].map(t => <option key={t} value={t}>{t}</option>)}
+                {[
+                  { v: 'text',     l: 'Text' },
+                  { v: 'number',   l: 'Number' },
+                  { v: 'date',     l: 'Date' },
+                  { v: 'select',   l: 'Select / Dropdown' },
+                  { v: 'checkbox', l: 'Checkbox' },
+                  { v: 'url',      l: 'URL' },
+                  { v: 'person',   l: 'Person' },
+                ].map(t => <option key={t.v} value={t.v}>{t.l}</option>)}
               </select>
               <button className="k-btn k-btn--primary k-btn--sm" onClick={addField}>Add</button>
             </div>
@@ -246,10 +254,12 @@ export default function BoardsPage() {
               tasks={tasks}
               teamMembers={teamMembers}
               fieldDefs={fieldDefs}
+              teamId={activeId}
               currentUserId={me?.user_id}
               currentUserRole={me?.role}
               showRequested={me?.role !== 'client'}
               onTasksChange={handleTasksChange}
+              onColumnsChange={setColumns}
             />
           )}
           {view === 'table' && (

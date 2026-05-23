@@ -219,7 +219,15 @@ export default function ProjectBoardPage() {
                 style={{ flex: 1 }}
               />
               <select className="k-select" value={newFieldType} onChange={e => setNewFieldType(e.target.value)}>
-                {['text','number','date','select','checkbox','url','person'].map(t => <option key={t} value={t}>{t}</option>)}
+                {[
+                  { v: 'text',     l: 'Text' },
+                  { v: 'number',   l: 'Number' },
+                  { v: 'date',     l: 'Date' },
+                  { v: 'select',   l: 'Select / Dropdown' },
+                  { v: 'checkbox', l: 'Checkbox' },
+                  { v: 'url',      l: 'URL' },
+                  { v: 'person',   l: 'Person' },
+                ].map(t => <option key={t.v} value={t.v}>{t.l}</option>)}
               </select>
               <button className="k-btn k-btn--primary k-btn--sm" onClick={addField}>Add</button>
             </div>
@@ -271,8 +279,10 @@ export default function ProjectBoardPage() {
           fieldDefs={fieldDefs}
           fieldValueMap={fieldValueMap}
           teamMembers={teamMembers}
+          teamId={projectId}
           onTasksChange={setTasks}
           onColumnChange={handleColumnChange}
+          onColumnsChange={setColumns}
           showRequested={me?.role === 'admin' || me?.role === 'owner'}
           showClientApproval={me?.role === 'admin' || me?.role === 'owner'}
           currentUserId={me?.user_id}
