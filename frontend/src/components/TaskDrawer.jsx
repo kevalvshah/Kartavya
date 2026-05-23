@@ -91,6 +91,7 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
   const [manualDesc, setManualDesc] = useState('');
   const [attachments, setAttachments] = useState([]);
   const [uploading,   setUploading]   = useState(false);
+  const [columns,     setColumns]     = useState([]);
   const fileRef = useRef(null);
 
   // Approval UI state
@@ -139,6 +140,9 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
       const att = t.attachments || [];
       setAttachments(Array.isArray(att) ? att.map(a => typeof a === 'string' ? { url: a, name: a.split('/').pop() } : a) : []);
       if (t.team_id) {
+        api.get(`/projects/${t.team_id}/columns`).then(r => {
+          setColumns(Array.isArray(r.data) ? r.data : []);
+        }).catch(() => {});
         api.get(`/fields/team/${t.team_id}`).then(r => {
           const defs = r.data.map(f =>
             f.type === 'person' ? { ...f, config: { ...f.config, members: mentionMembers } } : f
@@ -289,7 +293,7 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
       }
       const updated = [...attachments, ...newFiles];
       setAttachments(updated);
-      await saveTask({ attachments: updated.map(f => f.url) });
+      await saveTask({ attachments: updated.map(f => ({ name: f.name, url: f.url, key: f.key || null })) });
       pushToast({ type: 'success', title: `${newFiles.length} file${newFiles.length > 1 ? 's' : ''} uploaded` });
     } catch (err) {
       const msg = err?.response?.data?.detail || 'Upload failed';
@@ -301,7 +305,7 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
   const removeAttachment = async (idx) => {
     const updated = attachments.filter((_, i) => i !== idx);
     setAttachments(updated);
-    await saveTask({ attachments: updated.map(f => f.url) });
+    await saveTask({ attachments: updated.map(f => ({ name: f.name, url: f.url, key: f.key || null })) });
   };
 
   const isSystemAdmin = me?.role === 'admin';
@@ -450,6 +454,30 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
                 {Object.entries(PRIORITY_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
               </select>
             </div>
+            {columns.length > 0 && (
+              <div className="k-prop">
+                <span className="k-prop__lbl">Column <span className="k-prop__sans">स्तंभ</span></span>
+                <select
+                  value={task?.column_id || ''}
+                  onChange={async e => {
+                    const colId = e.target.value;
+                    if (!colId) return;
+                    try {
+                      const res = await api.patch(`/tasks/${taskId}/move`, { column_id: colId, order: 999 });
+                      setTask(res.data);
+                      setDraft(d => ({ ...d, status: res.data.status }));
+                      onSaved?.(res.data);
+                    } catch { /* ignore */ }
+                  }}
+                  className="k-input"
+                  style={{ fontSize: 13 }}
+                >
+                  {columns.map(c => (
+                    <option key={c.column_id} value={c.column_id}>{c.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
             <div className="k-prop">
               <span className="k-prop__lbl">Due date <span className="k-prop__sans">समय-सीमा</span></span>
               <input

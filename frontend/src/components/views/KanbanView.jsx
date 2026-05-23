@@ -74,6 +74,17 @@ export default function KanbanView({
     }
   };
 
+  const deleteCol = async (col) => {
+    if (!window.confirm(`Delete column "${col.name}"? Tasks will move to the next column.`)) return;
+    try {
+      await api.delete(`/projects/${teamId}/columns/${col.column_id}`);
+      onColumnsChange?.(prev => prev.filter(c => c.column_id !== col.column_id));
+      pushToast({ type: 'success', title: `"${col.name}" deleted` });
+    } catch (e) {
+      pushToast({ type: 'error', title: e?.response?.data?.detail || 'Could not delete column' });
+    }
+  };
+
   const commitAddCol = async () => {
     const name = newColName.trim();
     if (!name) { setAddingCol(false); return; }
@@ -215,6 +226,15 @@ export default function KanbanView({
                   </span>
                 )}
                 <span className="k-bcol__count">{colTasks.length}</span>
+                {canManageCols && !isSynth && (
+                  <button
+                    title="Delete column"
+                    onClick={() => deleteCol(col)}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-faint)', padding: '2px 4px', fontSize: 15, lineHeight: 1, borderRadius: 4, opacity: 0.5, marginLeft: 2 }}
+                    onMouseEnter={e => e.currentTarget.style.opacity = '1'}
+                    onMouseLeave={e => e.currentTarget.style.opacity = '0.5'}
+                  >×</button>
+                )}
               </div>
               <div className="k-bcol__body">
                 {colTasks.map((task, idx) => {

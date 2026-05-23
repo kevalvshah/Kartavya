@@ -207,9 +207,10 @@ export default function TasksListPage() {
 
       {editor.open && (
         <TaskEditor
-          task={editor.task}
+          open={editor.open}
+          editing={editor.task}
           teams={teams}
-          onClose={() => setEditor({ open: false, task: null })}
+          onOpenChange={(v) => { if (!v) setEditor({ open: false, task: null }); }}
           onSaved={() => { setEditor({ open: false, task: null }); load(); }}
         />
       )}
