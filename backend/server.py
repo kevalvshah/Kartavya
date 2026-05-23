@@ -1200,6 +1200,38 @@ async def startup():
     logger.info(f"R2_BUCKET: {r2_bucket} | R2_PUBLIC_URL: {os.environ.get('R2_PUBLIC_URL','<presigned>')}")
     logger.info(f"CORS origins: {ALLOWED_ORIGINS}")
     logger.info("Kartavya API v2 ready — custom fields, automations, activity, time tracking, R2 uploads")
+    # Ensure tables that may be missing in production exist
+    try:
+        pool = await get_pool()
+        await pool.execute("""
+            CREATE TABLE IF NOT EXISTS activity_events (
+                event_id    TEXT PRIMARY KEY DEFAULT ('evt_' || substr(md5(random()::text), 1, 12)),
+                task_id     TEXT REFERENCES tasks(task_id) ON DELETE CASCADE,
+                team_id     TEXT NOT NULL,
+                actor_id    TEXT,
+                type        TEXT NOT NULL,
+                data        JSONB DEFAULT '{}',
+                created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            )
+        """)
+        await pool.execute("""
+            CREATE INDEX IF NOT EXISTS idx_activity_events_team ON activity_events(team_id, created_at DESC)
+        """)
+        await pool.execute("""
+            CREATE TABLE IF NOT EXISTS time_entries (
+                entry_id    TEXT PRIMARY KEY,
+                task_id     TEXT REFERENCES tasks(task_id) ON DELETE CASCADE,
+                user_id     TEXT NOT NULL,
+                started_at  TIMESTAMPTZ,
+                ended_at    TIMESTAMPTZ,
+                minutes     INTEGER,
+                description TEXT,
+                created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            )
+        """)
+        logger.info("Startup migrations: activity_events + time_entries OK")
+    except Exception as e:
+        logger.warning(f"Startup migration warning (non-fatal): {e}")
 
 @app.on_event("shutdown")
 async def shutdown(): await close_pool()

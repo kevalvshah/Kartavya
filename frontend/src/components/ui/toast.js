@@ -1,7 +1,13 @@
 import React, { createContext, useCallback, useContext, useMemo, useState } from "react";
-import { cn } from "../../lib/utils";
 
 const ToastCtx = createContext(null);
+
+const TYPE_STYLES = {
+  success: { borderLeft: '3px solid #05b7aa', icon: '✓' },
+  error:   { borderLeft: '3px solid #e53e3e', icon: '✕' },
+  warning: { borderLeft: '3px solid #f59e0b', icon: '!' },
+  info:    { borderLeft: '3px solid #0082c6', icon: 'i' },
+};
 
 export function ToastProvider({ children }) {
   const [toasts, setToasts] = useState([]);
@@ -25,20 +31,62 @@ export function ToastProvider({ children }) {
   return (
     <ToastCtx.Provider value={value}>
       {children}
-      <div data-testid="toast-stack" className="fixed right-5 top-5 z-[60] flex w-[360px] max-w-[calc(100vw-40px)] flex-col gap-2">
-        {toasts.map((t) => (
-          <div
-            key={t.id}
-            data-testid={`toast-${t.type}`}
-            className={cn(
-              "rounded-2xl border border-border/60 bg-card/90 p-4 shadow-lg backdrop-blur",
-              t.type === "error" ? "ring-1 ring-rose-500/30" : "ring-1 ring-violet-500/20",
-            )}
-          >
-            <div className="text-sm font-semibold">{t.title}</div>
-            {t.message ? <div className="mt-1 text-sm text-muted-foreground">{t.message}</div> : null}
-          </div>
-        ))}
+      <div style={{
+        position: 'fixed', right: 20, top: 20, zIndex: 9999,
+        display: 'flex', flexDirection: 'column', gap: 8,
+        width: 320, maxWidth: 'calc(100vw - 40px)',
+        pointerEvents: 'none',
+      }}>
+        {toasts.map((t) => {
+          const ts = TYPE_STYLES[t.type] || TYPE_STYLES.info;
+          return (
+            <div key={t.id} style={{
+              background: 'var(--surface, #FCFAF5)',
+              border: '1px solid var(--rule, #E5E0D5)',
+              borderLeft: ts.borderLeft,
+              borderRadius: 10,
+              padding: '10px 14px',
+              boxShadow: '0 4px 20px rgba(0,0,0,0.18)',
+              pointerEvents: 'all',
+              display: 'flex',
+              gap: 10,
+              alignItems: 'flex-start',
+            }}>
+              <span style={{
+                fontSize: 12,
+                fontWeight: 700,
+                color: ts.borderLeft.split(' ')[2],
+                marginTop: 1,
+                flexShrink: 0,
+              }}>
+                {ts.icon}
+              </span>
+              <div style={{ minWidth: 0 }}>
+                {t.title && (
+                  <div style={{
+                    fontSize: 13,
+                    fontWeight: 600,
+                    color: 'var(--ink, #1A2230)',
+                    fontFamily: 'var(--font-ui, system-ui)',
+                    lineHeight: 1.3,
+                  }}>
+                    {t.title}
+                  </div>
+                )}
+                {t.message && (
+                  <div style={{
+                    fontSize: 12,
+                    color: 'var(--ink-3, #6B7280)',
+                    marginTop: 2,
+                    fontFamily: 'var(--font-ui, system-ui)',
+                  }}>
+                    {t.message}
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
       </div>
     </ToastCtx.Provider>
   );
