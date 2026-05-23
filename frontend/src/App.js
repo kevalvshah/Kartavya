@@ -15,6 +15,7 @@
  */
 import React, { Suspense, lazy } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useOutletContext } from 'react-router-dom';
+import { Analytics } from '@vercel/analytics/react';
 import './App.css';
 import './styles/index.css';
 import './styles/kartavya-design.css';
@@ -132,6 +133,7 @@ export default function App() {
           <CustomizeFAB />
         </BrowserRouter>
       </ToastProvider>
+      <Analytics />
     </CustomizeProvider>
   );
 }
