@@ -129,130 +129,167 @@ async def remove_user(user_id: str, reassign_to: Optional[str] = None, pool=Depe
         raise HTTPException(status_code=400, detail="Cannot remove yourself")
     if reassign_to == user_id:
         raise HTTPException(status_code=400, detail="Cannot reassign to the same user")
-    # Validate reassign_to exists
     if reassign_to:
         target = await pool.fetchrow("SELECT user_id FROM users WHERE user_id=$1", reassign_to)
         if not target:
             raise HTTPException(status_code=404, detail="Reassign target user not found")
-    # Cascade-delete all user data in dependency order
+
+    r = reassign_to  # shorthand
+
     async with pool.acquire() as conn:
         async with conn.transaction():
-            # Remove from team/project memberships
-            await conn.execute("DELETE FROM team_members       WHERE user_id=$1", user_id)
+
+            # ── Memberships (cannot transfer — remove) ────────────────────────
+            await conn.execute("DELETE FROM team_members        WHERE user_id=$1", user_id)
             await conn.execute("DELETE FROM project_assignments WHERE user_id=$1", user_id)
-            # Remove task client links
-            await conn.execute("DELETE FROM task_clients       WHERE user_id=$1", user_id)
-            # Remove activity authored by user
-            await conn.execute("DELETE FROM activity_events    WHERE actor_id=$1", user_id)
-            # Remove time entries
-            await conn.execute("DELETE FROM time_entries       WHERE user_id=$1", user_id)
-            # Remove comments
-            try:
-                await conn.execute("DELETE FROM task_comments  WHERE user_id=$1", user_id)
-            except Exception:
-                pass
-            try:
-                await conn.execute("DELETE FROM comments       WHERE author_id=$1", user_id)
-            except Exception:
-                pass
-            # Reassign tasks: use explicit reassign_to if provided, else fall back to project owner/admin
-            if reassign_to:
+            await conn.execute("DELETE FROM task_clients        WHERE user_id=$1", user_id)
+
+            # ── Activity events ───────────────────────────────────────────────
+            if r:
+                await conn.execute("UPDATE activity_events SET actor_id=$1 WHERE actor_id=$2", r, user_id)
+            else:
+                await conn.execute("DELETE FROM activity_events WHERE actor_id=$1", user_id)
+
+            # ── Time entries ──────────────────────────────────────────────────
+            if r:
+                await conn.execute("UPDATE time_entries SET user_id=$1 WHERE user_id=$2", r, user_id)
+            else:
+                await conn.execute("DELETE FROM time_entries WHERE user_id=$1", user_id)
+
+            # ── Comments (try both table names) ───────────────────────────────
+            for tbl, col in [("task_comments", "user_id"), ("comments", "author_id")]:
+                try:
+                    if r:
+                        await conn.execute(f"UPDATE {tbl} SET {col}=$1 WHERE {col}=$2", r, user_id)
+                    else:
+                        await conn.execute(f"DELETE FROM {tbl} WHERE {col}=$1", user_id)
+                except Exception:
+                    pass
+
+            # ── Tasks: created_by_user_id ─────────────────────────────────────
+            if r:
                 await conn.execute(
-                    "UPDATE tasks SET created_by_user_id=$1 WHERE created_by_user_id=$2",
-                    reassign_to, user_id
+                    "UPDATE tasks SET created_by_user_id=$1 WHERE created_by_user_id=$2", r, user_id
                 )
             else:
+                # Fall back: reassign per-team to owner/admin, else NULL
                 task_teams = await conn.fetch(
                     "SELECT DISTINCT team_id FROM tasks WHERE created_by_user_id=$1", user_id
                 )
                 for tt in task_teams:
                     tid = tt["team_id"]
-                    replacement = await conn.fetchval("""
+                    fallback = await conn.fetchval("""
                         SELECT user_id FROM project_assignments
                         WHERE team_id=$1 AND role IN ('owner','admin') AND user_id != $2
-                        ORDER BY CASE role WHEN 'owner' THEN 0 ELSE 1 END ASC LIMIT 1
+                        ORDER BY CASE role WHEN 'owner' THEN 0 ELSE 1 END LIMIT 1
                     """, tid, user_id)
-                    if replacement:
-                        await conn.execute(
-                            "UPDATE tasks SET created_by_user_id=$1 WHERE created_by_user_id=$2 AND team_id=$3",
-                            replacement, user_id, tid
-                        )
-                    else:
-                        await conn.execute(
-                            "UPDATE tasks SET created_by_user_id=NULL WHERE created_by_user_id=$1 AND team_id=$2",
-                            user_id, tid
-                        )
-            # Nullify tasks.user_id (owner column — may have FK)
-            try:
-                await conn.execute("UPDATE tasks SET user_id=NULL WHERE user_id=$1", user_id)
-            except Exception:
-                pass
-            # Nullify tasks.assigned_by_user_id if it exists
-            try:
-                await conn.execute("UPDATE tasks SET assigned_by_user_id=NULL WHERE assigned_by_user_id=$1", user_id)
-            except Exception:
-                pass
-            # Update assignee_user_ids array on tasks
-            try:
-                if reassign_to:
-                    # Replace deleted user with reassign_to in the array (avoid duplicates)
                     await conn.execute(
-                        """UPDATE tasks
-                           SET assignee_user_ids = array_append(array_remove(assignee_user_ids,$1), $2)
-                           WHERE $1=ANY(assignee_user_ids) AND NOT ($2=ANY(assignee_user_ids))""",
-                        user_id, reassign_to
+                        "UPDATE tasks SET created_by_user_id=$1 WHERE created_by_user_id=$2 AND team_id=$3",
+                        fallback, user_id, tid
                     )
+
+            # ── Tasks: user_id column (FK) ────────────────────────────────────
+            try:
+                if r:
+                    await conn.execute("UPDATE tasks SET user_id=$1 WHERE user_id=$2", r, user_id)
+                else:
+                    await conn.execute("UPDATE tasks SET user_id=NULL WHERE user_id=$1", user_id)
+            except Exception:
+                pass
+
+            # ── Tasks: assigned_by_user_id ────────────────────────────────────
+            try:
+                if r:
+                    await conn.execute("UPDATE tasks SET assigned_by_user_id=$1 WHERE assigned_by_user_id=$2", r, user_id)
+                else:
+                    await conn.execute("UPDATE tasks SET assigned_by_user_id=NULL WHERE assigned_by_user_id=$1", user_id)
+            except Exception:
+                pass
+
+            # ── Tasks: assignee_user_ids[] ────────────────────────────────────
+            try:
+                if r:
+                    # Swap user_id → reassign_to, skip if already assigned
+                    await conn.execute("""
+                        UPDATE tasks
+                        SET assignee_user_ids = array_append(array_remove(assignee_user_ids,$1), $2)
+                        WHERE $1=ANY(assignee_user_ids) AND NOT ($2=ANY(assignee_user_ids))
+                    """, user_id, r)
+                # Always clean up any remaining references
+                await conn.execute(
+                    "UPDATE tasks SET assignee_user_ids=array_remove(assignee_user_ids,$1) WHERE $1=ANY(assignee_user_ids)",
+                    user_id
+                )
+            except Exception:
+                pass
+
+            # ── Task assignees junction table (if exists) ─────────────────────
+            try:
+                if r:
                     await conn.execute(
-                        "UPDATE tasks SET assignee_user_ids=array_remove(assignee_user_ids,$1) WHERE $1=ANY(assignee_user_ids)",
-                        user_id
+                        "UPDATE task_assignees SET user_id=$1 WHERE user_id=$2", r, user_id
                     )
                 else:
-                    await conn.execute(
-                        "UPDATE tasks SET assignee_user_ids=array_remove(assignee_user_ids,$1) WHERE $1=ANY(assignee_user_ids)",
-                        user_id
-                    )
+                    await conn.execute("DELETE FROM task_assignees WHERE user_id=$1", user_id)
             except Exception:
                 pass
-            # Remove assignee links (junction table pattern)
+
+            # ── Approvals ─────────────────────────────────────────────────────
             try:
-                await conn.execute("DELETE FROM task_assignees WHERE user_id=$1", user_id)
+                if r:
+                    await conn.execute("UPDATE approvals SET requested_by=$1 WHERE requested_by=$2", r, user_id)
+                    await conn.execute("UPDATE approvals SET approved_by=$1   WHERE approved_by=$2",  r, user_id)
+                else:
+                    await conn.execute("UPDATE approvals SET requested_by=NULL WHERE requested_by=$1", user_id)
+                    await conn.execute("UPDATE approvals SET approved_by=NULL   WHERE approved_by=$1",  user_id)
             except Exception:
                 pass
-            # Remove / nullify approvals
+
+            # ── Report schedules ──────────────────────────────────────────────
             try:
-                await conn.execute("UPDATE approvals SET requested_by=NULL WHERE requested_by=$1", user_id)
+                if r:
+                    await conn.execute("UPDATE report_schedules SET created_by=$1 WHERE created_by=$2", r, user_id)
+                else:
+                    await conn.execute("DELETE FROM report_schedules WHERE created_by=$1", user_id)
             except Exception:
                 pass
+
+            # ── Automations ───────────────────────────────────────────────────
             try:
-                await conn.execute("UPDATE approvals SET approved_by=NULL WHERE approved_by=$1", user_id)
+                if r:
+                    await conn.execute("UPDATE automations SET created_by=$1 WHERE created_by=$2", r, user_id)
+                else:
+                    await conn.execute("DELETE FROM automations WHERE created_by=$1", user_id)
             except Exception:
                 pass
-            # Remove report schedules
+
+            # ── Invites invited_by ────────────────────────────────────────────
             try:
-                await conn.execute("DELETE FROM report_schedules WHERE created_by=$1", user_id)
+                if r:
+                    await conn.execute("UPDATE invites SET invited_by=$1 WHERE invited_by=$2", r, user_id)
+                else:
+                    await conn.execute("UPDATE invites SET invited_by=NULL WHERE invited_by=$1", user_id)
             except Exception:
                 pass
-            # Remove automations created by user
+
+            # ── Remove the user's own invite record ───────────────────────────
             try:
-                await conn.execute("DELETE FROM automations WHERE created_by=$1", user_id)
+                await conn.execute(
+                    "DELETE FROM invites WHERE email=(SELECT email FROM users WHERE user_id=$1)", user_id
+                )
             except Exception:
                 pass
-            # Remove invites
-            try:
-                await conn.execute("DELETE FROM invites WHERE invited_by=$1 OR email=(SELECT email FROM users WHERE user_id=$1)", user_id)
-            except Exception:
-                pass
-            # Remove refresh tokens / sessions if table exists
-            try:
-                await conn.execute("DELETE FROM refresh_tokens WHERE user_id=$1", user_id)
-            except Exception:
-                pass
-            try:
-                await conn.execute("DELETE FROM sessions WHERE user_id=$1", user_id)
-            except Exception:
-                pass
-            # Finally remove the user
+
+            # ── Sessions / tokens (cannot transfer — always delete) ───────────
+            for tbl in ("refresh_tokens", "sessions"):
+                try:
+                    await conn.execute(f"DELETE FROM {tbl} WHERE user_id=$1", user_id)
+                except Exception:
+                    pass
+
+            # ── Finally delete the user ───────────────────────────────────────
             await conn.execute("DELETE FROM users WHERE user_id=$1", user_id)
+
     return {"ok": True}
 
 
