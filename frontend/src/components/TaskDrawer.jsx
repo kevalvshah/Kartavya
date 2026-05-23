@@ -4,7 +4,7 @@ import { currentUser } from '../lib/auth';
 import FieldRenderer from './fields/FieldRenderer';
 import MentionTextarea from './MentionTextarea';
 import ActivityList from './ActivityList';
-import { Paperclip, ExternalLink, Trash2, Play, Square, Clock } from 'lucide-react';
+import { Paperclip, ExternalLink, Trash2, Play, Square, Clock, Pencil, Check, X } from 'lucide-react';
 
 const PRIORITY_COLORS  = { low: '#22c55e', medium: '#f59e0b', high: '#ef4444', urgent: '#dc2626' };
 const PRIORITY_LABELS  = { low: 'Low', medium: 'Medium', high: 'High', urgent: 'Urgent' };
@@ -86,20 +86,24 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
   const [tab,        setTab]        = useState('details');
   const [saving,     setSaving]     = useState(false);
   const [draft,      setDraft]      = useState({});
-  const [categories,    setCategories]    = useState([]);
-  const [manualMin,     setManualMin]     = useState('');
-  const [manualDesc,    setManualDesc]    = useState('');
-  const [attachments,   setAttachments]   = useState([]);
-  const [uploading,     setUploading]     = useState(false);
+  const [categories, setCategories] = useState([]);
+  const [manualMin,  setManualMin]  = useState('');
+  const [manualDesc, setManualDesc] = useState('');
+  const [attachments, setAttachments] = useState([]);
+  const [uploading,   setUploading]   = useState(false);
   const fileRef = useRef(null);
-  // Subtasks
-  const [subtasks,      setSubtasks]      = useState([]);
-  const [newSubtask,    setNewSubtask]    = useState('');
-  // Comment edit
-  const [editingCmt,    setEditingCmt]    = useState(null); // comment_id
-  const [editCmtBody,   setEditCmtBody]   = useState('');
 
   // Approval UI state
+  const [deletingTask,    setDeletingTask]    = useState(false);
+
+  // Subtask state
+  const [newSubtask,     setNewSubtask]     = useState('');
+  const [addingSubtask,  setAddingSubtask]  = useState(false);
+
+  // Comment edit state
+  const [editingComment, setEditingComment] = useState(null); // comment_id
+  const [editBody,       setEditBody]       = useState('');
+
   const [approvalLoading,  setApprovalLoading]  = useState(false);
   const [approvalNotes,    setApprovalNotes]    = useState('');
   const [sendToClient,     setSendToClient]     = useState(false);
@@ -119,7 +123,7 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
     if (!open || !taskId) return;
     setTab('details');
     setTask(null); setFields([]); setFValues({});
-    setComments([]); setActivity([]); setEntries([]); setTimer(null); setAttachments([]); setSubtasks([]);
+    setComments([]); setActivity([]); setEntries([]); setTimer(null); setAttachments([]);
 
     api.get('/categories').then(r => setCategories(Array.isArray(r.data) ? r.data : [])).catch(() => {});
 
@@ -131,7 +135,6 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
       setTask(t);
       setDraft({ title: t.title, description: t.description, priority: t.priority, due_at: t.due_at, status: t.status, category_id: t.category_id || '' });
       setComments(Array.isArray(cRes.data) ? cRes.data : []);
-      setSubtasks(Array.isArray(t.subtasks) ? t.subtasks : []);
       // Parse existing attachments
       const att = t.attachments || [];
       setAttachments(Array.isArray(att) ? att.map(a => typeof a === 'string' ? { url: a, name: a.split('/').pop() } : a) : []);
@@ -195,28 +198,47 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
     setComments(prev => prev.filter(c => c.comment_id !== commentId));
   };
 
+  const startEditComment = (c) => { setEditingComment(c.comment_id); setEditBody(c.body); };
+
   const saveEditComment = async (commentId) => {
-    if (!editCmtBody.trim()) return;
-    const res = await api.patch(`/tasks/${taskId}/comments/${commentId}`, { body: editCmtBody });
-    setComments(prev => prev.map(c => c.comment_id === commentId ? { ...c, body: res.data.body, edited: true } : c));
-    setEditingCmt(null); setEditCmtBody('');
+    if (!editBody.trim()) return;
+    const res = await api.put(`/tasks/${taskId}/comments/${commentId}`, { body: editBody });
+    setComments(prev => prev.map(c => c.comment_id === commentId ? { ...c, body: res.data.body } : c));
+    setEditingComment(null); setEditBody('');
   };
 
   const addSubtask = async () => {
     if (!newSubtask.trim()) return;
-    const res = await api.post(`/tasks/${taskId}/subtasks`, { title: newSubtask.trim() });
-    setSubtasks(prev => [...prev, res.data]);
-    setNewSubtask('');
+    setAddingSubtask(true);
+    try {
+      const res = await api.post(`/tasks/${taskId}/subtasks`, { title: newSubtask });
+      setTask(res.data);
+      setNewSubtask('');
+    } catch (e) { console.error(e); }
+    finally { setAddingSubtask(false); }
   };
 
-  const toggleSubtask = async (subtaskId, isDone) => {
-    const res = await api.patch(`/tasks/${taskId}/subtasks/${subtaskId}`, { is_done: !isDone });
-    if (res.data?.subtasks) setSubtasks(res.data.subtasks);
+  const toggleSubtask = async (subtaskId) => {
+    const res = await api.patch(`/tasks/${taskId}/subtasks/${subtaskId}`);
+    setTask(res.data);
   };
 
   const deleteSubtask = async (subtaskId) => {
     const res = await api.delete(`/tasks/${taskId}/subtasks/${subtaskId}`);
-    if (res.data?.subtasks) setSubtasks(res.data.subtasks);
+    setTask(res.data);
+  };
+
+  const handleDeleteTask = async () => {
+    if (!window.confirm('Delete this task? This cannot be undone.')) return;
+    setDeletingTask(true);
+    try {
+      await api.delete(`/tasks/${taskId}`);
+      onSaved?.(null);
+      onClose();
+    } catch (e) {
+      console.error(e);
+      setDeletingTask(false);
+    }
   };
 
   const startTimer = async () => { const res = await api.post(`/time/start?task_id=${taskId}`); setTimer(res.data); };
@@ -255,8 +277,12 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
     await saveTask({ attachments: updated.map(f => f.url) });
   };
 
+  const isSystemAdmin = me?.role === 'admin';
   const isOwnerAdmin = me?.role === 'admin' || me?.role === 'owner';
   const isClient = me?.role === 'client';
+
+  // For task deletion: check project-level role via task.project_role or fall back to system role
+  const canDeleteTask = isSystemAdmin || (task && teamMembers.find(m => m.user_id === me?.user_id && (m.role === 'admin' || m.role === 'owner')));
 
   const requestApproval = async () => {
     setApprovalLoading(true);
@@ -357,8 +383,8 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
           </div>
           <div className="k-dr__head-actions">
             {saving && <span style={{ fontSize: 11, color: 'var(--ink-3)', marginRight: 6, alignSelf: 'center' }}>Saving…</span>}
-            {task && (me?.role === 'admin' || me?.role === 'owner') && (
-              <button onClick={async () => { if (!window.confirm('Delete this task?')) return; await api.delete(`/tasks/${taskId}`); onClose(); onSaved?.(null); }} className="k-iconbtn" title="Delete task" style={{ color: '#dc2626' }} aria-label="Delete task">
+            {canDeleteTask && task && (
+              <button onClick={handleDeleteTask} disabled={deletingTask} className="k-iconbtn" aria-label="Delete task" title="Delete task" style={{ color: 'var(--k-danger)' }}>
                 <Trash2 size={14} />
               </button>
             )}
@@ -451,6 +477,50 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
                   style={{ width: '100%', resize: 'vertical', lineHeight: 1.65, fontSize: 13 }}
                   placeholder="Add a description…"
                 />
+              </div>
+
+              {/* ── Subtasks ── */}
+              <div style={{ marginBottom: 20 }}>
+                <span style={{ ...lbl, marginBottom: 10 }}>
+                  Subtasks{task.subtasks?.length > 0 && ` (${task.subtasks.filter(s => s.is_done).length}/${task.subtasks.length})`}
+                  {' '}<span style={{ fontFamily: 'var(--font-hindi)', fontSize: 12, textTransform: 'none', letterSpacing: 0, color: 'var(--ink-faint)', fontWeight: 400 }}>उप-कार्य</span>
+                </span>
+                {task.subtasks?.length > 0 && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 10 }}>
+                    {task.subtasks.map(s => (
+                      <div key={s.subtask_id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', background: 'var(--bg-soft)', borderRadius: 'var(--r-sm)', border: '1px solid var(--rule)' }}>
+                        <button
+                          onClick={() => toggleSubtask(s.subtask_id)}
+                          style={{ width: 16, height: 16, borderRadius: 4, border: `2px solid ${s.is_done ? 'var(--k-primary)' : 'var(--ink-3)'}`, background: s.is_done ? 'var(--k-primary)' : 'transparent', cursor: 'pointer', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}
+                        >
+                          {s.is_done && <Check size={10} color="#fff" strokeWidth={3} />}
+                        </button>
+                        <span style={{ flex: 1, fontSize: 13, color: s.is_done ? 'var(--ink-3)' : 'var(--ink)', textDecoration: s.is_done ? 'line-through' : 'none' }}>
+                          {s.title}
+                        </span>
+                        <button
+                          onClick={() => deleteSubtask(s.subtask_id)}
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-3)', padding: 0, display: 'flex', opacity: 0.6 }}
+                        >
+                          <X size={13} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <input
+                    value={newSubtask}
+                    onChange={e => setNewSubtask(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && addSubtask()}
+                    placeholder="Add a subtask…"
+                    className="k-input"
+                    style={{ flex: 1, fontSize: 12 }}
+                  />
+                  <button onClick={addSubtask} disabled={addingSubtask || !newSubtask.trim()} className="k-btn k-btn--ghost k-btn--sm">
+                    + Add
+                  </button>
+                </div>
               </div>
 
               {fields.length > 0 && (
@@ -608,37 +678,6 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
                 </div>
               )}
 
-              {/* ── Subtasks ── */}
-              <div style={{ marginBottom: 20 }}>
-                <span style={{ ...lbl, marginBottom: 10 }}>Subtasks <span style={{ fontFamily: 'var(--font-hindi)', fontSize: 12, textTransform: 'none', letterSpacing: 0, color: 'var(--ink-faint)', fontWeight: 400 }}>उप-कार्य</span>
-                  {subtasks.length > 0 && (
-                    <span style={{ marginLeft: 8, fontSize: 11, color: 'var(--ink-3)', fontFamily: 'var(--font-mono)', background: 'var(--bg-soft)', padding: '1px 7px', borderRadius: 99, fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>
-                      {subtasks.filter(s => s.is_done).length}/{subtasks.length}
-                    </span>
-                  )}
-                </span>
-                {subtasks.length > 0 && (
-                  <div style={{ marginBottom: 8, background: 'var(--bg-soft)', borderRadius: 'var(--r-md)', overflow: 'hidden', border: '1px solid var(--rule-soft)' }}>
-                    {subtasks.map((s, i) => (
-                      <div key={s.subtask_id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 12px', borderBottom: i < subtasks.length - 1 ? '1px solid var(--rule-soft)' : 'none' }}>
-                        <button onClick={() => toggleSubtask(s.subtask_id, s.is_done)} style={{ width: 16, height: 16, borderRadius: 4, border: `2px solid ${s.is_done ? 'var(--k-primary)' : 'var(--rule)'}`, background: s.is_done ? 'var(--k-primary)' : 'transparent', flexShrink: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}>
-                          {s.is_done && <svg width="9" height="9" viewBox="0 0 10 10" fill="none"><path d="M2 5l2.5 2.5L8 3" stroke="#fff" strokeWidth="1.8" strokeLinecap="round"/></svg>}
-                        </button>
-                        <span style={{ flex: 1, fontSize: 13, color: s.is_done ? 'var(--ink-3)' : 'var(--ink)', textDecoration: s.is_done ? 'line-through' : 'none' }}>{s.title}</span>
-                        <button onClick={() => deleteSubtask(s.subtask_id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-faint)', padding: 2, display: 'flex', borderRadius: 4 }} title="Delete subtask">
-                          <Trash2 size={12} />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                <div style={{ display: 'flex', gap: 6 }}>
-                  <input value={newSubtask} onChange={e => setNewSubtask(e.target.value)} onKeyDown={e => e.key === 'Enter' && addSubtask()} placeholder="Add a subtask…" className="k-input" style={{ flex: 1, fontSize: 13 }} />
-                  <button onClick={addSubtask} className="k-btn k-btn--ghost k-btn--sm" disabled={!newSubtask.trim()}>Add</button>
-                </div>
-              </div>
-
-              {/* ── Comments ── */}
               <div>
                 <span style={{ ...lbl, marginBottom: 10 }}>Comments <span style={{ fontFamily: 'var(--font-hindi)', fontSize: 12, textTransform: 'none', letterSpacing: 0, color: 'var(--ink-faint)', fontWeight: 400 }}>टिप्पणियाँ</span></span>
                 {comments.length === 0 && <p style={{ color: 'var(--ink-3)', fontSize: 13, marginBottom: 12 }}>No comments yet.</p>}
@@ -648,22 +687,32 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
                       {c.user_name?.[0]?.toUpperCase() || '?'}
                     </div>
                     <div style={{ flex: 1 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <span style={{ fontWeight: 600, fontSize: 13 }}>{c.user_name}</span>
-                        <span style={{ color: 'var(--ink-3)', fontSize: 11 }}>{new Date(c.created_at).toLocaleString()}{c.edited && <em style={{ marginLeft: 4 }}>(edited)</em>}</span>
-                        {c.user_id === me?.user_id && editingCmt !== c.comment_id && (
-                          <span style={{ marginLeft: 'auto', display: 'flex', gap: 4 }}>
-                            <button onClick={() => { setEditingCmt(c.comment_id); setEditCmtBody(c.body); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-3)', fontSize: 11, padding: '1px 5px', borderRadius: 4 }}>Edit</button>
-                            <button onClick={() => deleteComment(c.comment_id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#dc2626', fontSize: 11, padding: '1px 5px', borderRadius: 4 }}>Delete</button>
-                          </span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ fontWeight: 600, fontSize: 13 }}>{c.user_name}</span>{' '}
+                        <span style={{ color: 'var(--ink-3)', fontSize: 11 }}>{new Date(c.created_at).toLocaleString()}</span>
+                        {(c.user_id === me?.user_id || isSystemAdmin) && editingComment !== c.comment_id && (
+                          <div style={{ marginLeft: 'auto', display: 'flex', gap: 4 }}>
+                            <button onClick={() => startEditComment(c)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-3)', padding: 2, display: 'flex' }} title="Edit">
+                              <Pencil size={11} />
+                            </button>
+                            <button onClick={() => deleteComment(c.comment_id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-3)', padding: 2, display: 'flex' }} title="Delete">
+                              <Trash2 size={11} />
+                            </button>
+                          </div>
                         )}
                       </div>
-                      {editingCmt === c.comment_id ? (
+                      {editingComment === c.comment_id ? (
                         <div style={{ marginTop: 6, display: 'flex', flexDirection: 'column', gap: 6 }}>
-                          <textarea value={editCmtBody} onChange={e => setEditCmtBody(e.target.value)} className="k-input" rows={2} style={{ fontSize: 13, resize: 'vertical' }} />
+                          <textarea
+                            value={editBody}
+                            onChange={e => setEditBody(e.target.value)}
+                            rows={3}
+                            className="k-input"
+                            style={{ width: '100%', resize: 'vertical', fontSize: 13 }}
+                          />
                           <div style={{ display: 'flex', gap: 6 }}>
-                            <button onClick={() => saveEditComment(c.comment_id)} className="k-btn k-btn--primary k-btn--sm">Save</button>
-                            <button onClick={() => setEditingCmt(null)} className="k-btn k-btn--ghost k-btn--sm">Cancel</button>
+                            <button onClick={() => setEditingComment(null)} className="k-btn k-btn--ghost k-btn--sm">Cancel</button>
+                            <button onClick={() => saveEditComment(c.comment_id)} className="k-btn k-btn--primary k-btn--sm" disabled={!editBody.trim()}>Save</button>
                           </div>
                         </div>
                       ) : (

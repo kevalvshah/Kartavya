@@ -14,7 +14,7 @@ export default function ProjectsPage() {
   const navigate = useNavigate();
   const { pushToast } = useToast();
   const me = currentUser();
-  const isAdmin = me?.role === 'admin' || me?.role === 'owner';
+  const isMainAdmin = me?.role === 'admin';
   const [projects, setProjects] = useState([]);
   const [name,     setName]     = useState('');
   const [creating, setCreating] = useState(false);
@@ -114,14 +114,16 @@ export default function ProjectsPage() {
                   <div className="k-pcard__name">{p.name}</div>
                   <div className="k-pcard__client">{p.workspace_name || 'Internal'}</div>
                 </div>
-                {isAdmin && <button
-                  className="k-iconbtn"
-                  style={{ marginLeft: 'auto', opacity: 0.5, fontSize: 12 }}
-                  onClick={e => { e.stopPropagation(); remove(p); }}
-                  title="Delete project"
-                >
-                  <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M3 4h10M5 4V2.5h6V4M6 7v5M10 7v5M4 4l.8 10h6.4L12 4"/></svg>
-                </button>}
+                {isMainAdmin && (
+                  <button
+                    className="k-iconbtn"
+                    style={{ marginLeft: 'auto', opacity: 0.5, fontSize: 12 }}
+                    onClick={e => { e.stopPropagation(); remove(p); }}
+                    title="Delete project"
+                  >
+                    <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M3 4h10M5 4V2.5h6V4M6 7v5M10 7v5M4 4l.8 10h6.4L12 4"/></svg>
+                  </button>
+                )}
               </div>
               <div className="k-pcard__body">
                 <div className="k-pcard__stat"><b>{taskCount}</b><span>tasks</span></div>
