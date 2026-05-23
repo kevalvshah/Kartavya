@@ -204,7 +204,7 @@ export default function TaskEditor({
                 ) : (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 4, flex: 1, flexWrap: 'wrap' }}>
                     {selectedMembers.slice(0, 3).map((m, i) => {
-                      const name = m.display_name || m.full_name || m.name || m.email || '';
+                      const name = m.display_name || m.full_name || m.name || '';
                       return (
                         <span key={m.user_id || m.member_id} style={{
                           display: 'inline-flex', alignItems: 'center', gap: 4,
@@ -245,8 +245,9 @@ export default function TaskEditor({
                   ) : (
                     members.map((m, i) => {
                       const uid = m.user_id || m.member_id;
-                      const name = m.display_name || m.full_name || m.name || m.email || '';
-                      const title = m.position || m.job_title || m.role || '';
+                      const name = m.display_name || m.full_name || m.name || '';
+                      if (!name) return null; // skip email-only members
+                      const title = m.position || m.job_title || '';
                       const checked = selectedIds.includes(uid);
                       return (
                         <button

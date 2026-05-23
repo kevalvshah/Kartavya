@@ -211,7 +211,7 @@ export default function NewTaskModal({ open, onClose, onCreated }) {
                 ) : (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 4, flex: 1, flexWrap: 'wrap' }}>
                     {selectedMembers.slice(0, 3).map((m, i) => {
-                      const name = m.display_name || m.full_name || m.name || m.email || '';
+                      const name = m.display_name || m.full_name || m.name || '';
                       return (
                         <span key={m.user_id} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: 'var(--side-active)', borderRadius: 20, padding: '2px 8px 2px 4px', fontSize: 12, fontWeight: 500 }}>
                           <span style={{ width: 18, height: 18, borderRadius: '50%', fontSize: 9, fontWeight: 700, background: AVATAR_COLORS[i % AVATAR_COLORS.length], color: '#fff', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
@@ -238,8 +238,9 @@ export default function NewTaskModal({ open, onClose, onCreated }) {
                   ) : (
                     members.map((m, i) => {
                       const uid     = m.user_id;
-                      const name    = m.display_name || m.full_name || m.name || m.email || '';
-                      const jobTitle = m.position || m.job_title || m.role || '';
+                      const name    = m.display_name || m.full_name || m.name || '';
+                      if (!name) return null; // skip email-only members
+                      const jobTitle = m.position || m.job_title || '';
                       const checked = assignees.includes(uid);
                       return (
                         <button
