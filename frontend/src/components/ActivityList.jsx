@@ -5,11 +5,15 @@ const TYPE_META = {
   status_changed:  { icon: "🔄", verb: "changed status" },
   assigned:        { icon: "👤", verb: "updated assignees" },
   commented:       { icon: "💬", verb: "commented" },
+  comment_edited:  { icon: "✏️", verb: "edited a comment" },
+  comment_deleted: { icon: "🗑️", verb: "deleted a comment" },
   field_changed:   { icon: "✏️", verb: "updated a field" },
   approved:        { icon: "✅", verb: "approved" },
   rejected:        { icon: "❌", verb: "rejected" },
   mention:         { icon: "📣", verb: "mentioned someone" },
   time_logged:     { icon: "⏱", verb: "logged time" },
+  subtask_added:   { icon: "☑️", verb: "added a subtask" },
+  subtask_deleted: { icon: "🗑️", verb: "removed a subtask" },
   default:         { icon: "📋", verb: "" },
 };
 

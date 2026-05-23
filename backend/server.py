@@ -678,6 +678,72 @@ async def add_comment(task_id:str,body:CommentCreate,pool=Depends(get_db),user=D
     actor_name=user.get("full_name") or user.get("name") or user.get("email","")
     return CommentOut(comment_id=row["comment_id"],task_id=row["task_id"],user_id=row["user_id"],user_name=actor_name,body=row["body"],created_at=row["created_at"])
 
+@api_router.put("/tasks/{task_id}/comments/{comment_id}",response_model=CommentOut)
+async def edit_comment(task_id:str,comment_id:str,body:CommentCreate,pool=Depends(get_db),user=Depends(require_user)):
+    row=await pool.fetchrow("SELECT * FROM task_comments WHERE comment_id=$1 AND task_id=$2",comment_id,task_id)
+    if not row: raise HTTPException(404)
+    if row["user_id"]!=user["user_id"] and user.get("role")!="admin":
+        raise HTTPException(403,"Can only edit your own comments")
+    updated=await pool.fetchrow("UPDATE task_comments SET body=$1 WHERE comment_id=$2 RETURNING *",body.body,comment_id)
+    try:
+        from services.activity_logger import log_event
+        await log_event(pool,task_id=task_id,actor_id=user["user_id"],event_type="comment_edited",data={"preview":body.body[:80]})
+    except Exception: pass
+    actor_name=user.get("full_name") or user.get("name") or user.get("email","")
+    return CommentOut(comment_id=updated["comment_id"],task_id=updated["task_id"],user_id=updated["user_id"],user_name=actor_name,body=updated["body"],created_at=updated["created_at"])
+
+@api_router.delete("/tasks/{task_id}/comments/{comment_id}")
+async def delete_comment(task_id:str,comment_id:str,pool=Depends(get_db),user=Depends(require_user)):
+    row=await pool.fetchrow("SELECT user_id FROM task_comments WHERE comment_id=$1 AND task_id=$2",comment_id,task_id)
+    if not row: raise HTTPException(404)
+    if row["user_id"]!=user["user_id"] and user.get("role")!="admin":
+        raise HTTPException(403,"Can only delete your own comments")
+    await pool.execute("DELETE FROM task_comments WHERE comment_id=$1",comment_id)
+    try:
+        from services.activity_logger import log_event
+        await log_event(pool,task_id=task_id,actor_id=user["user_id"],event_type="comment_deleted",data={})
+    except Exception: pass
+    return {"ok":True}
+
+@api_router.post("/tasks/{task_id}/subtasks",response_model=TaskOut)
+async def add_subtask(task_id:str,body:Subtask,pool=Depends(get_db),user=Depends(require_user)):
+    task=await pool.fetchrow("SELECT subtasks FROM tasks WHERE task_id=$1",task_id)
+    if not task: raise HTTPException(404)
+    subtasks=json.loads(task["subtasks"] or "[]")
+    new_sub={"subtask_id":f"sub_{uuid.uuid4().hex[:12]}","title":body.title,"is_done":False,"order":len(subtasks)}
+    subtasks.append(new_sub)
+    row=await pool.fetchrow("UPDATE tasks SET subtasks=$1,updated_at=NOW() WHERE task_id=$2 RETURNING *",json.dumps(subtasks),task_id)
+    try:
+        from services.activity_logger import log_event
+        await log_event(pool,task_id=task_id,actor_id=user["user_id"],event_type="subtask_added",data={"title":body.title})
+    except Exception: pass
+    return row_to_task(row)
+
+@api_router.patch("/tasks/{task_id}/subtasks/{subtask_id}",response_model=TaskOut)
+async def toggle_subtask(task_id:str,subtask_id:str,pool=Depends(get_db),user=Depends(require_user)):
+    task=await pool.fetchrow("SELECT subtasks FROM tasks WHERE task_id=$1",task_id)
+    if not task: raise HTTPException(404)
+    subtasks=json.loads(task["subtasks"] or "[]")
+    for s in subtasks:
+        if s["subtask_id"]==subtask_id: s["is_done"]=not s.get("is_done",False)
+    row=await pool.fetchrow("UPDATE tasks SET subtasks=$1,updated_at=NOW() WHERE task_id=$2 RETURNING *",json.dumps(subtasks),task_id)
+    return row_to_task(row)
+
+@api_router.delete("/tasks/{task_id}/subtasks/{subtask_id}",response_model=TaskOut)
+async def delete_subtask(task_id:str,subtask_id:str,pool=Depends(get_db),user=Depends(require_user)):
+    task=await pool.fetchrow("SELECT subtasks FROM tasks WHERE task_id=$1",task_id)
+    if not task: raise HTTPException(404)
+    subtasks=json.loads(task["subtasks"] or "[]")
+    removed=[s for s in subtasks if s["subtask_id"]==subtask_id]
+    subtasks=[s for s in subtasks if s["subtask_id"]!=subtask_id]
+    row=await pool.fetchrow("UPDATE tasks SET subtasks=$1,updated_at=NOW() WHERE task_id=$2 RETURNING *",json.dumps(subtasks),task_id)
+    try:
+        from services.activity_logger import log_event
+        title=removed[0]["title"] if removed else ""
+        await log_event(pool,task_id=task_id,actor_id=user["user_id"],event_type="subtask_deleted",data={"title":title})
+    except Exception: pass
+    return row_to_task(row)
+
 # ── Teams ────────────────────────────────────────────────────────
 
 @api_router.get("/teams",response_model=List[TeamOut])
@@ -789,6 +855,15 @@ async def update_team_member(team_id:str,member_id:str,payload:TeamMemberUpdate,
     if payload.role and row["user_id"]:
         await pool.execute("UPDATE project_assignments SET role=$1 WHERE team_id=$2 AND user_id=$3",payload.role,team_id,row["user_id"])
     return TeamMemberOut(**dict(row))
+
+@api_router.delete("/teams/{team_id}")
+async def delete_team(team_id:str,pool=Depends(get_db),user=Depends(require_admin)):
+    await pool.execute("DELETE FROM tasks WHERE team_id=$1",team_id)
+    await pool.execute("DELETE FROM project_assignments WHERE team_id=$1",team_id)
+    await pool.execute("DELETE FROM team_members WHERE team_id=$1",team_id)
+    await pool.execute("DELETE FROM project_columns WHERE team_id=$1",team_id)
+    await pool.execute("DELETE FROM teams WHERE team_id=$1",team_id)
+    return {"ok":True}
 
 @api_router.delete("/teams/{team_id}/members/{member_id}")
 async def remove_team_member(team_id:str,member_id:str,pool=Depends(get_db),user=Depends(require_user)):
@@ -965,12 +1040,19 @@ async def patch_task(task_id:str,payload:TaskUpdate,pool=Depends(get_db),user=De
 
 @api_router.delete("/tasks/{task_id}")
 async def delete_task(task_id:str,pool=Depends(get_db),user=Depends(require_user)):
-    team_ids=await get_visible_team_ids(pool,user["user_id"],_user_dict=user)
-    doc=await pool.fetchrow(
-        "SELECT * FROM tasks WHERE task_id=$1 AND (user_id=$2 OR team_id=ANY($3::text[]) OR created_by_user_id=$2)",
-        task_id,user["user_id"],team_ids
-    )
+    doc=await pool.fetchrow("SELECT team_id FROM tasks WHERE task_id=$1",task_id)
     if not doc: raise HTTPException(404)
+    # System admin can always delete
+    if user.get("role")!="admin":
+        if doc["team_id"]:
+            mem=await pool.fetchrow("SELECT role FROM project_assignments WHERE team_id=$1 AND user_id=$2",doc["team_id"],user["user_id"])
+            if not mem or mem["role"] not in ("owner","admin"):
+                raise HTTPException(403,"Only project admin or owner can delete tasks")
+        else:
+            # Personal task — only the owner can delete
+            personal=await pool.fetchrow("SELECT user_id FROM tasks WHERE task_id=$1",task_id)
+            if not personal or personal["user_id"]!=user["user_id"]:
+                raise HTTPException(403,"Only project admin or owner can delete tasks")
     await pool.execute("DELETE FROM tasks WHERE task_id=$1",task_id)
     return {"ok":True}
 
