@@ -108,19 +108,13 @@ async def _fetch_report_data(pool, team_id: str, from_date: str, to_date: str) -
         "SELECT COUNT(*) FROM tasks WHERE team_id=$1 AND status!='done' AND due_at < $2", team_id, now
     )
 
-    # Detailed task list (up to 50, in-progress first)
-    # owner_name: safe subquery using array element cast to text
+    # Detailed task list (up to 50) — no array subquery, owner derived from created_by
     try:
         task_list_rows = await pool.fetch("""
             SELECT t.task_id, t.title, t.status, t.priority, t.due_at, t.updated_at,
-                   COALESCE(
-                     (SELECT COALESCE(u2.full_name, u2.name, u2.email)
-                      FROM users u2
-                      WHERE u2.user_id = (t.assignee_user_ids::text[])[1]
-                      LIMIT 1),
-                     'Unassigned'
-                   ) AS owner_name
+                   COALESCE(u2.full_name, u2.name, u2.email, 'Unassigned') AS owner_name
             FROM tasks t
+            LEFT JOIN users u2 ON u2.user_id = t.created_by_user_id
             WHERE t.team_id = $1
             ORDER BY CASE t.status
                 WHEN 'in_progress' THEN 0 WHEN 'todo' THEN 1 ELSE 2 END,
@@ -129,24 +123,6 @@ async def _fetch_report_data(pool, team_id: str, from_date: str, to_date: str) -
         """, team_id)
     except Exception:
         task_list_rows = []
-
-    # Per-member tasks completed in period
-    try:
-        member_tasks_rows = await pool.fetch("""
-            SELECT COALESCE(u3.full_name, u3.name, u3.email, uid) AS user_name,
-                   COUNT(*) AS tasks_done
-            FROM tasks t
-            CROSS JOIN LATERAL unnest(t.assignee_user_ids::text[]) AS uid
-            LEFT JOIN users u3 ON u3.user_id = uid
-            WHERE t.team_id = $1 AND t.status = 'done'
-              AND t.updated_at >= $2::timestamptz
-              AND t.updated_at <= ($3::date + interval '1 day')::timestamptz
-              AND array_length(t.assignee_user_ids::text[], 1) > 0
-            GROUP BY user_name
-            ORDER BY tasks_done DESC
-        """, team_id, from_date, to_date)
-    except Exception:
-        member_tasks_rows = []
 
     # Daily throughput: tasks closed per calendar day
     try:
@@ -160,6 +136,16 @@ async def _fetch_report_data(pool, team_id: str, from_date: str, to_date: str) -
         """, team_id, from_date, to_date)
     except Exception:
         throughput_rows = []
+
+    # Per-member task counts: derived from time entries (no array unnest needed)
+    member_tasks_map: dict[str, int] = {}
+    for e in entries:
+        nm = e.get("user_name") or "Unknown"
+        member_tasks_map[nm] = member_tasks_map.get(nm, 0) + 1
+    member_tasks_rows_derived = [
+        {"user_name": nm, "tasks_done": cnt}
+        for nm, cnt in sorted(member_tasks_map.items(), key=lambda x: -x[1])
+    ]
 
     def _serialize(e):
         d = dict(e)
@@ -184,8 +170,7 @@ async def _fetch_report_data(pool, team_id: str, from_date: str, to_date: str) -
             "overdue":     overdue or 0,
         },
         "task_list":        [_serialize_task(t) for t in task_list_rows],
-        "by_member_tasks":  [{"user_name": r["user_name"], "tasks_done": int(r["tasks_done"])}
-                             for r in member_tasks_rows],
+        "by_member_tasks":  member_tasks_rows_derived,
         "daily_throughput": [{"day": str(r["day"]), "done_count": int(r["done_count"])}
                              for r in throughput_rows],
     }
@@ -202,7 +187,11 @@ async def get_report_data(
     user=Depends(require_user),
 ):
     await _assert_project_owner(pool, team_id, user)
-    return await _fetch_report_data(pool, team_id, from_date, to_date)
+    try:
+        return await _fetch_report_data(pool, team_id, from_date, to_date)
+    except Exception as exc:
+        logger.error(f"Report data fetch failed for {team_id}: {exc}", exc_info=True)
+        raise HTTPException(500, f"Report data error: {exc}")
 
 
 @router.get("/download/{team_id}")
