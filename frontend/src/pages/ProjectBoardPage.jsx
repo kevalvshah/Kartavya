@@ -39,6 +39,7 @@ import { useRealtimeTasks }   from '../hooks/useRealtimeTasks';
 import { usePresence }        from '../hooks/usePresence';
 import { PageHeader, AvatarStack } from '../components/editorial';
 import AutomationsPage from './AutomationsPage';
+import { useToast } from '../components/ui/toast';
 
 const VIEWS = [
   { id: 'kanban',   label: 'Board',
@@ -75,7 +76,8 @@ export default function ProjectBoardPage() {
   const [newFieldType,  setNewFieldType]  = useState('text');
   const [newTaskEditor, setNewTaskEditor] = useState({ open: false, columnId: null });
 
-  const { fieldDefs, createField, deleteField } = useFields(projectId);
+  const { defs: fieldDefs, createField, deleteField } = useFields(projectId);
+  const { pushToast } = useToast();
   const { savedViews, saveView }                = useViews(projectId);
 
   // ── Realtime: tasks state is now owned by this hook ──────────────────────
@@ -130,8 +132,13 @@ export default function ProjectBoardPage() {
 
   const addField = async () => {
     if (!newFieldName.trim()) return;
-    await createField({ name: newFieldName.trim(), type: newFieldType, config: {} });
-    setNewFieldName('');
+    try {
+      await createField({ name: newFieldName.trim(), type: newFieldType, config: {} });
+      setNewFieldName('');
+      pushToast({ type: 'success', title: 'Field added' });
+    } catch (e) {
+      pushToast({ type: 'error', title: 'Could not add field', body: e?.response?.data?.detail || e?.message });
+    }
   };
 
   // ── Styles ───────────────────────────────────────────────────────────────

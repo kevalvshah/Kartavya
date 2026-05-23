@@ -17,6 +17,7 @@ import { useFields }    from '../hooks/useFields';
 import { useRealtimeTasks } from '../hooks/useRealtimeTasks';
 import { usePresence }  from '../hooks/usePresence';
 import { PageHeader, AvatarStack } from '../components/editorial';
+import { useToast } from '../components/ui/toast';
 import { AVATAR_COLORS } from '../lib/utils';
 import AutomationsPage from './AutomationsPage';
 import TaskEditor from '../components/TaskEditor';
@@ -55,7 +56,8 @@ export default function BoardsPage() {
   const [view,        setView]        = useState('kanban');
   const [newTaskEditor, setNewTaskEditor] = useState({ open: false, columnId: null });
 
-  const { fieldDefs, createField, deleteField } = useFields(activeId);
+  const { defs: fieldDefs, createField, deleteField } = useFields(activeId);
+  const { pushToast } = useToast();
   const [showFieldMgr,    setShowFieldMgr]    = useState(false);
   const [showAutomations, setShowAutomations] = useState(false);
   const [newFieldName,    setNewFieldName]    = useState('');
@@ -110,8 +112,13 @@ export default function BoardsPage() {
 
   const addField = async () => {
     if (!newFieldName.trim()) return;
-    await createField({ name: newFieldName.trim(), type: newFieldType, config: {} });
-    setNewFieldName('');
+    try {
+      await createField({ name: newFieldName.trim(), type: newFieldType, config: {} });
+      setNewFieldName('');
+      pushToast({ type: 'success', title: 'Field added' });
+    } catch (e) {
+      pushToast({ type: 'error', title: 'Could not add field', body: e?.response?.data?.detail || e?.message });
+    }
   };
 
   const activeProject = projects.find(p => p.team_id === activeId);
