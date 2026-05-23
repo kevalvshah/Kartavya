@@ -6,6 +6,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../lib/api';
 import { toLocal, fromLocal } from '../lib/auth';
 import { useToast } from './ui/toast';
+import { AVATAR_COLORS, userInitials } from '../lib/utils';
 
 export default function TaskEditor({
   open,
@@ -17,43 +18,85 @@ export default function TaskEditor({
   defaultColumnId = null,
   lockToProject = false,
   onSaved,
-  // clientMode: POSTs to /client/tasks/request — task goes to admin for approval
   clientMode = false,
 }) {
   const { pushToast } = useToast();
   const titleRef = useRef(null);
+  const assigneeRef = useRef(null);
+
   const [form, setForm] = useState({
     title: '', description: '', priority: 'medium',
     team_id: defaultTeamId || '', due_at: '',
+    assignee_user_ids: [],
   });
+
+  const [members, setMembers] = useState([]);
+  const [assigneeOpen, setAssigneeOpen] = useState(false);
+
+  // Fetch members when team changes
+  useEffect(() => {
+    const tid = form.team_id;
+    if (!tid) { setMembers([]); return; }
+    api.get(`/teams/${tid}`)
+      .then(r => setMembers(Array.isArray(r.data?.members) ? r.data.members : []))
+      .catch(() => setMembers([]));
+  }, [form.team_id]);
+
+  // Close assignee dropdown on outside click
+  useEffect(() => {
+    if (!assigneeOpen) return;
+    const handler = (e) => {
+      if (assigneeRef.current && !assigneeRef.current.contains(e.target)) {
+        setAssigneeOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [assigneeOpen]);
 
   useEffect(() => {
     if (!open) return;
     if (editing) {
       setForm({
-        title:       editing.title       || '',
-        description: editing.description || '',
-        priority:    editing.priority    || 'medium',
-        team_id:     editing.team_id     || defaultTeamId || '',
-        due_at:      editing.due_at ? toLocal(editing.due_at) : '',
+        title:              editing.title       || '',
+        description:        editing.description || '',
+        priority:           editing.priority    || 'medium',
+        team_id:            editing.team_id     || defaultTeamId || '',
+        due_at:             editing.due_at ? toLocal(editing.due_at) : '',
+        assignee_user_ids:  editing.assignee_user_ids || [],
       });
     } else {
-      setForm({ title: '', description: '', priority: 'medium', team_id: defaultTeamId || '', due_at: '' });
+      setForm({
+        title: '', description: '', priority: 'medium',
+        team_id: defaultTeamId || '', due_at: '',
+        assignee_user_ids: [],
+      });
     }
     setTimeout(() => titleRef.current?.focus(), 60);
-  }, [open, editing, defaultTeamId, lockToProject]);
+  }, [open, editing, defaultTeamId]);
 
   const upd = (k) => (e) => setForm(f => ({ ...f, [k]: e?.target ? e.target.value : e }));
+
+  const toggleAssignee = (uid) => {
+    setForm(f => {
+      const ids = f.assignee_user_ids || [];
+      return {
+        ...f,
+        assignee_user_ids: ids.includes(uid) ? ids.filter(x => x !== uid) : [...ids, uid],
+      };
+    });
+  };
 
   const save = async () => {
     if (!form.title.trim()) { pushToast({ type: 'error', title: 'Title is required' }); return; }
     const teamId = lockToProject ? (defaultTeamId || null) : (form.team_id || null);
     const payload = {
-      title:       form.title.trim(),
-      description: form.description?.trim() || null,
-      priority:    form.priority,
-      team_id:     teamId,
-      due_at:      fromLocal(form.due_at),
+      title:              form.title.trim(),
+      description:        form.description?.trim() || null,
+      priority:           form.priority,
+      team_id:            teamId,
+      due_at:             fromLocal(form.due_at),
+      assignee_user_ids:  form.assignee_user_ids,
     };
     if (!editing && defaultColumnId) payload.column_id = defaultColumnId;
     try {
@@ -75,9 +118,12 @@ export default function TaskEditor({
 
   if (!open) return null;
 
+  const selectedIds = form.assignee_user_ids || [];
+  const selectedMembers = members.filter(m => selectedIds.includes(m.user_id || m.member_id));
+
   return (
     <div className="k-modal-scrim" style={{ zIndex: 400 }} onClick={e => e.target === e.currentTarget && onOpenChange(false)}>
-      <div className="k-modal" style={{ maxWidth: 520 }}>
+      <div className="k-modal" style={{ maxWidth: 540 }}>
         {/* Header */}
         <div style={{ padding: '20px 24px 0', flexShrink: 0 }}>
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 4 }}>
@@ -96,40 +142,25 @@ export default function TaskEditor({
 
         {/* Body */}
         <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+
           {/* Title */}
-          <div>
-            <label className="k-label">Title *</label>
-            <input
-              ref={titleRef}
-              className="k-input"
-              style={{ width: '100%' }}
-              value={form.title}
-              onChange={upd('title')}
-              placeholder="Clear, action-first title…"
-              onKeyDown={e => e.key === 'Enter' && save()}
-            />
-          </div>
+          <input
+            ref={titleRef}
+            className="k-input"
+            style={{ width: '100%', fontSize: 18, fontFamily: 'var(--font-display)', fontWeight: 400, background: 'transparent', border: 'none', borderBottom: '1px solid var(--rule)', borderRadius: 0, padding: '6px 0', color: 'var(--ink)' }}
+            value={form.title}
+            onChange={upd('title')}
+            placeholder="Write a clear, action-first title..."
+            onKeyDown={e => e.key === 'Enter' && save()}
+          />
 
-          {/* Notes */}
-          <div>
-            <label className="k-label">Notes</label>
-            <textarea
-              className="k-input"
-              rows={3}
-              style={{ width: '100%', resize: 'vertical', lineHeight: 1.6 }}
-              value={form.description}
-              onChange={upd('description')}
-              placeholder="Context, links, acceptance criteria…"
-            />
-          </div>
-
-          {/* Project + Priority + Due */}
-          <div style={{ display: 'grid', gridTemplateColumns: lockToProject ? '1fr 1fr' : '1fr 1fr 1fr', gap: 12 }}>
+          {/* Row 1: Project + Status */}
+          <div style={{ display: 'grid', gridTemplateColumns: lockToProject ? '1fr' : '1fr 1fr', gap: 12 }}>
             {!lockToProject && (
               <div>
-                <label className="k-label">Project · परियोजना</label>
+                <label style={lbl}>PROJECT · परियोजना</label>
                 <select className="k-input" style={{ width: '100%' }} value={form.team_id} onChange={upd('team_id')}>
-                  <option value="">Personal</option>
+                  <option value="">No project</option>
                   {teams.filter(t => t.team_id && t.name).map(t => (
                     <option key={t.team_id} value={t.team_id}>{t.name}</option>
                   ))}
@@ -137,7 +168,7 @@ export default function TaskEditor({
               </div>
             )}
             <div>
-              <label className="k-label">Priority · प्राथमिकता</label>
+              <label style={lbl}>PRIORITY · प्राथमिकता</label>
               <select className="k-input" style={{ width: '100%' }} value={form.priority} onChange={upd('priority')}>
                 <option value="low">Low</option>
                 <option value="medium">Medium</option>
@@ -145,22 +176,153 @@ export default function TaskEditor({
                 <option value="urgent">Urgent</option>
               </select>
             </div>
+          </div>
+
+          {/* Row 2: Due + Assignees */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div>
-              <label className="k-label">Due date · नियत तिथि</label>
+              <label style={lbl}>DUE · नियत तिथि</label>
               <input type="datetime-local" className="k-input" style={{ width: '100%' }} value={form.due_at} onChange={upd('due_at')} />
             </div>
+
+            {/* Assignee picker */}
+            <div ref={assigneeRef} style={{ position: 'relative' }}>
+              <label style={lbl}>ASSIGNEES · नियुक्त</label>
+              <button
+                type="button"
+                onClick={() => setAssigneeOpen(v => !v)}
+                style={{
+                  width: '100%', display: 'flex', alignItems: 'center', gap: 8,
+                  background: 'var(--bg-soft)', border: '1px solid var(--rule)',
+                  borderRadius: 'var(--r-md)', padding: '7px 10px', cursor: 'pointer',
+                  fontFamily: 'var(--font-ui)', fontSize: 13, color: selectedMembers.length ? 'var(--ink)' : 'var(--ink-faint)',
+                  minHeight: 36,
+                }}
+              >
+                {selectedMembers.length === 0 ? (
+                  <span style={{ flex: 1, textAlign: 'left' }}>Pick team members…</span>
+                ) : (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4, flex: 1, flexWrap: 'wrap' }}>
+                    {selectedMembers.slice(0, 3).map((m, i) => {
+                      const name = m.display_name || m.full_name || m.name || m.email || '';
+                      return (
+                        <span key={m.user_id || m.member_id} style={{
+                          display: 'inline-flex', alignItems: 'center', gap: 4,
+                          background: 'var(--side-active)', borderRadius: 20,
+                          padding: '2px 8px 2px 4px', fontSize: 12, fontWeight: 500,
+                        }}>
+                          <span style={{
+                            width: 18, height: 18, borderRadius: '50%', fontSize: 9, fontWeight: 700,
+                            background: AVATAR_COLORS[i % AVATAR_COLORS.length], color: '#fff',
+                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                          }}>{userInitials(name)}</span>
+                          {name.split(' ')[0]}
+                        </span>
+                      );
+                    })}
+                    {selectedMembers.length > 3 && (
+                      <span style={{ fontSize: 12, color: 'var(--ink-3)' }}>+{selectedMembers.length - 3}</span>
+                    )}
+                  </div>
+                )}
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ flexShrink: 0, color: 'var(--ink-3)' }}>
+                  <path d="M2 4l4 4 4-4"/>
+                </svg>
+              </button>
+
+              {/* Dropdown */}
+              {assigneeOpen && (
+                <div style={{
+                  position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0, zIndex: 100,
+                  background: 'var(--surface)', border: '1px solid var(--rule)',
+                  borderRadius: 'var(--r-md)', boxShadow: '0 8px 24px rgba(0,0,0,0.18)',
+                  maxHeight: 220, overflowY: 'auto',
+                }}>
+                  {members.length === 0 ? (
+                    <div style={{ padding: '12px 14px', fontSize: 12, color: 'var(--ink-3)', fontStyle: 'italic' }}>
+                      {form.team_id ? 'No members found' : 'Select a project first'}
+                    </div>
+                  ) : (
+                    members.map((m, i) => {
+                      const uid = m.user_id || m.member_id;
+                      const name = m.display_name || m.full_name || m.name || m.email || '';
+                      const title = m.position || m.job_title || m.role || '';
+                      const checked = selectedIds.includes(uid);
+                      return (
+                        <button
+                          key={uid}
+                          type="button"
+                          onClick={() => toggleAssignee(uid)}
+                          style={{
+                            width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+                            padding: '9px 12px', background: checked ? 'var(--side-active)' : 'transparent',
+                            border: 'none', cursor: 'pointer', textAlign: 'left',
+                            borderBottom: i < members.length - 1 ? '1px solid var(--rule-soft)' : 'none',
+                          }}
+                        >
+                          {/* Avatar */}
+                          <span style={{
+                            width: 30, height: 30, borderRadius: '50%', fontSize: 11, fontWeight: 700,
+                            background: AVATAR_COLORS[i % AVATAR_COLORS.length], color: '#fff',
+                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                          }}>{userInitials(name)}</span>
+                          {/* Name + title */}
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink)', fontFamily: 'var(--font-ui)' }}>
+                              {name}
+                            </div>
+                            {title && (
+                              <div style={{ fontSize: 11, color: 'var(--ink-3)', marginTop: 1 }}>{title}</div>
+                            )}
+                          </div>
+                          {/* Checkmark */}
+                          {checked && (
+                            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="var(--k-primary)" strokeWidth="2" style={{ flexShrink: 0 }}>
+                              <path d="M2 7l4 4 6-6"/>
+                            </svg>
+                          )}
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Description */}
+          <div>
+            <label style={lbl}>DESCRIPTION · विवरण</label>
+            <textarea
+              className="k-input"
+              rows={3}
+              style={{ width: '100%', resize: 'vertical', lineHeight: 1.6 }}
+              value={form.description}
+              onChange={upd('description')}
+              placeholder="Acceptance criteria, context, links..."
+            />
           </div>
         </div>
 
         {/* Footer */}
         <div style={{ padding: '14px 24px', borderTop: '1px solid var(--rule-soft)', display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
-          <span style={{ fontSize: 11, color: 'var(--ink-faint)', flex: 1 }}>↵ to save · Esc to close</span>
+          <span style={{ fontSize: 11, color: 'var(--ink-faint)', flex: 1 }}>↵ to create · Esc to close</span>
           <button className="k-btn k-btn--ghost k-btn--sm" onClick={() => onOpenChange(false)}>Cancel</button>
           <button className="k-btn k-btn--primary k-btn--sm" onClick={save} disabled={!form.title.trim()}>
-            {editing ? 'Save changes' : 'Create task'}
+            {editing ? 'Save changes' : clientMode ? 'Submit request' : 'Create task'}
           </button>
         </div>
       </div>
     </div>
   );
 }
+
+const lbl = {
+  display: 'block',
+  fontSize: 10,
+  fontWeight: 800,
+  letterSpacing: '0.12em',
+  textTransform: 'uppercase',
+  color: 'var(--ink-3)',
+  marginBottom: 6,
+};
