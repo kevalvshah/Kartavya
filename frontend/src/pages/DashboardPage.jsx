@@ -52,7 +52,7 @@ export default function DashboardPage({ teams = [] }) {
       api.get('/tasks'),
       api.get('/verse-of-the-day').catch(() => null),
     ]).then(([tRes, vRes]) => {
-      setTasks(tRes.data || []);
+      setTasks(Array.isArray(tRes.data) ? tRes.data : []);
       if (vRes) setVerse(vRes.data);
     }).catch(console.error).finally(() => setLoading(false));
   }, []);
@@ -80,18 +80,19 @@ export default function DashboardPage({ teams = [] }) {
   const {
     myPlate, openTasks, openProjectCount, dueToday, overdue, completedWeek, inProgress, inReview, upcoming,
   } = useMemo(() => {
-    const myTasks   = tasks.filter(t => t.user_id === myId || t.assignee_user_ids?.includes(myId));
-    const open      = tasks.filter(t => t.status !== 'done');
+    const safeTasks = Array.isArray(tasks) ? tasks : [];
+    const myTasks   = safeTasks.filter(t => t.user_id === myId || t.assignee_user_ids?.includes(myId));
+    const open      = safeTasks.filter(t => t.status !== 'done');
     return {
       myPlate:       myTasks.filter(t => t.status !== 'done').slice(0, 6),
       openTasks:     open,
       openProjectCount: new Set(open.map(t => t.team_id).filter(Boolean)).size || 1,
-      dueToday:      tasks.filter(t => t.due_at && new Date(t.due_at) >= today && new Date(t.due_at) < tomorrow),
-      overdue:       tasks.filter(t => t.due_at && new Date(t.due_at) < today && t.status !== 'done'),
-      completedWeek: tasks.filter(t => t.status === 'done' && t.updated_at && new Date(t.updated_at) >= weekAgo),
-      inProgress:    tasks.filter(t => t.status === 'in_progress'),
-      inReview:      tasks.filter(t => t.status === 'in_review'),
-      upcoming:      tasks
+      dueToday:      safeTasks.filter(t => t.due_at && new Date(t.due_at) >= today && new Date(t.due_at) < tomorrow),
+      overdue:       safeTasks.filter(t => t.due_at && new Date(t.due_at) < today && t.status !== 'done'),
+      completedWeek: safeTasks.filter(t => t.status === 'done' && t.updated_at && new Date(t.updated_at) >= weekAgo),
+      inProgress:    safeTasks.filter(t => t.status === 'in_progress'),
+      inReview:      safeTasks.filter(t => t.status === 'in_review'),
+      upcoming:      safeTasks
         .filter(t => t.due_at && new Date(t.due_at) >= today && new Date(t.due_at) <= weekEnd && t.status !== 'done')
         .sort((a,b) => new Date(a.due_at) - new Date(b.due_at)).slice(0, 6),
     };
