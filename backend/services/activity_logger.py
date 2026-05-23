@@ -42,7 +42,7 @@ async def log_event(
             resolved_team_id,
             actor_id,
             event_type,
-            __import__('json').dumps(data or {}),
+            __import__('json').dumps(data or {}),  # stored as jsonb — asyncpg accepts json string
         )
     except Exception as exc:
         log.warning(f"activity_logger swallowed error: {exc}")

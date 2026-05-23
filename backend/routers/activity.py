@@ -4,9 +4,24 @@ BUG FIX: removed spaces inside f-string braces for LIMIT/OFFSET params
 """
 from fastapi import APIRouter, Depends, Query
 from typing import Optional
+import json
 
 from auth_router import require_user
 from db import get_pool
+
+
+def _normalize(rows):
+    result = []
+    for r in rows:
+        row = dict(r)
+        d = row.get("data")
+        if isinstance(d, str):
+            try:
+                row["data"] = json.loads(d)
+            except Exception:
+                row["data"] = {}
+        result.append(row)
+    return result
 
 router = APIRouter(prefix="/api/activity", tags=["activity"])
 
@@ -38,7 +53,7 @@ async def team_activity(
         ORDER BY ae.created_at DESC
         LIMIT ${limit_idx} OFFSET ${offset_idx}
     """, *vals, limit, offset)
-    return [dict(r) for r in rows]
+    return _normalize(rows)
 
 
 @router.get("/task/{task_id}")
@@ -57,4 +72,4 @@ async def task_activity(
         ORDER BY ae.created_at DESC
         LIMIT $2
     """, task_id, limit)
-    return [dict(r) for r in rows]
+    return _normalize(rows)
