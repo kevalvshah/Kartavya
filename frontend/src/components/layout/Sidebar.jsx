@@ -70,6 +70,7 @@ const NAV_CLIENT = [
       { to: '/client/projects', icon: 'projects',  en: 'My Projects',   hi: 'योजना' },
       { to: '/tasks',           icon: 'tasks',     en: 'My Tasks',      hi: 'कर्तव्य' },
       { to: '/approvals',       icon: 'approvals', en: 'Approvals',     hi: 'सम्मति' },
+      { to: '/inbox',           icon: 'inbox',     en: 'Inbox',         hi: 'सन्देश', badge: 'unread' },
       { to: '/settings/notifications', icon: 'notifications', en: 'Notifications', hi: 'सूचना' },
     ],
   },
