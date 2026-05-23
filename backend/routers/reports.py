@@ -84,7 +84,7 @@ def _next_run(frequency: str, day_of_week: int, day_of_month: int, send_hour_utc
 
 
 async def _fetch_report_data(pool, team_id: str, from_date: str, to_date: str) -> dict:
-    """Fetch time entries + task stats for a team/period."""
+    """Fetch time entries + task stats + task list + leaderboard + throughput."""
     # Time entries
     entries = await pool.fetch("""
         SELECT te.entry_id, te.minutes, te.started_at, te.description,
@@ -108,21 +108,73 @@ async def _fetch_report_data(pool, team_id: str, from_date: str, to_date: str) -
         "SELECT COUNT(*) FROM tasks WHERE team_id=$1 AND status!='done' AND due_at < $2", team_id, now
     )
 
+    # Detailed task list (up to 50, in-progress first)
+    task_list_rows = await pool.fetch("""
+        SELECT t.task_id, t.title, t.status, t.priority, t.due_at, t.updated_at,
+               COALESCE(
+                 (SELECT COALESCE(u2.full_name, u2.name, u2.email)
+                  FROM users u2 WHERE u2.user_id = t.assignee_user_ids[1] LIMIT 1),
+                 'Unassigned'
+               ) AS owner_name
+        FROM tasks t
+        WHERE t.team_id = $1
+        ORDER BY CASE t.status
+            WHEN 'in_progress' THEN 0 WHEN 'todo' THEN 1 ELSE 2 END,
+            t.due_at ASC NULLS LAST
+        LIMIT 50
+    """, team_id)
+
+    # Per-member tasks completed in period (updated_at proxy for done date)
+    member_tasks_rows = await pool.fetch("""
+        SELECT COALESCE(u3.full_name, u3.name, u3.email, uid) AS user_name,
+               COUNT(*) AS tasks_done
+        FROM tasks t
+        CROSS JOIN LATERAL unnest(COALESCE(t.assignee_user_ids, ARRAY[]::text[])) AS uid
+        LEFT JOIN users u3 ON u3.user_id = uid
+        WHERE t.team_id = $1 AND t.status = 'done'
+          AND t.updated_at >= $2::timestamptz
+          AND t.updated_at <= ($3::date + interval '1 day')::timestamptz
+        GROUP BY user_name
+        ORDER BY tasks_done DESC
+    """, team_id, from_date, to_date)
+
+    # Daily throughput: tasks closed per calendar day
+    throughput_rows = await pool.fetch("""
+        SELECT DATE(t.updated_at AT TIME ZONE 'UTC') AS day, COUNT(*) AS done_count
+        FROM tasks t
+        WHERE t.team_id = $1 AND t.status = 'done'
+          AND t.updated_at >= $2::timestamptz
+          AND t.updated_at <= ($3::date + interval '1 day')::timestamptz
+        GROUP BY day ORDER BY day
+    """, team_id, from_date, to_date)
+
     def _serialize(e):
         d = dict(e)
         if d.get("started_at") and hasattr(d["started_at"], "isoformat"):
             d["started_at"] = d["started_at"].isoformat()
         return d
 
+    def _serialize_task(t):
+        d = dict(t)
+        for fld in ("due_at", "updated_at"):
+            if d.get(fld) and hasattr(d[fld], "isoformat"):
+                d[fld] = d[fld].isoformat()
+        return d
+
     return {
-        "total_minutes": total_mins,
-        "entries":       [_serialize(e) for e in entries],
+        "total_minutes":    total_mins,
+        "entries":          [_serialize(e) for e in entries],
         "tasks": {
             "todo":        todo or 0,
             "in_progress": in_progress or 0,
             "done":        done or 0,
             "overdue":     overdue or 0,
         },
+        "task_list":        [_serialize_task(t) for t in task_list_rows],
+        "by_member_tasks":  [{"user_name": r["user_name"], "tasks_done": int(r["tasks_done"])}
+                             for r in member_tasks_rows],
+        "daily_throughput": [{"day": str(r["day"]), "done_count": int(r["done_count"])}
+                             for r in throughput_rows],
     }
 
 
