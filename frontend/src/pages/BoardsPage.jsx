@@ -18,6 +18,7 @@ import { useRealtimeTasks } from '../hooks/useRealtimeTasks';
 import { usePresence }  from '../hooks/usePresence';
 import { PageHeader, AvatarStack } from '../components/editorial';
 import { AVATAR_COLORS } from '../lib/utils';
+import AutomationsPage from './AutomationsPage';
 
 const PROJECT_COLORS = ['#0082c6','#05b7aa','#8b5cf6','#ec4899','#f59e0b','#10b981','#6366f1'];
 
@@ -52,7 +53,11 @@ export default function BoardsPage() {
   const [loading,     setLoading]     = useState(true);
   const [view,        setView]        = useState('kanban');
 
-  const { fieldDefs } = useFields(activeId);
+  const { fieldDefs, createField, deleteField } = useFields(activeId);
+  const [showFieldMgr,    setShowFieldMgr]    = useState(false);
+  const [showAutomations, setShowAutomations] = useState(false);
+  const [newFieldName,    setNewFieldName]    = useState('');
+  const [newFieldType,    setNewFieldType]    = useState('text');
   const { tasks, setTasks } = useRealtimeTasks(activeId, rawTasks);
   const onlineUsers = usePresence(activeId, me);
 
@@ -89,6 +94,19 @@ export default function BoardsPage() {
     setTasks(updatedTasks);
   }, [setTasks]);
 
+  // Close panels when switching projects
+  const switchProject = (id) => {
+    setActiveId(id);
+    setShowFieldMgr(false);
+    setShowAutomations(false);
+  };
+
+  const addField = async () => {
+    if (!newFieldName.trim()) return;
+    await createField({ name: newFieldName.trim(), type: newFieldType, config: {} });
+    setNewFieldName('');
+  };
+
   const activeProject = projects.find(p => p.team_id === activeId);
   const onlineAvatars = onlineUsers.map((u, i) => ({ name: u.name || u.email || '?', color: AVATAR_COLORS[i % AVATAR_COLORS.length] }));
 
@@ -109,13 +127,27 @@ export default function BoardsPage() {
                 <button
                   key={p.team_id}
                   className={'k-projectpicker__chip' + (p.team_id === activeId ? ' is-active' : '')}
-                  onClick={() => setActiveId(p.team_id)}
+                  onClick={() => switchProject(p.team_id)}
                 >
                   <span className="k-projectpicker__dot" style={{ background: PROJECT_COLORS[idx % PROJECT_COLORS.length] }} />
                   {p.name}
                 </button>
               ))}
             </div>
+            <button
+              className="k-btn k-btn--ghost k-btn--sm"
+              onClick={() => { setShowFieldMgr(v => !v); setShowAutomations(false); }}
+              style={showFieldMgr ? { background: 'var(--bg-soft)' } : {}}
+            >
+              ⚙ Fields
+            </button>
+            <button
+              className="k-btn k-btn--ghost k-btn--sm"
+              onClick={() => { setShowAutomations(v => !v); setShowFieldMgr(false); }}
+              style={showAutomations ? { background: 'var(--bg-soft)' } : {}}
+            >
+              ⚡ Automations
+            </button>
             <button className="k-link" onClick={() => activeId && navigate(`/projects/${activeId}`)}>
               Open project →
             </button>
@@ -139,6 +171,67 @@ export default function BoardsPage() {
           ))}
         </div>
       </div>
+
+      {/* Field manager panel */}
+      {showFieldMgr && (
+        <section className="k-card">
+          <header className="k-card__head">
+            <div className="k-card__titles">
+              <h3 className="k-card__title">Custom Fields</h3>
+            </div>
+            <button className="k-iconbtn" style={{ marginLeft: 'auto', opacity: 0.5 }} onClick={() => setShowFieldMgr(false)} title="Close">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 3l10 10M13 3L3 13"/></svg>
+            </button>
+          </header>
+          <div className="k-card__body">
+            <div style={{ display: 'flex', gap: 8, marginBottom: 12, alignItems: 'flex-end' }}>
+              <input
+                className="k-input"
+                value={newFieldName}
+                onChange={e => setNewFieldName(e.target.value)}
+                placeholder="Field name"
+                style={{ flex: 1 }}
+                onKeyDown={e => e.key === 'Enter' && addField()}
+              />
+              <select className="k-select" value={newFieldType} onChange={e => setNewFieldType(e.target.value)}>
+                {['text','number','date','select','checkbox','url','person'].map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+              <button className="k-btn k-btn--primary k-btn--sm" onClick={addField}>Add</button>
+            </div>
+            {(fieldDefs || []).length === 0 ? (
+              <p style={{ color: 'var(--ink-3)', fontSize: 13 }}>No custom fields yet.</p>
+            ) : (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                {(fieldDefs || []).map(f => (
+                  <div key={f.field_id} style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--bg-soft)', borderRadius: 'var(--r-sm)', padding: '4px 10px', fontSize: 13 }}>
+                    <span style={{ fontWeight: 500 }}>{f.name}</span>
+                    <span style={{ color: 'var(--ink-3)', fontSize: 11 }}>{f.type}</span>
+                    <button onClick={() => deleteField(f.field_id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-3)', fontSize: 14, lineHeight: 1 }}>×</button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </section>
+      )}
+
+      {/* Automations panel */}
+      {showAutomations && (
+        <section className="k-card">
+          <header className="k-card__head">
+            <div className="k-card__titles">
+              <h3 className="k-card__title">Automations</h3>
+              <span className="k-card__sans">स्वचालन</span>
+            </div>
+            <button className="k-iconbtn" style={{ marginLeft: 'auto', opacity: 0.5 }} onClick={() => setShowAutomations(false)} title="Close">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 3l10 10M13 3L3 13"/></svg>
+            </button>
+          </header>
+          <div className="k-card__body" style={{ paddingTop: 0 }}>
+            <AutomationsPage teamId={activeId} embedded />
+          </div>
+        </section>
+      )}
 
       {/* Content */}
       {loading ? (
