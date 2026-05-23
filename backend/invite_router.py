@@ -138,23 +138,36 @@ async def remove_user(user_id: str, reassign_to: Optional[str] = None, pool=Depe
 
     async with pool.acquire() as conn:
         async with conn.transaction():
+          try:
 
             # ── Memberships (cannot transfer — remove) ────────────────────────
-            await conn.execute("DELETE FROM team_members        WHERE user_id=$1", user_id)
-            await conn.execute("DELETE FROM project_assignments WHERE user_id=$1", user_id)
-            await conn.execute("DELETE FROM task_clients        WHERE user_id=$1", user_id)
+            for stmt, args in [
+                ("DELETE FROM team_members        WHERE user_id=$1", (user_id,)),
+                ("DELETE FROM project_assignments WHERE user_id=$1", (user_id,)),
+                ("DELETE FROM task_clients        WHERE user_id=$1", (user_id,)),
+            ]:
+                try:
+                    await conn.execute(stmt, *args)
+                except Exception:
+                    pass
 
             # ── Activity events ───────────────────────────────────────────────
-            if r:
-                await conn.execute("UPDATE activity_events SET actor_id=$1 WHERE actor_id=$2", r, user_id)
-            else:
-                await conn.execute("DELETE FROM activity_events WHERE actor_id=$1", user_id)
+            try:
+                if r:
+                    await conn.execute("UPDATE activity_events SET actor_id=$1 WHERE actor_id=$2", r, user_id)
+                else:
+                    await conn.execute("DELETE FROM activity_events WHERE actor_id=$1", user_id)
+            except Exception:
+                pass
 
             # ── Time entries ──────────────────────────────────────────────────
-            if r:
-                await conn.execute("UPDATE time_entries SET user_id=$1 WHERE user_id=$2", r, user_id)
-            else:
-                await conn.execute("DELETE FROM time_entries WHERE user_id=$1", user_id)
+            try:
+                if r:
+                    await conn.execute("UPDATE time_entries SET user_id=$1 WHERE user_id=$2", r, user_id)
+                else:
+                    await conn.execute("DELETE FROM time_entries WHERE user_id=$1", user_id)
+            except Exception:
+                pass
 
             # ── Comments (try both table names) ───────────────────────────────
             for tbl, col in [("task_comments", "user_id"), ("comments", "author_id")]:
@@ -167,26 +180,28 @@ async def remove_user(user_id: str, reassign_to: Optional[str] = None, pool=Depe
                     pass
 
             # ── Tasks: created_by_user_id ─────────────────────────────────────
-            if r:
-                await conn.execute(
-                    "UPDATE tasks SET created_by_user_id=$1 WHERE created_by_user_id=$2", r, user_id
-                )
-            else:
-                # Fall back: reassign per-team to owner/admin, else NULL
-                task_teams = await conn.fetch(
-                    "SELECT DISTINCT team_id FROM tasks WHERE created_by_user_id=$1", user_id
-                )
-                for tt in task_teams:
-                    tid = tt["team_id"]
-                    fallback = await conn.fetchval("""
-                        SELECT user_id FROM project_assignments
-                        WHERE team_id=$1 AND role IN ('owner','admin') AND user_id != $2
-                        ORDER BY CASE role WHEN 'owner' THEN 0 ELSE 1 END LIMIT 1
-                    """, tid, user_id)
+            try:
+                if r:
                     await conn.execute(
-                        "UPDATE tasks SET created_by_user_id=$1 WHERE created_by_user_id=$2 AND team_id=$3",
-                        fallback, user_id, tid
+                        "UPDATE tasks SET created_by_user_id=$1 WHERE created_by_user_id=$2", r, user_id
                     )
+                else:
+                    task_teams = await conn.fetch(
+                        "SELECT DISTINCT team_id FROM tasks WHERE created_by_user_id=$1", user_id
+                    )
+                    for tt in task_teams:
+                        tid = tt["team_id"]
+                        fallback = await conn.fetchval("""
+                            SELECT user_id FROM project_assignments
+                            WHERE team_id=$1 AND role IN ('owner','admin') AND user_id != $2
+                            ORDER BY CASE role WHEN 'owner' THEN 0 ELSE 1 END LIMIT 1
+                        """, tid, user_id)
+                        await conn.execute(
+                            "UPDATE tasks SET created_by_user_id=$1 WHERE created_by_user_id=$2 AND team_id=$3",
+                            fallback, user_id, tid
+                        )
+            except Exception:
+                pass
 
             # ── Tasks: user_id column (FK) ────────────────────────────────────
             try:
@@ -289,6 +304,11 @@ async def remove_user(user_id: str, reassign_to: Optional[str] = None, pool=Depe
 
             # ── Finally delete the user ───────────────────────────────────────
             await conn.execute("DELETE FROM users WHERE user_id=$1", user_id)
+
+          except Exception as exc:
+            import logging
+            logging.getLogger(__name__).error(f"remove_user {user_id} failed: {exc}")
+            raise HTTPException(status_code=500, detail=str(exc))
 
     return {"ok": True}
 
