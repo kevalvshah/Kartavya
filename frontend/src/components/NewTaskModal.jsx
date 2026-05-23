@@ -1,8 +1,10 @@
 /**
- * NewTaskModal.jsx — "New task" creation modal with bilingual design system.
+ * NewTaskModal.jsx — global "New task" modal. k-* design system.
+ * Opened from the top-bar "+ New task" button (AppShell).
  */
 import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../lib/api';
+import { AVATAR_COLORS, userInitials } from '../lib/utils';
 
 const PRIORITY_DOTS = {
   low:    { color: '#10b981', label: 'Low',    hi: 'लघु' },
@@ -11,54 +13,52 @@ const PRIORITY_DOTS = {
   urgent: { color: '#dc2626', label: 'Urgent', hi: 'अत्यावश्यक' },
 };
 
-const MEMBER_COLORS = ['#0082c6','#05b7aa','#8b5cf6','#ec4899','#f59e0b','#10b981','#6366f1'];
-
-function initials(name) {
-  return (name || '?').split(' ').map(w => w[0]).join('').slice(0,2).toUpperCase();
-}
-
 export default function NewTaskModal({ open, onClose, onCreated }) {
   const [title,       setTitle]       = useState('');
   const [projectId,   setProjectId]   = useState('');
   const [status,      setStatus]      = useState('todo');
   const [priority,    setPriority]    = useState('medium');
   const [dueAt,       setDueAt]       = useState('');
-  const [estimate,    setEstimate]    = useState('');
   const [description, setDescription] = useState('');
   const [assignees,   setAssignees]   = useState([]);
-  const [files,       setFiles]       = useState([]); // [{name, url}]
+  const [files,       setFiles]       = useState([]);
   const [uploading,   setUploading]   = useState(false);
   const [projects,    setProjects]    = useState([]);
   const [members,     setMembers]     = useState([]);
-  const [categoryId,  setCategoryId]  = useState('');
-  const [categories,  setCategories]  = useState([]);
   const [saving,      setSaving]      = useState(false);
   const [titleError,  setTitleError]  = useState(false);
-  const fileRef = useRef(null);
+  const [assigneeOpen, setAssigneeOpen] = useState(false);
 
-  const titleRef = useRef(null);
+  const titleRef    = useRef(null);
+  const fileRef     = useRef(null);
+  const assigneeRef = useRef(null);
 
   useEffect(() => {
     if (!open) return;
     setTitle(''); setProjectId(''); setStatus('todo'); setPriority('medium');
-    setDueAt(''); setEstimate(''); setDescription(''); setAssignees([]); setFiles([]); setCategoryId('');
-    api.get('/categories').then(r => setCategories(Array.isArray(r.data) ? r.data : [])).catch(() => {});
+    setDueAt(''); setDescription(''); setAssignees([]); setFiles([]);
+    setTitleError(false); setAssigneeOpen(false);
     api.get('/teams').then(r => setProjects(Array.isArray(r.data) ? r.data : [])).catch(() => {});
-    api.get('/teams').then(r => {
-      const allMembers = [];
-      (Array.isArray(r.data) ? r.data : []).forEach(t => (t.members || []).forEach(m => {
-        if (!allMembers.find(x => x.user_id === m.user_id)) allMembers.push(m);
-      }));
-      setMembers(allMembers);
-    }).catch(() => {});
     setTimeout(() => titleRef.current?.focus(), 80);
   }, [open]);
 
   // Fetch members when project changes
   useEffect(() => {
-    if (!projectId) return;
-    api.get(`/teams/${projectId}`).then(r => setMembers(Array.isArray(r.data?.members) ? r.data.members : [])).catch(() => {});
+    if (!projectId) { setMembers([]); return; }
+    api.get(`/teams/${projectId}`)
+      .then(r => setMembers(Array.isArray(r.data?.members) ? r.data.members : []))
+      .catch(() => setMembers([]));
   }, [projectId]);
+
+  // Close assignee dropdown on outside click
+  useEffect(() => {
+    if (!assigneeOpen) return;
+    const handler = (e) => {
+      if (assigneeRef.current && !assigneeRef.current.contains(e.target)) setAssigneeOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [assigneeOpen]);
 
   const toggleAssignee = (uid) => {
     setAssignees(prev => prev.includes(uid) ? prev.filter(x => x !== uid) : [...prev, uid]);
@@ -73,7 +73,7 @@ export default function NewTaskModal({ open, onClose, onCreated }) {
         const fd = new FormData();
         fd.append('file', file);
         const res = await api.post('/upload', fd);
-        setFiles(prev => [...prev, { name: file.name, url: res.data.url }]);
+        setFiles(prev => [...prev, { name: file.name, url: res.data.url, key: res.data.key || null }]);
       }
     } catch (_) {}
     finally { setUploading(false); e.target.value = ''; }
@@ -90,12 +90,10 @@ export default function NewTaskModal({ open, onClose, onCreated }) {
         priority,
         description: description.trim() || null,
       };
-      if (projectId)             payload.team_id             = projectId;
-      if (categoryId)            payload.category_id         = categoryId;
-      if (dueAt)                 payload.due_at              = new Date(dueAt).toISOString();
-      if (estimate)              payload.estimated_minutes   = Math.round(parseFloat(estimate) * 60);
-      if (assignees.length)      payload.assignee_user_ids   = assignees;
-      if (files.length)          payload.attachments         = files.map(f => ({ name: f.name, url: f.url }));
+      if (projectId)        payload.team_id           = projectId;
+      if (dueAt)            payload.due_at             = new Date(dueAt).toISOString();
+      if (assignees.length) payload.assignee_user_ids  = assignees;
+      if (files.length)     payload.attachments        = files.map(f => ({ name: f.name, url: f.url, key: f.key || null }));
       await api.post('/tasks', payload);
       onCreated?.();
       onClose();
@@ -110,6 +108,8 @@ export default function NewTaskModal({ open, onClose, onCreated }) {
 
   if (!open) return null;
 
+  const selectedMembers = members.filter(m => assignees.includes(m.user_id));
+
   return (
     <div
       className="k-modal-scrim"
@@ -119,12 +119,12 @@ export default function NewTaskModal({ open, onClose, onCreated }) {
     >
       <div className="k-modal">
 
-        {/* Modal header */}
+        {/* Header */}
         <div style={{ padding: '20px 24px 0', flexShrink: 0 }}>
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 4 }}>
             <div>
               <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--k-primary)', marginBottom: 2 }}>
-                NEW TASK · <span className="k-hi">नया कार्य</span>
+                NEW TASK · <span style={{ fontFamily: 'var(--font-hindi)', textTransform: 'none', letterSpacing: 0 }}>नया कार्य</span>
               </div>
               <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 400, color: 'var(--ink)' }}>
                 What needs doing?
@@ -135,7 +135,7 @@ export default function NewTaskModal({ open, onClose, onCreated }) {
           <div style={{ height: 1, background: 'var(--rule-soft)', margin: '16px 0 0' }} />
         </div>
 
-        {/* Scrollable body */}
+        {/* Body */}
         <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
 
           {/* Title */}
@@ -145,28 +145,22 @@ export default function NewTaskModal({ open, onClose, onCreated }) {
               value={title}
               onChange={e => { setTitle(e.target.value); if (e.target.value.trim()) setTitleError(false); }}
               placeholder="Write a clear, action-first title…"
-              style={{ width: '100%', border: 'none', borderBottom: `2px solid ${titleError ? '#dc2626' : 'var(--rule)'}`, outline: 'none', fontSize: 20, fontFamily: 'var(--font-display)', color: 'var(--ink)', background: 'transparent', paddingBottom: 10, fontWeight: 400, transition: 'border-color .15s' }}
+              style={{ width: '100%', border: 'none', borderBottom: `2px solid ${titleError ? '#dc2626' : 'var(--rule)'}`, outline: 'none', fontSize: 20, fontFamily: 'var(--font-display)', color: 'var(--ink)', background: 'transparent', paddingBottom: 10, fontWeight: 400 }}
             />
-            {titleError && (
-              <div style={{ fontSize: 11, color: '#dc2626', marginTop: 5 }}>Title is required to create a task.</div>
-            )}
+            {titleError && <div style={{ fontSize: 11, color: '#dc2626', marginTop: 5 }}>Title is required.</div>}
           </div>
 
-          {/* PROJECT + STATUS row */}
+          {/* PROJECT + STATUS */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
             <div>
-              <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--ink-3)', marginBottom: 6 }}>
-                PROJECT · <span className="k-hi" style={{ fontFamily: 'var(--font-hindi)', textTransform: 'none', letterSpacing: 0 }}>परियोजना</span>
-              </div>
+              <FieldLabel>PROJECT · परियोजना</FieldLabel>
               <select className="k-select" style={{ width: '100%' }} value={projectId} onChange={e => setProjectId(e.target.value)}>
                 <option value="">No project</option>
                 {projects.map(p => <option key={p.team_id} value={p.team_id}>{p.name}</option>)}
               </select>
             </div>
             <div>
-              <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--ink-3)', marginBottom: 6 }}>
-                STATUS · <span className="k-hi" style={{ fontFamily: 'var(--font-hindi)', textTransform: 'none', letterSpacing: 0 }}>स्थिति</span>
-              </div>
+              <FieldLabel>STATUS · स्थिति</FieldLabel>
               <select className="k-select" style={{ width: '100%' }} value={status} onChange={e => setStatus(e.target.value)}>
                 <option value="todo">To do</option>
                 <option value="in_progress">In progress</option>
@@ -178,9 +172,7 @@ export default function NewTaskModal({ open, onClose, onCreated }) {
 
           {/* PRIORITY */}
           <div style={{ marginBottom: 16 }}>
-            <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--ink-3)', marginBottom: 8 }}>
-              PRIORITY · <span className="k-hi" style={{ fontFamily: 'var(--font-hindi)', textTransform: 'none', letterSpacing: 0 }}>प्राथमिकता</span>
-            </div>
+            <FieldLabel>PRIORITY · प्राथमिकता</FieldLabel>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               {Object.entries(PRIORITY_DOTS).map(([key, { color, label }]) => (
                 <button key={key} onClick={() => setPriority(key)}
@@ -192,65 +184,94 @@ export default function NewTaskModal({ open, onClose, onCreated }) {
             </div>
           </div>
 
-          {/* DUE + ESTIMATE row */}
+          {/* DUE + ASSIGNEES */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
             <div>
-              <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--ink-3)', marginBottom: 6 }}>
-                DUE · <span className="k-hi" style={{ fontFamily: 'var(--font-hindi)', textTransform: 'none', letterSpacing: 0 }}>नियत तिथि</span>
-              </div>
+              <FieldLabel>DUE · नियत तिथि</FieldLabel>
               <input type="date" className="k-input" style={{ width: '100%' }} value={dueAt} onChange={e => setDueAt(e.target.value)} />
             </div>
-            <div>
-              <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--ink-3)', marginBottom: 6 }}>
-                ESTIMATE · <span className="k-hi" style={{ fontFamily: 'var(--font-hindi)', textTransform: 'none', letterSpacing: 0 }}>अनुमान</span>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <input type="number" min="0" step="0.5" className="k-input" style={{ width: 80 }} value={estimate} onChange={e => setEstimate(e.target.value)} placeholder="2" />
-                <span style={{ fontSize: 13, color: 'var(--ink-3)' }}>hours</span>
-              </div>
+
+            {/* Assignee dropdown */}
+            <div ref={assigneeRef} style={{ position: 'relative' }}>
+              <FieldLabel>ASSIGNEES · नियुक्त</FieldLabel>
+              <button
+                type="button"
+                onClick={() => setAssigneeOpen(v => !v)}
+                style={{
+                  width: '100%', display: 'flex', alignItems: 'center', gap: 8,
+                  background: 'var(--bg-soft)', border: '1px solid var(--rule)',
+                  borderRadius: 'var(--r-md)', padding: '7px 10px', cursor: 'pointer',
+                  fontFamily: 'var(--font-ui)', fontSize: 13,
+                  color: selectedMembers.length ? 'var(--ink)' : 'var(--ink-faint)',
+                  minHeight: 36,
+                }}
+              >
+                {selectedMembers.length === 0 ? (
+                  <span style={{ flex: 1, textAlign: 'left' }}>Pick team members…</span>
+                ) : (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4, flex: 1, flexWrap: 'wrap' }}>
+                    {selectedMembers.slice(0, 3).map((m, i) => {
+                      const name = m.display_name || m.full_name || m.name || m.email || '';
+                      return (
+                        <span key={m.user_id} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: 'var(--side-active)', borderRadius: 20, padding: '2px 8px 2px 4px', fontSize: 12, fontWeight: 500 }}>
+                          <span style={{ width: 18, height: 18, borderRadius: '50%', fontSize: 9, fontWeight: 700, background: AVATAR_COLORS[i % AVATAR_COLORS.length], color: '#fff', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                            {userInitials(name)}
+                          </span>
+                          {name.split(' ')[0]}
+                        </span>
+                      );
+                    })}
+                    {selectedMembers.length > 3 && <span style={{ fontSize: 12, color: 'var(--ink-3)' }}>+{selectedMembers.length - 3}</span>}
+                  </div>
+                )}
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ flexShrink: 0, color: 'var(--ink-3)' }}>
+                  <path d="M2 4l4 4 4-4"/>
+                </svg>
+              </button>
+
+              {assigneeOpen && (
+                <div style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0, zIndex: 100, background: 'var(--surface)', border: '1px solid var(--rule)', borderRadius: 'var(--r-md)', boxShadow: '0 8px 24px rgba(0,0,0,0.18)', maxHeight: 220, overflowY: 'auto' }}>
+                  {members.length === 0 ? (
+                    <div style={{ padding: '12px 14px', fontSize: 12, color: 'var(--ink-3)', fontStyle: 'italic' }}>
+                      {projectId ? 'No members found' : 'Select a project first'}
+                    </div>
+                  ) : (
+                    members.map((m, i) => {
+                      const uid     = m.user_id;
+                      const name    = m.display_name || m.full_name || m.name || m.email || '';
+                      const jobTitle = m.position || m.job_title || m.role || '';
+                      const checked = assignees.includes(uid);
+                      return (
+                        <button
+                          key={uid}
+                          type="button"
+                          onClick={() => toggleAssignee(uid)}
+                          style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', background: checked ? 'var(--side-active)' : 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left', borderBottom: i < members.length - 1 ? '1px solid var(--rule-soft)' : 'none' }}
+                        >
+                          <span style={{ width: 30, height: 30, borderRadius: '50%', fontSize: 11, fontWeight: 700, background: AVATAR_COLORS[i % AVATAR_COLORS.length], color: '#fff', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                            {userInitials(name)}
+                          </span>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink)', fontFamily: 'var(--font-ui)' }}>{name}</div>
+                            {jobTitle && <div style={{ fontSize: 11, color: 'var(--ink-3)', marginTop: 1 }}>{jobTitle}</div>}
+                          </div>
+                          {checked && (
+                            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="var(--k-primary)" strokeWidth="2" style={{ flexShrink: 0 }}>
+                              <path d="M2 7l4 4 6-6"/>
+                            </svg>
+                          )}
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+              )}
             </div>
           </div>
 
-          {/* CATEGORY */}
-          {categories.length > 0 && (
-            <div style={{ marginBottom: 16 }}>
-              <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--ink-3)', marginBottom: 6 }}>
-                CATEGORY · <span className="k-hi" style={{ fontFamily: 'var(--font-hindi)', textTransform: 'none', letterSpacing: 0 }}>श्रेणी</span>
-              </div>
-              <select className="k-select" style={{ width: '100%' }} value={categoryId} onChange={e => setCategoryId(e.target.value)}>
-                <option value="">— None —</option>
-                {categories.map(c => <option key={c.category_id} value={c.category_id}>{c.name}</option>)}
-              </select>
-            </div>
-          )}
-
-          {/* ASSIGNEES */}
-          {members.length > 0 && (
-            <div style={{ marginBottom: 16 }}>
-              <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--ink-3)', marginBottom: 8 }}>
-                ASSIGNEES · <span className="k-hi" style={{ fontFamily: 'var(--font-hindi)', textTransform: 'none', letterSpacing: 0 }}>नियुक्त</span>
-              </div>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                {members.map((m, i) => {
-                  const uid = m.user_id;
-                  const sel = assignees.includes(uid);
-                  const color = MEMBER_COLORS[i % MEMBER_COLORS.length];
-                  return (
-                    <button key={uid} onClick={() => toggleAssignee(uid)} title={m.name || m.email || m.display_name}
-                      style={{ width: 34, height: 34, borderRadius: '50%', background: sel ? color : `${color}30`, color: sel ? '#fff' : color, border: `2px solid ${sel ? color : 'transparent'}`, cursor: 'pointer', fontWeight: 700, fontSize: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s' }}>
-                      {initials(m.name || m.display_name || m.email)}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
           {/* DESCRIPTION */}
           <div style={{ marginBottom: 16 }}>
-            <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--ink-3)', marginBottom: 6 }}>
-              DESCRIPTION · <span className="k-hi" style={{ fontFamily: 'var(--font-hindi)', textTransform: 'none', letterSpacing: 0 }}>विवरण</span>
-            </div>
+            <FieldLabel>DESCRIPTION · विवरण</FieldLabel>
             <textarea
               className="k-input"
               rows={3}
@@ -261,11 +282,9 @@ export default function NewTaskModal({ open, onClose, onCreated }) {
             />
           </div>
 
-          {/* FILES */}
+          {/* ATTACHMENTS */}
           <div>
-            <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--ink-3)', marginBottom: 8 }}>
-              ATTACHMENTS · <span className="k-hi" style={{ fontFamily: 'var(--font-hindi)', textTransform: 'none', letterSpacing: 0 }}>संलग्नक</span>
-            </div>
+            <FieldLabel>ATTACHMENTS · संलग्नक</FieldLabel>
             <input ref={fileRef} type="file" multiple style={{ display: 'none' }} onChange={handleFileChange} />
             {files.length > 0 && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 10 }}>
@@ -294,15 +313,19 @@ export default function NewTaskModal({ open, onClose, onCreated }) {
         <div style={{ padding: '14px 24px', borderTop: '1px solid var(--rule-soft)', display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
           <span style={{ fontSize: 11, color: 'var(--ink-faint)', flex: 1 }}>↵ to create · Esc to close</span>
           <button className="k-btn k-btn--ghost k-btn--sm" onClick={onClose}>Cancel</button>
-          <button
-            className="k-btn k-btn--primary k-btn--sm"
-            onClick={handleSubmit}
-            disabled={saving}
-          >
+          <button className="k-btn k-btn--primary k-btn--sm" onClick={handleSubmit} disabled={saving}>
             {saving ? 'Creating…' : 'Create task'}
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+function FieldLabel({ children }) {
+  return (
+    <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--ink-3)', marginBottom: 6, fontFamily: 'var(--font-ui)' }}>
+      {children}
     </div>
   );
 }
