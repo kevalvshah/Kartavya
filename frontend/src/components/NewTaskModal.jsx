@@ -240,7 +240,7 @@ export default function NewTaskModal({ open, onClose, onCreated }) {
                       const uid     = m.user_id;
                       const name    = m.display_name || m.full_name || m.name || '';
                       if (!name) return null; // skip email-only members
-                      const jobTitle = m.position || m.job_title || '';
+                      const jobTitle = m.member_role || m.position || m.job_title || '';
                       const checked = assignees.includes(uid);
                       return (
                         <button
@@ -261,7 +261,7 @@ export default function NewTaskModal({ open, onClose, onCreated }) {
                               {m.receives_approval_emails && (
                                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 10, fontWeight: 700, color: '#05b7aa', background: '#05b7aa18', borderRadius: 4, padding: '1px 5px', marginTop: 1 }}>
                                   <svg width="9" height="9" viewBox="0 0 10 10" fill="none" stroke="#05b7aa" strokeWidth="2"><path d="M1.5 5l3 3 4-4"/></svg>
-                                  Approval
+                                  {m.role === 'client' ? 'Client Approver' : 'Internal Approver'}
                                 </span>
                               )}
                             </div>

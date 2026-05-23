@@ -247,7 +247,7 @@ export default function TaskEditor({
                       const uid = m.user_id || m.member_id;
                       const name = m.display_name || m.full_name || m.name || '';
                       if (!name) return null; // skip email-only members
-                      const title = m.position || m.job_title || '';
+                      const title = m.member_role || m.position || m.job_title || '';
                       const checked = selectedIds.includes(uid);
                       return (
                         <button
@@ -279,7 +279,7 @@ export default function TaskEditor({
                               {m.receives_approval_emails && (
                                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 10, fontWeight: 700, color: '#05b7aa', background: '#05b7aa18', borderRadius: 4, padding: '1px 5px', marginTop: 1 }}>
                                   <svg width="9" height="9" viewBox="0 0 10 10" fill="none" stroke="#05b7aa" strokeWidth="2"><path d="M1.5 5l3 3 4-4"/></svg>
-                                  Approval
+                                  {m.role === 'client' ? 'Client Approver' : 'Internal Approver'}
                                 </span>
                               )}
                             </div>
