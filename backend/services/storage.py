@@ -1,18 +1,13 @@
 """
-storage.py — Cloudflare R2 file storage with 60-day auto-expiry.
+storage.py — Cloudflare R2 file storage (no auto-expiry).
 
 Environment variables required:
-  R2_ACCOUNT_ID      — Cloudflare account ID
-  R2_ACCESS_KEY_ID   — R2 access key
+  R2_ACCOUNT_ID        — Cloudflare account ID
+  R2_ACCESS_KEY_ID     — R2 access key
   R2_SECRET_ACCESS_KEY — R2 secret key
-  R2_BUCKET_NAME     — bucket name (e.g. 'kartavya-uploads')
-  R2_PUBLIC_URL      — public URL prefix (e.g. https://uploads.kartavya.app)
-                       OR leave empty to use presigned URLs
-
-The 60-day lifecycle rule must be set on the bucket in the Cloudflare
-dashboard (Objects > Lifecycle rules > Expiration: 60 days after creation).
-This file does NOT set the rule programmatically — Cloudflare R2 lifecycle
-rules are managed via the dashboard or wrangler, not via the S3 API.
+  R2_BUCKET_NAME       — bucket name (e.g. 'kartavya-uploads')
+  R2_PUBLIC_URL        — public URL prefix (e.g. https://uploads.kartavya.app)
+                         OR leave empty to use presigned URLs (7-day expiry)
 """
 import os
 import uuid

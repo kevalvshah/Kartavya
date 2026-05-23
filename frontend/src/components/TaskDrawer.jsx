@@ -252,22 +252,49 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
   };
   const deleteEntry = async (id) => { await api.delete(`/time/${id}`); setEntries(prev => prev.filter(e => e.entry_id !== id)); };
 
+  const MAX_FILES = 5;
+  const MAX_MB    = 5;
+
   const handleFileChange = async (e) => {
     const picked = Array.from(e.target.files);
     if (!picked.length) return;
+
+    // Slot check
+    const slots = MAX_FILES - attachments.length;
+    if (slots <= 0) {
+      pushToast({ type: 'error', title: `Max ${MAX_FILES} files per task` });
+      if (fileRef.current) fileRef.current.value = '';
+      return;
+    }
+    const toUpload = picked.slice(0, slots);
+    if (toUpload.length < picked.length)
+      pushToast({ type: 'error', title: `Only ${slots} slot(s) remaining — uploading first ${slots}` });
+
+    // Size check
+    const oversized = toUpload.filter(f => f.size > MAX_MB * 1024 * 1024);
+    if (oversized.length) {
+      pushToast({ type: 'error', title: `${oversized.map(f => f.name).join(', ')} exceed${oversized.length > 1 ? '' : 's'} ${MAX_MB} MB` });
+      if (fileRef.current) fileRef.current.value = '';
+      return;
+    }
+
     setUploading(true);
     try {
       const newFiles = [];
-      for (const file of picked) {
+      for (const file of toUpload) {
         const fd = new FormData();
         fd.append('file', file);
-        const res = await api.post('/upload', fd);
-        newFiles.push({ name: file.name, url: res.data.url });
+        const res = await api.post('/upload', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+        newFiles.push({ name: file.name, url: res.data.url, key: res.data.key, size: res.data.size });
       }
       const updated = [...attachments, ...newFiles];
       setAttachments(updated);
       await saveTask({ attachments: updated.map(f => f.url) });
-    } catch (err) { console.error('Upload failed', err); }
+      pushToast({ type: 'success', title: `${newFiles.length} file${newFiles.length > 1 ? 's' : ''} uploaded` });
+    } catch (err) {
+      const msg = err?.response?.data?.detail || 'Upload failed';
+      pushToast({ type: 'error', title: msg });
+    }
     finally { setUploading(false); if (fileRef.current) fileRef.current.value = ''; }
   };
 
@@ -747,16 +774,26 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
           {/* ── Files ── */}
           {tab === 'files' && (
             <div>
-              <input ref={fileRef} type="file" multiple style={{ display: 'none' }} onChange={handleFileChange} />
-              <button
-                className="k-btn k-btn--ghost k-btn--sm"
-                onClick={() => fileRef.current?.click()}
-                disabled={uploading}
-                style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 6 }}
-              >
-                <Paperclip size={13} />
-                {uploading ? 'Uploading…' : 'Attach files'}
-              </button>
+              <input
+                ref={fileRef}
+                type="file"
+                multiple
+                accept=".jpg,.jpeg,.png,.gif,.heic,.heif,.pdf,.doc,.docx,.xls,.xlsx,.csv,.ppt,.pptx,.txt"
+                style={{ display: 'none' }}
+                onChange={handleFileChange}
+              />
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                <button
+                  className="k-btn k-btn--ghost k-btn--sm"
+                  onClick={() => fileRef.current?.click()}
+                  disabled={uploading || attachments.length >= MAX_FILES}
+                  style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+                >
+                  <Paperclip size={13} />
+                  {uploading ? 'Uploading…' : 'Attach files'}
+                </button>
+                <span style={{ fontSize: 11, color: 'var(--ink-3)' }}>{attachments.length}/{MAX_FILES} · max 5 MB each</span>
+              </div>
 
               {attachments.length === 0 && !uploading && (
                 <div className="k-empty" style={{ paddingTop: 40 }}>
