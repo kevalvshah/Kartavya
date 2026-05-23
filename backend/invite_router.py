@@ -136,55 +136,47 @@ async def remove_user(user_id: str, reassign_to: Optional[str] = None, pool=Depe
 
     r = reassign_to  # shorthand
 
+    # Helper: run a statement using a savepoint so a failure doesn't abort
+    # the outer transaction (plain try/except does NOT protect the tx in Postgres).
+    async def sp(conn, sql, *args):
+        async with conn.transaction():   # nested → becomes a SAVEPOINT
+            await conn.execute(sql, *args)
+
     async with pool.acquire() as conn:
         async with conn.transaction():
-          try:
 
-            # ── Memberships (cannot transfer — remove) ────────────────────────
-            for stmt, args in [
-                ("DELETE FROM team_members        WHERE user_id=$1", (user_id,)),
-                ("DELETE FROM project_assignments WHERE user_id=$1", (user_id,)),
-                ("DELETE FROM task_clients        WHERE user_id=$1", (user_id,)),
+            # ── Memberships (remove — can't transfer) ─────────────────────────
+            for sql in [
+                "DELETE FROM team_members        WHERE user_id=$1",
+                "DELETE FROM project_assignments WHERE user_id=$1",
+                "DELETE FROM task_clients        WHERE user_id=$1",
             ]:
-                try:
-                    await conn.execute(stmt, *args)
-                except Exception:
-                    pass
+                try: await sp(conn, sql, user_id)
+                except Exception: pass
 
             # ── Activity events ───────────────────────────────────────────────
             try:
-                if r:
-                    await conn.execute("UPDATE activity_events SET actor_id=$1 WHERE actor_id=$2", r, user_id)
-                else:
-                    await conn.execute("DELETE FROM activity_events WHERE actor_id=$1", user_id)
-            except Exception:
-                pass
+                if r: await sp(conn, "UPDATE activity_events SET actor_id=$1 WHERE actor_id=$2", r, user_id)
+                else: await sp(conn, "DELETE FROM activity_events WHERE actor_id=$1", user_id)
+            except Exception: pass
 
             # ── Time entries ──────────────────────────────────────────────────
             try:
-                if r:
-                    await conn.execute("UPDATE time_entries SET user_id=$1 WHERE user_id=$2", r, user_id)
-                else:
-                    await conn.execute("DELETE FROM time_entries WHERE user_id=$1", user_id)
-            except Exception:
-                pass
+                if r: await sp(conn, "UPDATE time_entries SET user_id=$1 WHERE user_id=$2", r, user_id)
+                else: await sp(conn, "DELETE FROM time_entries WHERE user_id=$1", user_id)
+            except Exception: pass
 
             # ── Comments (try both table names) ───────────────────────────────
             for tbl, col in [("task_comments", "user_id"), ("comments", "author_id")]:
                 try:
-                    if r:
-                        await conn.execute(f"UPDATE {tbl} SET {col}=$1 WHERE {col}=$2", r, user_id)
-                    else:
-                        await conn.execute(f"DELETE FROM {tbl} WHERE {col}=$1", user_id)
-                except Exception:
-                    pass
+                    if r: await sp(conn, f"UPDATE {tbl} SET {col}=$1 WHERE {col}=$2", r, user_id)
+                    else: await sp(conn, f"DELETE FROM {tbl} WHERE {col}=$1", user_id)
+                except Exception: pass
 
             # ── Tasks: created_by_user_id ─────────────────────────────────────
             try:
                 if r:
-                    await conn.execute(
-                        "UPDATE tasks SET created_by_user_id=$1 WHERE created_by_user_id=$2", r, user_id
-                    )
+                    await sp(conn, "UPDATE tasks SET created_by_user_id=$1 WHERE created_by_user_id=$2", r, user_id)
                 else:
                     task_teams = await conn.fetch(
                         "SELECT DISTINCT team_id FROM tasks WHERE created_by_user_id=$1", user_id
@@ -196,119 +188,80 @@ async def remove_user(user_id: str, reassign_to: Optional[str] = None, pool=Depe
                             WHERE team_id=$1 AND role IN ('owner','admin') AND user_id != $2
                             ORDER BY CASE role WHEN 'owner' THEN 0 ELSE 1 END LIMIT 1
                         """, tid, user_id)
-                        await conn.execute(
+                        await sp(conn,
                             "UPDATE tasks SET created_by_user_id=$1 WHERE created_by_user_id=$2 AND team_id=$3",
-                            fallback, user_id, tid
-                        )
-            except Exception:
-                pass
+                            fallback, user_id, tid)
+            except Exception: pass
 
-            # ── Tasks: user_id column (FK) ────────────────────────────────────
+            # ── Tasks: user_id (FK col) ───────────────────────────────────────
             try:
-                if r:
-                    await conn.execute("UPDATE tasks SET user_id=$1 WHERE user_id=$2", r, user_id)
-                else:
-                    await conn.execute("UPDATE tasks SET user_id=NULL WHERE user_id=$1", user_id)
-            except Exception:
-                pass
+                if r: await sp(conn, "UPDATE tasks SET user_id=$1 WHERE user_id=$2", r, user_id)
+                else: await sp(conn, "UPDATE tasks SET user_id=NULL WHERE user_id=$1", user_id)
+            except Exception: pass
 
             # ── Tasks: assigned_by_user_id ────────────────────────────────────
             try:
-                if r:
-                    await conn.execute("UPDATE tasks SET assigned_by_user_id=$1 WHERE assigned_by_user_id=$2", r, user_id)
-                else:
-                    await conn.execute("UPDATE tasks SET assigned_by_user_id=NULL WHERE assigned_by_user_id=$1", user_id)
-            except Exception:
-                pass
+                if r: await sp(conn, "UPDATE tasks SET assigned_by_user_id=$1 WHERE assigned_by_user_id=$2", r, user_id)
+                else: await sp(conn, "UPDATE tasks SET assigned_by_user_id=NULL WHERE assigned_by_user_id=$1", user_id)
+            except Exception: pass
 
             # ── Tasks: assignee_user_ids[] ────────────────────────────────────
             try:
                 if r:
-                    # Swap user_id → reassign_to, skip if already assigned
-                    await conn.execute("""
+                    await sp(conn, """
                         UPDATE tasks
                         SET assignee_user_ids = array_append(array_remove(assignee_user_ids,$1), $2)
                         WHERE $1=ANY(assignee_user_ids) AND NOT ($2=ANY(assignee_user_ids))
                     """, user_id, r)
-                # Always clean up any remaining references
-                await conn.execute(
+                await sp(conn,
                     "UPDATE tasks SET assignee_user_ids=array_remove(assignee_user_ids,$1) WHERE $1=ANY(assignee_user_ids)",
-                    user_id
-                )
-            except Exception:
-                pass
+                    user_id)
+            except Exception: pass
 
-            # ── Task assignees junction table (if exists) ─────────────────────
+            # ── Task assignees junction table ─────────────────────────────────
             try:
-                if r:
-                    await conn.execute(
-                        "UPDATE task_assignees SET user_id=$1 WHERE user_id=$2", r, user_id
-                    )
-                else:
-                    await conn.execute("DELETE FROM task_assignees WHERE user_id=$1", user_id)
-            except Exception:
-                pass
+                if r: await sp(conn, "UPDATE task_assignees SET user_id=$1 WHERE user_id=$2", r, user_id)
+                else: await sp(conn, "DELETE FROM task_assignees WHERE user_id=$1", user_id)
+            except Exception: pass
 
             # ── Approvals ─────────────────────────────────────────────────────
             try:
                 if r:
-                    await conn.execute("UPDATE approvals SET requested_by=$1 WHERE requested_by=$2", r, user_id)
-                    await conn.execute("UPDATE approvals SET approved_by=$1   WHERE approved_by=$2",  r, user_id)
+                    await sp(conn, "UPDATE approvals SET requested_by=$1 WHERE requested_by=$2", r, user_id)
+                    await sp(conn, "UPDATE approvals SET approved_by=$1   WHERE approved_by=$2",  r, user_id)
                 else:
-                    await conn.execute("UPDATE approvals SET requested_by=NULL WHERE requested_by=$1", user_id)
-                    await conn.execute("UPDATE approvals SET approved_by=NULL   WHERE approved_by=$1",  user_id)
-            except Exception:
-                pass
+                    await sp(conn, "UPDATE approvals SET requested_by=NULL WHERE requested_by=$1", user_id)
+                    await sp(conn, "UPDATE approvals SET approved_by=NULL   WHERE approved_by=$1",  user_id)
+            except Exception: pass
 
             # ── Report schedules ──────────────────────────────────────────────
             try:
-                if r:
-                    await conn.execute("UPDATE report_schedules SET created_by=$1 WHERE created_by=$2", r, user_id)
-                else:
-                    await conn.execute("DELETE FROM report_schedules WHERE created_by=$1", user_id)
-            except Exception:
-                pass
+                if r: await sp(conn, "UPDATE report_schedules SET created_by=$1 WHERE created_by=$2", r, user_id)
+                else: await sp(conn, "DELETE FROM report_schedules WHERE created_by=$1", user_id)
+            except Exception: pass
 
             # ── Automations ───────────────────────────────────────────────────
             try:
-                if r:
-                    await conn.execute("UPDATE automations SET created_by=$1 WHERE created_by=$2", r, user_id)
-                else:
-                    await conn.execute("DELETE FROM automations WHERE created_by=$1", user_id)
-            except Exception:
-                pass
+                if r: await sp(conn, "UPDATE automations SET created_by=$1 WHERE created_by=$2", r, user_id)
+                else: await sp(conn, "DELETE FROM automations WHERE created_by=$1", user_id)
+            except Exception: pass
 
-            # ── Invites invited_by ────────────────────────────────────────────
+            # ── Invites ───────────────────────────────────────────────────────
             try:
-                if r:
-                    await conn.execute("UPDATE invites SET invited_by=$1 WHERE invited_by=$2", r, user_id)
-                else:
-                    await conn.execute("UPDATE invites SET invited_by=NULL WHERE invited_by=$1", user_id)
-            except Exception:
-                pass
-
-            # ── Remove the user's own invite record ───────────────────────────
+                if r: await sp(conn, "UPDATE invites SET invited_by=$1 WHERE invited_by=$2", r, user_id)
+                else: await sp(conn, "UPDATE invites SET invited_by=NULL WHERE invited_by=$1", user_id)
+            except Exception: pass
             try:
-                await conn.execute(
-                    "DELETE FROM invites WHERE email=(SELECT email FROM users WHERE user_id=$1)", user_id
-                )
-            except Exception:
-                pass
+                await sp(conn, "DELETE FROM invites WHERE email=(SELECT email FROM users WHERE user_id=$1)", user_id)
+            except Exception: pass
 
-            # ── Sessions / tokens (cannot transfer — always delete) ───────────
+            # ── Sessions / tokens ─────────────────────────────────────────────
             for tbl in ("refresh_tokens", "sessions"):
-                try:
-                    await conn.execute(f"DELETE FROM {tbl} WHERE user_id=$1", user_id)
-                except Exception:
-                    pass
+                try: await sp(conn, f"DELETE FROM {tbl} WHERE user_id=$1", user_id)
+                except Exception: pass
 
-            # ── Finally delete the user ───────────────────────────────────────
+            # ── Delete the user ───────────────────────────────────────────────
             await conn.execute("DELETE FROM users WHERE user_id=$1", user_id)
-
-          except Exception as exc:
-            import logging
-            logging.getLogger(__name__).error(f"remove_user {user_id} failed: {exc}")
-            raise HTTPException(status_code=500, detail=str(exc))
 
     return {"ok": True}
 
