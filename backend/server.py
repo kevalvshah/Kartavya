@@ -761,6 +761,22 @@ async def list_teams(pool=Depends(get_db),user=Depends(require_user)):
     """, team_ids)
     return [TeamOut(**dict(r)) for r in rows]
 
+# ── MUST be before GET /teams/{team_id} to avoid "bin" matching as a team_id ──
+@api_router.get("/teams/bin")
+async def list_deleted_teams(pool=Depends(get_db),user=Depends(require_admin)):
+    """List soft-deleted projects still within 30-day restore window."""
+    rows = await pool.fetch("""
+        SELECT t.*,
+               COALESCE(u.full_name, u.name, u.email) AS deleted_by_name,
+               EXTRACT(EPOCH FROM (NOW() - t.deleted_at)) / 86400 AS days_deleted
+        FROM teams t
+        LEFT JOIN users u ON u.user_id = t.deleted_by
+        WHERE t.deleted_at IS NOT NULL
+          AND t.deleted_at > NOW() - INTERVAL '30 days'
+        ORDER BY t.deleted_at DESC
+    """)
+    return [dict(r) for r in rows]
+
 @api_router.post("/teams",response_model=TeamOut)
 async def create_team(payload:TeamCreate,pool=Depends(get_db),user=Depends(require_user)):
     team_id=f"team_{uuid.uuid4().hex[:12]}"
@@ -866,21 +882,6 @@ async def delete_team(team_id:str,pool=Depends(get_db),user=Depends(require_admi
         user["user_id"], team_id
     )
     return {"ok": True, "soft_deleted": True}
-
-@api_router.get("/teams/bin")
-async def list_deleted_teams(pool=Depends(get_db),user=Depends(require_admin)):
-    """List soft-deleted projects still within 30-day restore window."""
-    rows = await pool.fetch("""
-        SELECT t.*,
-               COALESCE(u.full_name, u.name, u.email) AS deleted_by_name,
-               EXTRACT(EPOCH FROM (NOW() - t.deleted_at)) / 86400 AS days_deleted
-        FROM teams t
-        LEFT JOIN users u ON u.user_id = t.deleted_by
-        WHERE t.deleted_at IS NOT NULL
-          AND t.deleted_at > NOW() - INTERVAL '30 days'
-        ORDER BY t.deleted_at DESC
-    """)
-    return [dict(r) for r in rows]
 
 @api_router.post("/teams/{team_id}/restore")
 async def restore_team(team_id:str,pool=Depends(get_db),user=Depends(require_admin)):
