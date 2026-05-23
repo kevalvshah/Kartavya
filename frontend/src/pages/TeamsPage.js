@@ -35,11 +35,11 @@ export default function TeamsPage() {
   useEffect(() => {
     loadTeams().catch(() => {});
     api.get('/users').then(r => setAllUsers(r.data)).catch(() => {});
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []); // eslint-disable-line
   useEffect(() => {
     if (!selectedTeamId) { setTeamDetail(null); return; }
     loadDetail(selectedTeamId).catch(() => {});
-  }, [selectedTeamId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [selectedTeamId]); // eslint-disable-line
 
   const yourRole = teamDetail?.your_role || 'member';
   const isAdmin  = yourRole === 'owner' || yourRole === 'admin';

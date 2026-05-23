@@ -39,7 +39,6 @@ export default function Protected({ children, requiredRole }) {
         setReady(false);
       });
     return () => { live = false; };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   if (ready === null) return (

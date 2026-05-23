@@ -104,7 +104,7 @@ export default function ProjectBoardPage() {
     }
   }, [projectId]);
 
-  useEffect(() => { load(); }, [projectId]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { load(); }, [projectId]); // eslint-disable-line
 
   // ── Field-value fetch (stable dep — only when task IDs change) ───────────
   const taskIds = useMemo(() => tasks.map(t => t.task_id).join(','), [tasks]);
@@ -120,7 +120,7 @@ export default function ProjectBoardPage() {
         } catch {}
       })
     ).then(() => setFieldValueMap({ ...map }));
-  }, [taskIds, fieldDefs?.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [taskIds, fieldDefs?.length]); // eslint-disable-line
 
   const handleColumnChange = (action, payload) => {
     if (action === 'new_task') setNewTaskEditor({ open: true, columnId: payload });

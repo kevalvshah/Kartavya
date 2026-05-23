@@ -189,7 +189,7 @@ export default function AdminPage() {
     api.get('/admin/invites').then(r => setInvites(r.data)).catch(() => {}),
   ]);
 
-  useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { load(); }, []);
 
   // ── Invite ────────────────────────────────────────────────────────────────
 

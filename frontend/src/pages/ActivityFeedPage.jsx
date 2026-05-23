@@ -72,7 +72,7 @@ export default function ActivityFeedPage({ teamId }) {
     } finally {
       reset ? setLoading(false) : setLoadingMore(false);
     }
-  }, [teamId, filterType, filterActor]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [teamId, filterType, filterActor]);
 
   useEffect(() => { load(true); }, [load]);
 

@@ -109,8 +109,6 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
     user_id:      m.user_id,
     display_name: m.display_name || m.full_name || m.email || 'Unknown',
   }));
-
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!open || !taskId) return;
     setTab('details');
@@ -144,7 +142,7 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
         });
       }
     }).catch(console.error);
-  }, [open, taskId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [open, taskId]);
 
   useEffect(() => {
     if (tab !== 'activity' || !taskId) return;

@@ -36,7 +36,7 @@ export default function DashboardPage({ teams = [] }) {
 
   const weekDates = useMemo(() => Array.from({ length: 7 }, (_, i) => {
     const d = new Date(now); d.setDate(now.getDate() - dayIdx + i); return d;
-  }), []); // eslint-disable-line react-hooks/exhaustive-deps
+  }), []);
 
   // ── State ──────────────────────────────────────────────────────────────────
   const [loading,  setLoading]  = useState(true);
@@ -65,7 +65,7 @@ export default function DashboardPage({ teams = [] }) {
     api.get(`/activity/team/${tid}`, { params: { limit: 6 } })
        .then(r => setActivity(r.data || []))
        .catch(() => {});
-  }, [teams]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [teams]);
 
   // ── Derived ────────────────────────────────────────────────────────────────
   const { today, tomorrow, weekEnd, weekAgo } = useMemo(() => {

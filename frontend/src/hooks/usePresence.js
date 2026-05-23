@@ -95,7 +95,7 @@ export function usePresence(projectId, user) {
         channelRef.current = null;
       }
     };
-  }, [projectId, user?.user_id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [projectId, user?.user_id]);
 
   return onlineUsers;
 }

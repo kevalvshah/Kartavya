@@ -28,7 +28,7 @@ export default function NotificationsSettingsPage() {
     setEnabled(!!sub);
   };
 
-  useEffect(() => { refreshEnabled().catch(() => {}); }, [supported]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { refreshEnabled().catch(() => {}); }, [supported]);
 
   const enablePush = async () => {
     if (!supported) return;

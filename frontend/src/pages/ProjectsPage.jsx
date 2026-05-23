@@ -18,7 +18,7 @@ export default function ProjectsPage() {
   const [showNew,  setShowNew]  = useState(false);
 
   const load = () => api.get('/teams').then(r => setProjects(r.data)).catch(() => {});
-  useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { load(); }, []); // eslint-disable-line
 
   const create = async () => {
     if (!name.trim()) return;

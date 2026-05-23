@@ -26,7 +26,6 @@ export function useRealtimeTasks(projectId, initialTasks = []) {
   // without nuking in-flight realtime patches.
   useEffect(() => {
     setTasks(initialTasks);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [JSON.stringify(initialTasks.map(t => t.task_id))]);
 
   useEffect(() => {

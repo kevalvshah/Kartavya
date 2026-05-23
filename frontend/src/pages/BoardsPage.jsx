@@ -63,7 +63,7 @@ export default function BoardsPage() {
       setProjects(list);
       if (list.length && !activeId) setActiveId(list[0].team_id);
     }).catch(() => {});
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   const loadBoard = useCallback(async () => {
     if (!activeId) return;
