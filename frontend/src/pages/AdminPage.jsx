@@ -237,7 +237,7 @@ export default function AdminPage() {
     if (u.user_id === me?.user_id) { pushToast({ type: 'error', title: 'You cannot remove yourself' }); return; }
     if (!window.confirm(`Remove ${u.full_name || u.name || u.email}? This cannot be undone.`)) return;
     try {
-      await api.delete(`/admin/users/${u.user_id}`);
+      await api.delete(`/users/${u.user_id}`);
       setUsers(prev => prev.filter(x => x.user_id !== u.user_id));
       pushToast({ type: 'success', title: 'User removed' });
     } catch (_) { pushToast({ type: 'error', title: 'Could not remove user' }); }
