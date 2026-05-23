@@ -272,9 +272,17 @@ export default function TaskEditor({
                             <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink)', fontFamily: 'var(--font-ui)' }}>
                               {name}
                             </div>
-                            {title && (
-                              <div style={{ fontSize: 11, color: 'var(--ink-3)', marginTop: 1 }}>{title}</div>
-                            )}
+                            <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '2px 6px', marginTop: 2 }}>
+                              {title && <span style={{ fontSize: 11, color: 'var(--ink-3)' }}>{title}</span>}
+                              {title && m.company_name && <span style={{ fontSize: 11, color: 'var(--ink-faint)' }}>·</span>}
+                              {m.company_name && <span style={{ fontSize: 11, color: 'var(--ink-3)' }}>{m.company_name}</span>}
+                              {m.receives_approval_emails && (
+                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 10, fontWeight: 700, color: '#05b7aa', background: '#05b7aa18', borderRadius: 4, padding: '1px 5px', marginTop: 1 }}>
+                                  <svg width="9" height="9" viewBox="0 0 10 10" fill="none" stroke="#05b7aa" strokeWidth="2"><path d="M1.5 5l3 3 4-4"/></svg>
+                                  Approval
+                                </span>
+                              )}
+                            </div>
                           </div>
                           {/* Checkmark */}
                           {checked && (
