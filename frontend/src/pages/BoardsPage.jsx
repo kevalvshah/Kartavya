@@ -19,6 +19,7 @@ import { usePresence }  from '../hooks/usePresence';
 import { PageHeader, AvatarStack } from '../components/editorial';
 import { AVATAR_COLORS } from '../lib/utils';
 import AutomationsPage from './AutomationsPage';
+import TaskEditor from '../components/TaskEditor';
 
 const PROJECT_COLORS = ['#0082c6','#05b7aa','#8b5cf6','#ec4899','#f59e0b','#10b981','#6366f1'];
 
@@ -52,6 +53,7 @@ export default function BoardsPage() {
   const [teamMembers, setTeamMembers] = useState([]);
   const [loading,     setLoading]     = useState(true);
   const [view,        setView]        = useState('kanban');
+  const [newTaskEditor, setNewTaskEditor] = useState({ open: false, columnId: null });
 
   const { fieldDefs, createField, deleteField } = useFields(activeId);
   const [showFieldMgr,    setShowFieldMgr]    = useState(false);
@@ -99,7 +101,12 @@ export default function BoardsPage() {
     setActiveId(id);
     setShowFieldMgr(false);
     setShowAutomations(false);
+    setNewTaskEditor({ open: false, columnId: null });
   };
+
+  const handleColumnChange = useCallback((action, payload) => {
+    if (action === 'new_task') setNewTaskEditor({ open: true, columnId: payload });
+  }, []);
 
   const addField = async () => {
     if (!newFieldName.trim()) return;
@@ -241,6 +248,20 @@ export default function BoardsPage() {
         </section>
       )}
 
+      {/* New task bar — shown on non-kanban views (kanban has per-column + Add task buttons) */}
+      {!loading && view !== 'kanban' && activeId && (
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+          <button
+            className="k-btn k-btn--primary k-btn--sm"
+            onClick={() => setNewTaskEditor({ open: true, columnId: null })}
+            style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+          >
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2"><path d="M8 3v10M3 8h10"/></svg>
+            New task
+          </button>
+        </div>
+      )}
+
       {/* Content */}
       {loading ? (
         <div style={{ padding: '60px 0', textAlign: 'center', color: 'var(--ink-3)', fontFamily: 'var(--font-display)', fontStyle: 'italic' }}>
@@ -259,6 +280,7 @@ export default function BoardsPage() {
               currentUserRole={me?.role}
               showRequested={me?.role !== 'client'}
               onTasksChange={handleTasksChange}
+              onColumnChange={handleColumnChange}
               onColumnsChange={setColumns}
             />
           )}
@@ -310,6 +332,19 @@ export default function BoardsPage() {
         </>
       )}
 
+      <TaskEditor
+        open={newTaskEditor.open}
+        onOpenChange={v => { if (!v) setNewTaskEditor({ open: false, columnId: null }); }}
+        editing={null}
+        teams={[]}
+        defaultTeamId={activeId}
+        defaultColumnId={newTaskEditor.columnId}
+        lockToProject
+        onSaved={task => {
+          setTasks(prev => [task, ...prev]);
+          setNewTaskEditor({ open: false, columnId: null });
+        }}
+      />
     </div>
   );
 }

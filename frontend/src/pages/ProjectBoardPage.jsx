@@ -271,6 +271,20 @@ export default function ProjectBoardPage() {
         </section>
       )}
 
+      {/* New task bar — non-kanban views (kanban has per-column buttons) */}
+      {view !== 'kanban' && (
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+          <button
+            className="k-btn k-btn--primary k-btn--sm"
+            onClick={() => setNewTaskEditor({ open: true, columnId: null })}
+            style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+          >
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2"><path d="M8 3v10M3 8h10"/></svg>
+            New task
+          </button>
+        </div>
+      )}
+
       {/* ── Board views ──────────────────────────────────────────────── */}
       {view === 'kanban' && (
         <KanbanView
