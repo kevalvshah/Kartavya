@@ -170,9 +170,36 @@ async def remove_user(user_id: str, pool=Depends(get_pool), admin=Depends(requir
                         "UPDATE tasks SET created_by_user_id=NULL WHERE created_by_user_id=$1 AND team_id=$2",
                         user_id, tid
                     )
+            # Nullify tasks.user_id (owner column — may have FK)
+            try:
+                await conn.execute("UPDATE tasks SET user_id=NULL WHERE user_id=$1", user_id)
+            except Exception:
+                pass
+            # Nullify tasks.assigned_by_user_id if it exists
+            try:
+                await conn.execute("UPDATE tasks SET assigned_by_user_id=NULL WHERE assigned_by_user_id=$1", user_id)
+            except Exception:
+                pass
+            # Remove from assignee_user_ids array on tasks
+            try:
+                await conn.execute(
+                    "UPDATE tasks SET assignee_user_ids=array_remove(assignee_user_ids,$1) WHERE $1=ANY(assignee_user_ids)",
+                    user_id
+                )
+            except Exception:
+                pass
             # Remove assignee links (junction table pattern)
             try:
                 await conn.execute("DELETE FROM task_assignees WHERE user_id=$1", user_id)
+            except Exception:
+                pass
+            # Remove / nullify approvals
+            try:
+                await conn.execute("UPDATE approvals SET requested_by=NULL WHERE requested_by=$1", user_id)
+            except Exception:
+                pass
+            try:
+                await conn.execute("UPDATE approvals SET approved_by=NULL WHERE approved_by=$1", user_id)
             except Exception:
                 pass
             # Remove report schedules
@@ -188,6 +215,15 @@ async def remove_user(user_id: str, pool=Depends(get_pool), admin=Depends(requir
             # Remove invites
             try:
                 await conn.execute("DELETE FROM invites WHERE invited_by=$1 OR email=(SELECT email FROM users WHERE user_id=$1)", user_id)
+            except Exception:
+                pass
+            # Remove refresh tokens / sessions if table exists
+            try:
+                await conn.execute("DELETE FROM refresh_tokens WHERE user_id=$1", user_id)
+            except Exception:
+                pass
+            try:
+                await conn.execute("DELETE FROM sessions WHERE user_id=$1", user_id)
             except Exception:
                 pass
             # Finally remove the user
