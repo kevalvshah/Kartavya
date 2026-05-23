@@ -686,8 +686,8 @@ async def list_teams(pool=Depends(get_db),user=Depends(require_user)):
     if not team_ids: return []
     rows=await pool.fetch("""
         SELECT t.*,
-          COALESCE(tc.cnt,0) AS task_count,
-          COALESCE(dc.cnt,0) AS done_count
+          COALESCE(tc.cnt,0)::int AS task_count,
+          COALESCE(dc.cnt,0)::int AS done_count
         FROM teams t
         LEFT JOIN (SELECT team_id,COUNT(*) cnt FROM tasks GROUP BY team_id) tc ON tc.team_id=t.team_id
         LEFT JOIN (SELECT team_id,COUNT(*) cnt FROM tasks WHERE status='done' GROUP BY team_id) dc ON dc.team_id=t.team_id

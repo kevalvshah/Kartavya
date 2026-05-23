@@ -59,7 +59,7 @@ export default function BoardsPage() {
   useEffect(() => {
     const endpoint = isClient ? '/client/projects' : '/teams';
     api.get(endpoint).then(r => {
-      const list = r.data || [];
+      const list = Array.isArray(r.data) ? r.data : [];
       setProjects(list);
       if (list.length && !activeId) setActiveId(list[0].team_id);
     }).catch(() => {});
