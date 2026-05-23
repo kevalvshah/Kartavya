@@ -505,7 +505,7 @@ function SchedulesTab({ teams }) {
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function ReportsPage({ teams: propTeams }) {
   const [tab,   setTab]   = useState('ondemand');
-  const [teams, setTeams] = useState(propTeams || []);
+  const [teams, setTeams] = useState(Array.isArray(propTeams) ? propTeams : []);
 
   useEffect(() => {
     if (propTeams?.length) { setTeams(propTeams); return; }

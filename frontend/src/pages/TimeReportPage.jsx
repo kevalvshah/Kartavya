@@ -139,7 +139,7 @@ export default function TimeReportPage({ teamId }) {
 
   useEffect(() => {
     if (!teamId) return;
-    api.get(`/teams/${teamId}`).then(r => setMembers(r.data.members || [])).catch(() => {});
+    api.get(`/teams/${teamId}`).then(r => setMembers(Array.isArray(r.data?.members) ? r.data.members : [])).catch(() => {});
   }, [teamId]);
 
   useEffect(() => {
@@ -147,7 +147,7 @@ export default function TimeReportPage({ teamId }) {
     const params = { team_id: teamId, from, to };
     if (memberF) params.user_id = memberF;
     api.get('/time/report', { params })
-       .then(r => setData(r.data))
+       .then(r => setData(r.data && Array.isArray(r.data.entries) ? r.data : { entries: [], total_minutes: 0 }))
        .catch(() => setData({ entries: [], total_minutes: 0 }))
        .finally(() => setLoading(false));
   }, [teamId, from, to, memberF]);

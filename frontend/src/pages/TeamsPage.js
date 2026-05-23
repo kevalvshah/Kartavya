@@ -23,8 +23,9 @@ export default function TeamsPage() {
 
   const loadTeams = async () => {
     const res = await api.get('/teams');
-    setTeams(res.data);
-    if (!selectedTeamId && res.data.length) setSelectedTeamId(res.data[0].team_id);
+    const list = Array.isArray(res.data) ? res.data : [];
+    setTeams(list);
+    if (!selectedTeamId && list.length) setSelectedTeamId(list[0].team_id);
   };
   const loadDetail = async (teamId) => {
     if (!teamId) return;
@@ -34,7 +35,7 @@ export default function TeamsPage() {
 
   useEffect(() => {
     loadTeams().catch(() => {});
-    api.get('/users').then(r => setAllUsers(r.data)).catch(() => {});
+    api.get('/users').then(r => setAllUsers(Array.isArray(r.data) ? r.data : [])).catch(() => {});
   }, []); // eslint-disable-line
   useEffect(() => {
     if (!selectedTeamId) { setTeamDetail(null); return; }
