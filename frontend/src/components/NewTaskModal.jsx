@@ -57,7 +57,7 @@ export default function NewTaskModal({ open, onClose, onCreated }) {
   // Fetch members when project changes
   useEffect(() => {
     if (!projectId) return;
-    api.get(`/teams/${projectId}`).then(r => setMembers(r.data.members || [])).catch(() => {});
+    api.get(`/teams/${projectId}`).then(r => setMembers(Array.isArray(r.data?.members) ? r.data.members : [])).catch(() => {});
   }, [projectId]);
 
   const toggleAssignee = (uid) => {
