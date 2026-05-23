@@ -68,22 +68,24 @@ async def list_field_definitions(team_id: str, pool=Depends(get_pool), user=Depe
 
 @router.post("/")
 async def create_field_definition(body: FieldDefCreate, pool=Depends(get_pool), user=Depends(require_user)):
+    import json
     if body.type not in FIELD_TYPES:
         raise HTTPException(400, f"type must be one of {FIELD_TYPES}")
     field_id = f"fld_{uuid.uuid4().hex[:12]}"
     await pool.execute(
-        "INSERT INTO field_definitions (field_id, team_id, name, type, config, sort_order) VALUES ($1,$2,$3,$4,$5,$6)",
-        field_id, body.team_id, body.name, body.type, body.config, body.sort_order
+        "INSERT INTO field_definitions (field_id, team_id, name, type, config, sort_order) VALUES ($1,$2,$3,$4,$5::jsonb,$6)",
+        field_id, body.team_id, body.name, body.type, json.dumps(body.config), body.sort_order
     )
     return {"field_id": field_id, **body.dict()}
 
 
 @router.put("/{field_id}")
 async def update_field_definition(field_id: str, body: FieldDefUpdate, pool=Depends(get_pool), user=Depends(require_user)):
+    import json
     updates, vals = [], []
-    if body.name is not None:       updates.append(f"name=${len(vals)+2}");       vals.append(body.name)
-    if body.config is not None:     updates.append(f"config=${len(vals)+2}");     vals.append(body.config)
-    if body.sort_order is not None: updates.append(f"sort_order=${len(vals)+2}"); vals.append(body.sort_order)
+    if body.name is not None:       updates.append(f"name=${len(vals)+2}");              vals.append(body.name)
+    if body.config is not None:     updates.append(f"config=${len(vals)+2}::jsonb");     vals.append(json.dumps(body.config))
+    if body.sort_order is not None: updates.append(f"sort_order=${len(vals)+2}");        vals.append(body.sort_order)
     if not updates:
         return {"ok": True}
     await pool.execute(f"UPDATE field_definitions SET {', '.join(updates)} WHERE field_id=$1", field_id, *vals)

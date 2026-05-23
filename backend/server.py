@@ -211,7 +211,7 @@ class TeamMemberOut(BaseModel):
 class Attachment(BaseModel):
     name:str; url:str; key:Optional[str]=None
 class Subtask(BaseModel):
-    subtask_id:str=Field(default_factory=lambda:f"sub_{uuid.uuid4().hex[:12]}"); title:str; is_done:bool=False; order:int=0
+    subtask_id:str=Field(default_factory=lambda:f"sub_{uuid.uuid4().hex[:12]}"); title:str; is_done:bool=False; order:int=0; assignee_user_id:Optional[str]=None
 class Recurrence(BaseModel):
     rule:str="none"; interval:int=1
 class TaskCreate(BaseModel):
@@ -742,6 +742,22 @@ async def delete_subtask(task_id:str,subtask_id:str,pool=Depends(get_db),user=De
         title=removed[0]["title"] if removed else ""
         await log_event(pool,task_id=task_id,actor_id=user["user_id"],event_type="subtask_deleted",data={"title":title})
     except Exception: pass
+    return row_to_task(row)
+
+class SubtaskPatch(BaseModel):
+    assignee_user_id: Optional[str] = None
+    title: Optional[str] = None
+
+@api_router.put("/tasks/{task_id}/subtasks/{subtask_id}",response_model=TaskOut)
+async def update_subtask(task_id:str,subtask_id:str,body:SubtaskPatch,pool=Depends(get_db),user=Depends(require_user)):
+    task=await pool.fetchrow("SELECT subtasks FROM tasks WHERE task_id=$1",task_id)
+    if not task: raise HTTPException(404)
+    subtasks=json.loads(task["subtasks"] or "[]")
+    for s in subtasks:
+        if s["subtask_id"]==subtask_id:
+            if body.assignee_user_id is not None: s["assignee_user_id"]=body.assignee_user_id
+            if body.title is not None: s["title"]=body.title
+    row=await pool.fetchrow("UPDATE tasks SET subtasks=$1,updated_at=NOW() WHERE task_id=$2 RETURNING *",json.dumps(subtasks),task_id)
     return row_to_task(row)
 
 # ── Teams ────────────────────────────────────────────────────────
@@ -1278,7 +1294,28 @@ async def startup():
         # Soft-delete columns on teams
         await pool.execute("ALTER TABLE teams ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ")
         await pool.execute("ALTER TABLE teams ADD COLUMN IF NOT EXISTS deleted_by TEXT")
-        logger.info("Startup migrations: activity_events + time_entries + teams soft-delete OK")
+        # Custom fields tables
+        await pool.execute("""
+            CREATE TABLE IF NOT EXISTS field_definitions (
+                field_id    TEXT PRIMARY KEY,
+                team_id     TEXT NOT NULL REFERENCES teams(team_id) ON DELETE CASCADE,
+                name        TEXT NOT NULL,
+                type        TEXT NOT NULL,
+                config      JSONB NOT NULL DEFAULT '{}',
+                sort_order  INTEGER NOT NULL DEFAULT 0,
+                created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            )
+        """)
+        await pool.execute("""
+            CREATE TABLE IF NOT EXISTS field_values (
+                task_id     TEXT NOT NULL REFERENCES tasks(task_id) ON DELETE CASCADE,
+                field_id    TEXT NOT NULL REFERENCES field_definitions(field_id) ON DELETE CASCADE,
+                value       JSONB,
+                PRIMARY KEY (task_id, field_id)
+            )
+        """)
+        # (subtasks are JSONB — no separate table migration needed)
+        logger.info("Startup migrations OK")
     except Exception as e:
         logger.warning(f"Startup migration warning (non-fatal): {e}")
 

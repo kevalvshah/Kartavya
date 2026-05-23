@@ -5,6 +5,7 @@ import FieldRenderer from './fields/FieldRenderer';
 import MentionTextarea from './MentionTextarea';
 import ActivityList from './ActivityList';
 import { Paperclip, ExternalLink, Trash2, Play, Square, Clock, Pencil, Check, X } from 'lucide-react';
+import { AVATAR_COLORS, userInitials } from '../lib/utils';
 
 const PRIORITY_COLORS  = { low: '#22c55e', medium: '#f59e0b', high: '#ef4444', urgent: '#dc2626' };
 const PRIORITY_LABELS  = { low: 'Low', medium: 'Medium', high: 'High', urgent: 'Urgent' };
@@ -92,6 +93,9 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
   const [attachments, setAttachments] = useState([]);
   const [uploading,   setUploading]   = useState(false);
   const [columns,     setColumns]     = useState([]);
+  const [members,     setMembers]     = useState([]);
+  const [assigneeOpen, setAssigneeOpen] = useState(false);
+  const assigneeRef = useRef(null);
   const fileRef = useRef(null);
 
   // Approval UI state
@@ -116,6 +120,15 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
   const [requestNotes,     setRequestNotes]     = useState('');
   const [showRequestPanel, setShowRequestPanel] = useState(false);
 
+  useEffect(() => {
+    if (!assigneeOpen) return;
+    const handler = (e) => {
+      if (assigneeRef.current && !assigneeRef.current.contains(e.target)) setAssigneeOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [assigneeOpen]);
+
   const mentionMembers = teamMembers.map(m => ({
     user_id:      m.user_id,
     display_name: m.display_name || m.full_name || m.email || 'Unknown',
@@ -127,6 +140,7 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
     setComments([]); setActivity([]); setEntries([]); setTimer(null); setAttachments([]);
 
     api.get('/categories').then(r => setCategories(Array.isArray(r.data) ? r.data : [])).catch(() => {});
+    setMembers([]); setAssigneeOpen(false);
 
     Promise.all([
       api.get(`/tasks/${taskId}`),
@@ -142,6 +156,9 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
       if (t.team_id) {
         api.get(`/projects/${t.team_id}/columns`).then(r => {
           setColumns(Array.isArray(r.data) ? r.data : []);
+        }).catch(() => {});
+        api.get(`/teams/${t.team_id}`).then(r => {
+          setMembers(Array.isArray(r.data?.members) ? r.data.members : []);
         }).catch(() => {});
         api.get(`/fields/team/${t.team_id}`).then(r => {
           const defs = r.data.map(f =>
@@ -178,6 +195,21 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
     setFValues(prev => ({ ...prev, [field_id]: value }));
     try { await api.put(`/fields/task/${taskId}/values`, [{ field_id, value }]); }
     catch (e) { console.error('Field save failed', e); }
+  }, [taskId]);
+
+  const toggleAssignee = useCallback(async (uid) => {
+    const current = task?.assignee_user_ids || [];
+    const next = current.includes(uid) ? current.filter(x => x !== uid) : [...current, uid];
+    setTask(t => ({ ...t, assignee_user_ids: next }));
+    try { await api.put(`/tasks/${taskId}`, { assignee_user_ids: next }); }
+    catch (e) { console.error(e); }
+  }, [task, taskId]);
+
+  const updateSubtaskAssignee = useCallback(async (subtaskId, uid) => {
+    try {
+      const res = await api.put(`/tasks/${taskId}/subtasks/${subtaskId}`, { assignee_user_id: uid || null });
+      setTask(res.data);
+    } catch (e) { console.error(e); }
   }, [taskId]);
 
   const saveTask = useCallback(async (patch) => {
@@ -499,6 +531,75 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
                 ))}
               </select>
             </div>
+
+            {/* Assignees */}
+            <div className="k-prop" ref={assigneeRef} style={{ position: 'relative' }}>
+              <span className="k-prop__lbl">Assignees <span className="k-prop__sans">नियुक्त</span></span>
+              {(() => {
+                const selIds = task?.assignee_user_ids || [];
+                const selMembers = members.filter(m => selIds.includes(m.user_id || m.member_id));
+                return (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setAssigneeOpen(v => !v)}
+                      style={{
+                        width: '100%', display: 'flex', alignItems: 'center', gap: 6,
+                        background: 'var(--bg-soft)', border: '1px solid var(--rule)',
+                        borderRadius: 'var(--r-md)', padding: '6px 10px', cursor: 'pointer',
+                        fontFamily: 'var(--font-ui)', fontSize: 12,
+                        color: selMembers.length ? 'var(--ink)' : 'var(--ink-faint)', minHeight: 34,
+                      }}
+                    >
+                      {selMembers.length === 0 ? (
+                        <span style={{ flex: 1, textAlign: 'left' }}>Pick members…</span>
+                      ) : (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 3, flex: 1, flexWrap: 'wrap' }}>
+                          {selMembers.slice(0, 3).map((m, i) => {
+                            const name = m.display_name || m.full_name || m.name || '';
+                            return (
+                              <span key={m.user_id || m.member_id} style={{
+                                display: 'inline-flex', alignItems: 'center', gap: 3,
+                                background: 'var(--side-active)', borderRadius: 20,
+                                padding: '1px 7px 1px 3px', fontSize: 11, fontWeight: 500,
+                              }}>
+                                <span style={{ width: 16, height: 16, borderRadius: '50%', fontSize: 8, fontWeight: 700, background: AVATAR_COLORS[i % AVATAR_COLORS.length], color: '#fff', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{userInitials(name)}</span>
+                                {name.split(' ')[0]}
+                              </span>
+                            );
+                          })}
+                          {selMembers.length > 3 && <span style={{ fontSize: 11, color: 'var(--ink-3)' }}>+{selMembers.length - 3}</span>}
+                        </div>
+                      )}
+                      <svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ flexShrink: 0, color: 'var(--ink-3)' }}><path d="M2 4l4 4 4-4"/></svg>
+                    </button>
+                    {assigneeOpen && (
+                      <div style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0, zIndex: 200, background: 'var(--surface)', border: '1px solid var(--rule)', borderRadius: 'var(--r-md)', boxShadow: '0 8px 24px rgba(0,0,0,0.18)', maxHeight: 200, overflowY: 'auto' }}>
+                        {members.length === 0 ? (
+                          <div style={{ padding: '10px 12px', fontSize: 12, color: 'var(--ink-3)', fontStyle: 'italic' }}>No members found</div>
+                        ) : members.map((m, i) => {
+                          const uid = m.user_id || m.member_id;
+                          const name = m.display_name || m.full_name || m.name || '';
+                          if (!name) return null;
+                          const jobTitle = m.member_role || m.position || m.job_title || '';
+                          const checked = selIds.includes(uid);
+                          return (
+                            <button key={uid} type="button" onClick={() => toggleAssignee(uid)} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', background: checked ? 'var(--side-active)' : 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left', borderBottom: i < members.length - 1 ? '1px solid var(--rule-soft)' : 'none' }}>
+                              <span style={{ width: 26, height: 26, borderRadius: '50%', fontSize: 10, fontWeight: 700, background: AVATAR_COLORS[i % AVATAR_COLORS.length], color: '#fff', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{userInitials(name)}</span>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink)' }}>{name}</div>
+                                {jobTitle && <div style={{ fontSize: 11, color: 'var(--ink-3)' }}>{jobTitle}</div>}
+                              </div>
+                              {checked && <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="var(--k-primary)" strokeWidth="2"><path d="M2 7l4 4 6-6"/></svg>}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
+            </div>
           </div>
         )}
 
@@ -542,25 +643,44 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
                 </span>
                 {task.subtasks?.length > 0 && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 10 }}>
-                    {task.subtasks.map(s => (
-                      <div key={s.subtask_id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', background: 'var(--bg-soft)', borderRadius: 'var(--r-sm)', border: '1px solid var(--rule)' }}>
-                        <button
-                          onClick={() => toggleSubtask(s.subtask_id)}
-                          style={{ width: 16, height: 16, borderRadius: 4, border: `2px solid ${s.is_done ? 'var(--k-primary)' : 'var(--ink-3)'}`, background: s.is_done ? 'var(--k-primary)' : 'transparent', cursor: 'pointer', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}
-                        >
-                          {s.is_done && <Check size={10} color="#fff" strokeWidth={3} />}
-                        </button>
-                        <span style={{ flex: 1, fontSize: 13, color: s.is_done ? 'var(--ink-3)' : 'var(--ink)', textDecoration: s.is_done ? 'line-through' : 'none' }}>
-                          {s.title}
-                        </span>
-                        <button
-                          onClick={() => deleteSubtask(s.subtask_id)}
-                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-3)', padding: 0, display: 'flex', opacity: 0.6 }}
-                        >
-                          <X size={13} />
-                        </button>
-                      </div>
-                    ))}
+                    {task.subtasks.map((s, si) => {
+                      const assignedMember = members.find(m => (m.user_id || m.member_id) === s.assignee_user_id);
+                      const aName = assignedMember ? (assignedMember.display_name || assignedMember.full_name || assignedMember.name || '') : '';
+                      return (
+                        <div key={s.subtask_id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', background: 'var(--bg-soft)', borderRadius: 'var(--r-sm)', border: '1px solid var(--rule)' }}>
+                          <button
+                            onClick={() => toggleSubtask(s.subtask_id)}
+                            style={{ width: 16, height: 16, borderRadius: 4, border: `2px solid ${s.is_done ? 'var(--k-primary)' : 'var(--ink-3)'}`, background: s.is_done ? 'var(--k-primary)' : 'transparent', cursor: 'pointer', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}
+                          >
+                            {s.is_done && <Check size={10} color="#fff" strokeWidth={3} />}
+                          </button>
+                          <span style={{ flex: 1, fontSize: 13, color: s.is_done ? 'var(--ink-3)' : 'var(--ink)', textDecoration: s.is_done ? 'line-through' : 'none' }}>
+                            {s.title}
+                          </span>
+                          {/* Mini assignee picker */}
+                          <select
+                            value={s.assignee_user_id || ''}
+                            onChange={e => updateSubtaskAssignee(s.subtask_id, e.target.value || null)}
+                            title="Assign subtask"
+                            style={{ fontSize: 11, background: 'var(--surface)', border: '1px solid var(--rule)', borderRadius: 'var(--r-sm)', padding: '2px 4px', color: aName ? 'var(--ink)' : 'var(--ink-faint)', maxWidth: 110, cursor: 'pointer' }}
+                          >
+                            <option value="">Assign…</option>
+                            {members.map(m => {
+                              const uid = m.user_id || m.member_id;
+                              const name = m.display_name || m.full_name || m.name || '';
+                              if (!name) return null;
+                              return <option key={uid} value={uid}>{name.split(' ')[0]}</option>;
+                            })}
+                          </select>
+                          <button
+                            onClick={() => deleteSubtask(s.subtask_id)}
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-3)', padding: 0, display: 'flex', opacity: 0.6 }}
+                          >
+                            <X size={13} />
+                          </button>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
                 <div style={{ display: 'flex', gap: 8 }}>
