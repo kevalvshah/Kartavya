@@ -109,44 +109,57 @@ async def _fetch_report_data(pool, team_id: str, from_date: str, to_date: str) -
     )
 
     # Detailed task list (up to 50, in-progress first)
-    task_list_rows = await pool.fetch("""
-        SELECT t.task_id, t.title, t.status, t.priority, t.due_at, t.updated_at,
-               COALESCE(
-                 (SELECT COALESCE(u2.full_name, u2.name, u2.email)
-                  FROM users u2 WHERE u2.user_id = t.assignee_user_ids[1] LIMIT 1),
-                 'Unassigned'
-               ) AS owner_name
-        FROM tasks t
-        WHERE t.team_id = $1
-        ORDER BY CASE t.status
-            WHEN 'in_progress' THEN 0 WHEN 'todo' THEN 1 ELSE 2 END,
-            t.due_at ASC NULLS LAST
-        LIMIT 50
-    """, team_id)
+    # owner_name: safe subquery using array element cast to text
+    try:
+        task_list_rows = await pool.fetch("""
+            SELECT t.task_id, t.title, t.status, t.priority, t.due_at, t.updated_at,
+                   COALESCE(
+                     (SELECT COALESCE(u2.full_name, u2.name, u2.email)
+                      FROM users u2
+                      WHERE u2.user_id = (t.assignee_user_ids::text[])[1]
+                      LIMIT 1),
+                     'Unassigned'
+                   ) AS owner_name
+            FROM tasks t
+            WHERE t.team_id = $1
+            ORDER BY CASE t.status
+                WHEN 'in_progress' THEN 0 WHEN 'todo' THEN 1 ELSE 2 END,
+                t.due_at ASC NULLS LAST
+            LIMIT 50
+        """, team_id)
+    except Exception:
+        task_list_rows = []
 
-    # Per-member tasks completed in period (updated_at proxy for done date)
-    member_tasks_rows = await pool.fetch("""
-        SELECT COALESCE(u3.full_name, u3.name, u3.email, uid) AS user_name,
-               COUNT(*) AS tasks_done
-        FROM tasks t
-        CROSS JOIN LATERAL unnest(COALESCE(t.assignee_user_ids, ARRAY[]::text[])) AS uid
-        LEFT JOIN users u3 ON u3.user_id = uid
-        WHERE t.team_id = $1 AND t.status = 'done'
-          AND t.updated_at >= $2::timestamptz
-          AND t.updated_at <= ($3::date + interval '1 day')::timestamptz
-        GROUP BY user_name
-        ORDER BY tasks_done DESC
-    """, team_id, from_date, to_date)
+    # Per-member tasks completed in period
+    try:
+        member_tasks_rows = await pool.fetch("""
+            SELECT COALESCE(u3.full_name, u3.name, u3.email, uid) AS user_name,
+                   COUNT(*) AS tasks_done
+            FROM tasks t
+            CROSS JOIN LATERAL unnest(t.assignee_user_ids::text[]) AS uid
+            LEFT JOIN users u3 ON u3.user_id = uid
+            WHERE t.team_id = $1 AND t.status = 'done'
+              AND t.updated_at >= $2::timestamptz
+              AND t.updated_at <= ($3::date + interval '1 day')::timestamptz
+              AND array_length(t.assignee_user_ids::text[], 1) > 0
+            GROUP BY user_name
+            ORDER BY tasks_done DESC
+        """, team_id, from_date, to_date)
+    except Exception:
+        member_tasks_rows = []
 
     # Daily throughput: tasks closed per calendar day
-    throughput_rows = await pool.fetch("""
-        SELECT DATE(t.updated_at AT TIME ZONE 'UTC') AS day, COUNT(*) AS done_count
-        FROM tasks t
-        WHERE t.team_id = $1 AND t.status = 'done'
-          AND t.updated_at >= $2::timestamptz
-          AND t.updated_at <= ($3::date + interval '1 day')::timestamptz
-        GROUP BY day ORDER BY day
-    """, team_id, from_date, to_date)
+    try:
+        throughput_rows = await pool.fetch("""
+            SELECT DATE(t.updated_at AT TIME ZONE 'UTC') AS day, COUNT(*) AS done_count
+            FROM tasks t
+            WHERE t.team_id = $1 AND t.status = 'done'
+              AND t.updated_at >= $2::timestamptz
+              AND t.updated_at <= ($3::date + interval '1 day')::timestamptz
+            GROUP BY day ORDER BY day
+        """, team_id, from_date, to_date)
+    except Exception:
+        throughput_rows = []
 
     def _serialize(e):
         d = dict(e)
