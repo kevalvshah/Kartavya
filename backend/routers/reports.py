@@ -223,16 +223,20 @@ async def download_report(
 
     data = await _fetch_report_data(pool, team_id, from_date, to_date)
 
-    if fmt == "excel":
-        from services.report_generator import generate_excel
-        content = generate_excel(data, team_name, from_date, to_date)
-        filename = f"kartavya-{team_name.lower().replace(' ','-')}-{from_date}-{to_date}.xlsx"
-        media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    else:
-        from services.report_generator import generate_pdf
-        content = generate_pdf(data, team_name, from_date, to_date)
-        filename = f"kartavya-{team_name.lower().replace(' ','-')}-{from_date}-{to_date}.pdf"
-        media_type = "application/pdf"
+    try:
+        if fmt == "excel":
+            from services.report_generator import generate_excel
+            content = generate_excel(data, team_name, from_date, to_date)
+            filename = f"kartavya-{team_name.lower().replace(' ','-')}-{from_date}-{to_date}.xlsx"
+            media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        else:
+            from services.report_generator import generate_pdf
+            content = generate_pdf(data, team_name, from_date, to_date)
+            filename = f"kartavya-{team_name.lower().replace(' ','-')}-{from_date}-{to_date}.pdf"
+            media_type = "application/pdf"
+    except Exception as exc:
+        logger.error(f"Report generation failed for {team_id} fmt={fmt}: {exc}", exc_info=True)
+        raise HTTPException(500, f"Report generation failed: {exc}")
 
     return StreamingResponse(
         io.BytesIO(content),

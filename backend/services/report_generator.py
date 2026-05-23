@@ -37,10 +37,10 @@ _BAD_BD   = "#D9CECA"
 _CHAMP_BG = "#ECF8F7"   # mix(teal 10%, surface)
 _CHAMP_BD = "#93D9D5"   # mix(teal 30%, rule)
 
-_FONT_DISP  = '"Newsreader", Georgia, "Times New Roman", serif'
-_FONT_UI    = 'Inter, -apple-system, "Helvetica Neue", Arial, sans-serif'
-_FONT_HINDI = '"Tiro Devanagari Hindi", "Noto Serif Devanagari", serif'
-_FONT_MONO  = '"JetBrains Mono", "Fira Code", "Courier New", monospace'
+_FONT_DISP  = 'Georgia, "Times New Roman", serif'
+_FONT_UI    = '"Helvetica Neue", Arial, sans-serif'
+_FONT_HINDI = '"Noto Serif Devanagari", serif'
+_FONT_MONO  = '"Courier New", monospace'
 
 _MEMBER_COLORS = ["#0082c6","#f59e0b","#05b7aa","#8b5cf6","#10b981","#ec4899","#ef4444","#6366f1"]
 
@@ -574,7 +574,7 @@ def _build_html(data: dict, team_name: str, period_from: str, period_to: str) ->
 
     # ── CSS ────────────────────────────────────────────────────────────────────
     css = f"""
-@import url('https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&family=Inter:wght@400;500;600;700&family=Tiro+Devanagari+Hindi&family=JetBrains+Mono:wght@400;700&display=swap');
+/* system fonts only — no external requests from WeasyPrint */
 
 *{{ box-sizing:border-box; margin:0; padding:0; }}
 body{{ background:{_BG}; font-family:{_FONT_UI}; color:{_INK}; -webkit-print-color-adjust:exact; print-color-adjust:exact; }}
