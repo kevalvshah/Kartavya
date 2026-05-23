@@ -52,7 +52,7 @@ export default function DashboardPage({ teams = [] }) {
       api.get('/tasks'),
       api.get('/verse-of-the-day').catch(() => null),
     ]).then(([tRes, vRes]) => {
-      setTasks(tRes.data || []);
+      setTasks(Array.isArray(tRes.data) ? tRes.data : []);
       if (vRes) setVerse(vRes.data);
     }).catch(console.error).finally(() => setLoading(false));
   }, []);

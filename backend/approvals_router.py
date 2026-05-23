@@ -78,7 +78,7 @@ async def is_project_owner(pool, team_id: str, user_id: str) -> bool:
 
 
 async def _notify(pool, task_id: str, task_title: str, recipient_id: str,
-                  notif_type: str, notes: Optional[str] = None):
+                  notif_type: str, notes: Optional[str] = None, team_id: Optional[str] = None):
     """Insert a DB notification row (fire-and-forget; never raises)."""
     try:
         title = {
@@ -88,21 +88,21 @@ async def _notify(pool, task_id: str, task_title: str, recipient_id: str,
         }.get(notif_type, f"Update on: {task_title}")
         message = notes or ""
         await pool.execute("""
-            INSERT INTO notifications (notification_id, user_id, type, title, message, task_id, created_at)
-            VALUES ($1, $2, $3, $4, $5, $6, NOW())
-        """, f"notif_{uuid.uuid4().hex[:12]}", recipient_id, notif_type, title, message, task_id)
+            INSERT INTO notifications (notification_id, user_id, team_id, type, title, message, task_id, url)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        """, f"notif_{uuid.uuid4().hex[:12]}", recipient_id, team_id, notif_type, title, message, task_id, f"/tasks")
     except Exception as exc:
         import logging; logging.getLogger(__name__).warning(f"_notify failed: {exc}")
 
 
 async def send_approval_notification(pool, task_id: str, task_title: str,
                                      recipient_id: str, notification_type: str,
-                                     notes: Optional[str] = None):
+                                     notes: Optional[str] = None, team_id: Optional[str] = None):
     user = await pool.fetchrow(
         "SELECT email, COALESCE(full_name,name) AS name FROM users WHERE user_id=$1", recipient_id
     )
     if user:
-        await _notify(pool, task_id, task_title, recipient_id, notification_type, notes)
+        await _notify(pool, task_id, task_title, recipient_id, notification_type, notes, team_id=team_id)
         try:
             from email_service import send_approval_notification_email
             send_approval_notification_email(
@@ -137,7 +137,7 @@ async def request_approval(task_id: str, payload: ApprovalRequest,
         WHERE task_id=$2
     """, payload.notes, task_id)
 
-    await send_approval_notification(pool, task_id, task["title"], owner["user_id"], "request", payload.notes)
+    await send_approval_notification(pool, task_id, task["title"], owner["user_id"], "request", payload.notes, team_id=task["team_id"])
     return {"message": "Approval requested", "approval_status": "pending"}
 
 
@@ -175,7 +175,7 @@ async def approve_task(task_id: str, payload: ApprovalRequest,
     """, user["user_id"], payload.notes, new_col_id, new_status, task_id)
 
     await send_approval_notification(pool, task_id, task["title"],
-                                     task["created_by_user_id"], "approved", payload.notes)
+                                     task["created_by_user_id"], "approved", payload.notes, team_id=task["team_id"])
     return {"message": "Task approved", "approval_status": "approved", "new_column_id": new_col_id}
 
 
@@ -202,7 +202,7 @@ async def reject_task(task_id: str, payload: ApprovalRequest,
     """, user["user_id"], payload.notes, task_id)
 
     await send_approval_notification(pool, task_id, task["title"],
-                                     task["created_by_user_id"], "rejected", payload.notes)
+                                     task["created_by_user_id"], "rejected", payload.notes, team_id=task["team_id"])
     return {"message": "Task rejected", "approval_status": "rejected"}
 
 
@@ -316,7 +316,7 @@ async def client_approve_task(task_id: str, payload: ApprovalRequest,
     # Notify task creator
     if task.get("created_by_user_id") and task["created_by_user_id"] != user["user_id"]:
         await send_approval_notification(pool, task_id, task["title"],
-                                         task["created_by_user_id"], "approved", payload.notes)
+                                         task["created_by_user_id"], "approved", payload.notes, team_id=task.get("team_id"))
 
     # FIX: fan-out team-sync email to ALL assignees
     try:
@@ -389,7 +389,7 @@ async def approve_by_token(token: str, payload_body: ApprovalRequest, pool=Depen
     """, client_user_id, payload_body.notes, new_col_id, task_id)
     if task.get("created_by_user_id") and task["created_by_user_id"] != client_user_id:
         await send_approval_notification(pool, task_id, task["title"],
-                                         task["created_by_user_id"], "approved", payload_body.notes)
+                                         task["created_by_user_id"], "approved", payload_body.notes, team_id=task.get("team_id"))
     return {"message": "Task approved by client", "approval_status": "approved"}
 
 
@@ -418,7 +418,7 @@ async def reject_by_token(token: str, payload_body: ApprovalRequest, pool=Depend
     """, client_user_id, payload_body.notes, new_col_id, task_id)
     if task.get("created_by_user_id"):
         await send_approval_notification(pool, task_id, task["title"],
-                                         task["created_by_user_id"], "rejected", payload_body.notes)
+                                         task["created_by_user_id"], "rejected", payload_body.notes, team_id=task.get("team_id"))
     return {"message": "Task rejected by client", "approval_status": "rejected"}
 
 
@@ -455,10 +455,10 @@ async def client_reject_task(task_id: str, payload: ApprovalRequest,
 
     if task.get("created_by_user_id"):
         await send_approval_notification(pool, task_id, task["title"],
-                                         task["created_by_user_id"], "rejected", payload.notes)
+                                         task["created_by_user_id"], "rejected", payload.notes, team_id=task.get("team_id"))
     for uid in (task.get("assignee_user_ids") or []):
         if uid != task.get("created_by_user_id"):
-            await send_approval_notification(pool, task_id, task["title"], uid, "rejected", payload.notes)
+            await send_approval_notification(pool, task_id, task["title"], uid, "rejected", payload.notes, team_id=task.get("team_id"))
 
     return {"message": "Task rejected by client", "approval_status": "rejected",
             "new_column_id": new_col_id}

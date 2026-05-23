@@ -222,6 +222,7 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
   };
 
   const isOwnerAdmin = me?.role === 'admin' || me?.role === 'owner';
+  const isClient = me?.role === 'client';
 
   const requestApproval = async () => {
     setApprovalLoading(true);
@@ -267,6 +268,27 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
     const approvalId = `task_approval::${taskId}`;
     try {
       await api.post(`/approvals/${approvalId}/review`, { status: 'rejected', notes: rejectNote });
+      setTask(t => ({ ...t, approval_status: 'rejected' }));
+      setShowRejectInput(false); setRejectNote('');
+    } catch (e) { console.error(e); }
+    finally { setApprovalLoading(false); }
+  };
+
+  const clientApproveTask = async () => {
+    setApprovalLoading(true);
+    try {
+      await api.post(`/tasks/${taskId}/client-approve`, { notes: '' });
+      setTask(t => ({ ...t, approval_status: 'approved' }));
+      onSaved?.({ ...task, approval_status: 'approved' });
+    } catch (e) { console.error(e); }
+    finally { setApprovalLoading(false); }
+  };
+
+  const clientRejectTask = async () => {
+    if (!rejectNote.trim()) return;
+    setApprovalLoading(true);
+    try {
+      await api.post(`/tasks/${taskId}/client-reject`, { notes: rejectNote });
       setTask(t => ({ ...t, approval_status: 'rejected' }));
       setShowRejectInput(false); setRejectNote('');
     } catch (e) { console.error(e); }
@@ -511,8 +533,35 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
                     </div>
                   )}
 
-                  {/* Awaiting client — no action for internal users */}
-                  {task.approval_status === 'pending_client' && (
+                  {/* Client: approve/reject buttons when pending_client */}
+                  {isClient && task.approval_status === 'pending_client' && !showRejectInput && (
+                    <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+                      <button className="k-btn k-btn--primary k-btn--sm" onClick={clientApproveTask} disabled={approvalLoading}>
+                        {approvalLoading ? '…' : '✓ Approve'}
+                      </button>
+                      <button className="k-btn k-btn--ghost k-btn--sm" onClick={() => setShowRejectInput(true)}
+                        style={{ color: 'var(--k-danger)' }}>
+                        ✕ Reject
+                      </button>
+                    </div>
+                  )}
+                  {isClient && task.approval_status === 'pending_client' && showRejectInput && (
+                    <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      <textarea value={rejectNote} onChange={e => setRejectNote(e.target.value)}
+                        placeholder="Reason for rejection (required)…" rows={2} className="k-input"
+                        style={{ width: '100%', resize: 'none', boxSizing: 'border-box', fontSize: 12 }} />
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        <button className="k-btn k-btn--ghost k-btn--sm" onClick={() => setShowRejectInput(false)}>Cancel</button>
+                        <button className="k-btn k-btn--ghost k-btn--sm" onClick={clientRejectTask}
+                          disabled={approvalLoading || !rejectNote.trim()}
+                          style={{ color: 'var(--k-danger)', borderColor: 'var(--k-danger)' }}>
+                          {approvalLoading ? '…' : '✕ Reject'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  {/* Internal users: no action while awaiting client */}
+                  {!isClient && task.approval_status === 'pending_client' && (
                     <p style={{ fontSize: 12, color: 'var(--ink-3)', margin: '8px 0 0' }}>
                       Approval request sent to client. Waiting for their response.
                     </p>
