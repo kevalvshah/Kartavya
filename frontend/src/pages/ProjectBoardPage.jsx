@@ -38,6 +38,7 @@ import { useViews }           from '../hooks/useViews';
 import { useRealtimeTasks }   from '../hooks/useRealtimeTasks';
 import { usePresence }        from '../hooks/usePresence';
 import { PageHeader, AvatarStack } from '../components/editorial';
+import AutomationsPage from './AutomationsPage';
 
 const VIEWS = [
   { id: 'kanban',   label: 'Board',
@@ -68,7 +69,8 @@ export default function ProjectBoardPage() {
   const [view,          setView]          = useState('kanban');
   const [fieldValueMap, setFieldValueMap] = useState({});
   const [loading,       setLoading]       = useState(true);
-  const [showFieldMgr,  setShowFieldMgr]  = useState(false);
+  const [showFieldMgr,     setShowFieldMgr]     = useState(false);
+  const [showAutomations,  setShowAutomations]  = useState(false);
   const [newFieldName,  setNewFieldName]  = useState('');
   const [newFieldType,  setNewFieldType]  = useState('text');
   const [newTaskEditor, setNewTaskEditor] = useState({ open: false, columnId: null });
@@ -159,8 +161,15 @@ export default function ProjectBoardPage() {
             {onlineUsers.length > 0 && (
               <AvatarStack users={presenceUsers} size={24} max={4} />
             )}
-            <button className="k-btn k-btn--ghost k-btn--sm" onClick={() => setShowFieldMgr(v => !v)}>
+            <button className="k-btn k-btn--ghost k-btn--sm" onClick={() => { setShowFieldMgr(v => !v); setShowAutomations(false); }}>
               ⚙ Fields
+            </button>
+            <button
+              className={'k-btn k-btn--ghost k-btn--sm' + (showAutomations ? ' is-active' : '')}
+              onClick={() => { setShowAutomations(v => !v); setShowFieldMgr(false); }}
+              style={showAutomations ? { background: 'var(--bg-soft)', color: 'var(--ink)' } : {}}
+            >
+              ⚡ Automations
             </button>
             <button
               className="k-btn k-btn--ghost k-btn--sm"
@@ -227,6 +236,29 @@ export default function ProjectBoardPage() {
                 ))}
               </div>
             )}
+          </div>
+        </section>
+      )}
+
+      {/* Automations panel */}
+      {showAutomations && (
+        <section className="k-card">
+          <header className="k-card__head">
+            <div className="k-card__titles">
+              <h3 className="k-card__title">Automations</h3>
+              <span className="k-card__sans">स्वचालन</span>
+            </div>
+            <button
+              className="k-iconbtn"
+              style={{ marginLeft: 'auto', opacity: 0.5 }}
+              onClick={() => setShowAutomations(false)}
+              title="Close"
+            >
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 3l10 10M13 3L3 13"/></svg>
+            </button>
+          </header>
+          <div className="k-card__body" style={{ paddingTop: 0 }}>
+            <AutomationsPage teamId={projectId} embedded />
           </div>
         </section>
       )}
