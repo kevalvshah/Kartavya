@@ -124,9 +124,16 @@ async def change_user_role(user_id: str, body: dict, pool=Depends(get_pool), adm
 
 
 @router.delete("/users/{user_id}")
-async def remove_user(user_id: str, pool=Depends(get_pool), admin=Depends(require_admin)):
+async def remove_user(user_id: str, reassign_to: Optional[str] = None, pool=Depends(get_pool), admin=Depends(require_admin)):
     if user_id == admin["user_id"]:
         raise HTTPException(status_code=400, detail="Cannot remove yourself")
+    if reassign_to == user_id:
+        raise HTTPException(status_code=400, detail="Cannot reassign to the same user")
+    # Validate reassign_to exists
+    if reassign_to:
+        target = await pool.fetchrow("SELECT user_id FROM users WHERE user_id=$1", reassign_to)
+        if not target:
+            raise HTTPException(status_code=404, detail="Reassign target user not found")
     # Cascade-delete all user data in dependency order
     async with pool.acquire() as conn:
         async with conn.transaction():
@@ -139,7 +146,7 @@ async def remove_user(user_id: str, pool=Depends(get_pool), admin=Depends(requir
             await conn.execute("DELETE FROM activity_events    WHERE actor_id=$1", user_id)
             # Remove time entries
             await conn.execute("DELETE FROM time_entries       WHERE user_id=$1", user_id)
-            # Remove comments (try — table may use different column name)
+            # Remove comments
             try:
                 await conn.execute("DELETE FROM task_comments  WHERE user_id=$1", user_id)
             except Exception:
@@ -148,28 +155,33 @@ async def remove_user(user_id: str, pool=Depends(get_pool), admin=Depends(requir
                 await conn.execute("DELETE FROM comments       WHERE author_id=$1", user_id)
             except Exception:
                 pass
-            # Reassign tasks created by this user to their project owner/admin
-            # Find all teams the user belongs to and get first owner/admin per team
-            task_teams = await conn.fetch(
-                "SELECT DISTINCT team_id FROM tasks WHERE created_by_user_id=$1", user_id
-            )
-            for tt in task_teams:
-                tid = tt["team_id"]
-                replacement = await conn.fetchval("""
-                    SELECT user_id FROM project_assignments
-                    WHERE team_id=$1 AND role IN ('owner','admin') AND user_id != $2
-                    ORDER BY CASE role WHEN 'owner' THEN 0 ELSE 1 END ASC LIMIT 1
-                """, tid, user_id)
-                if replacement:
-                    await conn.execute(
-                        "UPDATE tasks SET created_by_user_id=$1 WHERE created_by_user_id=$2 AND team_id=$3",
-                        replacement, user_id, tid
-                    )
-                else:
-                    await conn.execute(
-                        "UPDATE tasks SET created_by_user_id=NULL WHERE created_by_user_id=$1 AND team_id=$2",
-                        user_id, tid
-                    )
+            # Reassign tasks: use explicit reassign_to if provided, else fall back to project owner/admin
+            if reassign_to:
+                await conn.execute(
+                    "UPDATE tasks SET created_by_user_id=$1 WHERE created_by_user_id=$2",
+                    reassign_to, user_id
+                )
+            else:
+                task_teams = await conn.fetch(
+                    "SELECT DISTINCT team_id FROM tasks WHERE created_by_user_id=$1", user_id
+                )
+                for tt in task_teams:
+                    tid = tt["team_id"]
+                    replacement = await conn.fetchval("""
+                        SELECT user_id FROM project_assignments
+                        WHERE team_id=$1 AND role IN ('owner','admin') AND user_id != $2
+                        ORDER BY CASE role WHEN 'owner' THEN 0 ELSE 1 END ASC LIMIT 1
+                    """, tid, user_id)
+                    if replacement:
+                        await conn.execute(
+                            "UPDATE tasks SET created_by_user_id=$1 WHERE created_by_user_id=$2 AND team_id=$3",
+                            replacement, user_id, tid
+                        )
+                    else:
+                        await conn.execute(
+                            "UPDATE tasks SET created_by_user_id=NULL WHERE created_by_user_id=$1 AND team_id=$2",
+                            user_id, tid
+                        )
             # Nullify tasks.user_id (owner column — may have FK)
             try:
                 await conn.execute("UPDATE tasks SET user_id=NULL WHERE user_id=$1", user_id)
@@ -180,12 +192,25 @@ async def remove_user(user_id: str, pool=Depends(get_pool), admin=Depends(requir
                 await conn.execute("UPDATE tasks SET assigned_by_user_id=NULL WHERE assigned_by_user_id=$1", user_id)
             except Exception:
                 pass
-            # Remove from assignee_user_ids array on tasks
+            # Update assignee_user_ids array on tasks
             try:
-                await conn.execute(
-                    "UPDATE tasks SET assignee_user_ids=array_remove(assignee_user_ids,$1) WHERE $1=ANY(assignee_user_ids)",
-                    user_id
-                )
+                if reassign_to:
+                    # Replace deleted user with reassign_to in the array (avoid duplicates)
+                    await conn.execute(
+                        """UPDATE tasks
+                           SET assignee_user_ids = array_append(array_remove(assignee_user_ids,$1), $2)
+                           WHERE $1=ANY(assignee_user_ids) AND NOT ($2=ANY(assignee_user_ids))""",
+                        user_id, reassign_to
+                    )
+                    await conn.execute(
+                        "UPDATE tasks SET assignee_user_ids=array_remove(assignee_user_ids,$1) WHERE $1=ANY(assignee_user_ids)",
+                        user_id
+                    )
+                else:
+                    await conn.execute(
+                        "UPDATE tasks SET assignee_user_ids=array_remove(assignee_user_ids,$1) WHERE $1=ANY(assignee_user_ids)",
+                        user_id
+                    )
             except Exception:
                 pass
             # Remove assignee links (junction table pattern)

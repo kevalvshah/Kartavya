@@ -59,6 +59,89 @@ function Toggle({ checked, onChange, label }) {
   );
 }
 
+// ── Delete user modal ─────────────────────────────────────────────────────────
+
+function DeleteUserModal({ user, otherUsers, onConfirm, onClose }) {
+  const [reassignTo, setReassignTo] = useState('');
+  const [deleting,   setDeleting]   = useState(false);
+
+  const userName = user.full_name || user.name || user.email;
+
+  const handleConfirm = async () => {
+    setDeleting(true);
+    await onConfirm(user, reassignTo || null);
+    setDeleting(false);
+  };
+
+  return (
+    <div
+      style={{ position: 'fixed', inset: 0, zIndex: 500, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}
+      onClick={e => e.target === e.currentTarget && onClose()}
+    >
+      <div style={{ background: 'var(--surface)', borderRadius: 'var(--r-lg)', width: '100%', maxWidth: 460, boxShadow: '0 24px 64px rgba(0,0,0,0.35)', overflow: 'hidden' }}>
+
+        {/* Red header */}
+        <div style={{ background: 'linear-gradient(135deg, #b91c1c 0%, #dc2626 100%)', padding: '22px 24px 20px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="#fff" strokeWidth="1.8"><path d="M6 6h8M8 6V5h4v1M9 10v4M11 10v4M5 6l1 11h8l1-11"/></svg>
+            </div>
+            <div>
+              <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.14em', color: 'rgba(255,255,255,0.7)', textTransform: 'uppercase', marginBottom: 2 }}>REMOVE USER · उपयोगकर्ता हटाएं</div>
+              <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 400, color: '#fff' }}>
+                Remove <em>{userName}</em>?
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Body */}
+        <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+
+          <p style={{ fontSize: 13, color: 'var(--ink-2)', lineHeight: 1.6, margin: 0 }}>
+            All tasks, comments, and time entries created by <strong>{userName}</strong> will be reassigned to the person you choose below, or unassigned if left blank.
+          </p>
+
+          <div>
+            <label style={{ display: 'block', fontSize: 10, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--ink-3)', marginBottom: 6 }}>
+              REASSIGN WORK TO · कार्य सौंपें
+            </label>
+            <select
+              className="k-input"
+              style={{ width: '100%' }}
+              value={reassignTo}
+              onChange={e => setReassignTo(e.target.value)}
+            >
+              <option value="">— Leave unassigned —</option>
+              {otherUsers.map(u => (
+                <option key={u.user_id} value={u.user_id}>
+                  {u.full_name || u.name || u.email}{u.member_role ? ` · ${u.member_role}` : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 'var(--r-md)', padding: '10px 14px', fontSize: 12, color: '#b91c1c' }}>
+            ⚠ This action is permanent and cannot be undone.
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div style={{ padding: '14px 24px 20px', display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+          <button className="k-btn k-btn--ghost k-btn--sm" onClick={onClose} disabled={deleting}>Cancel</button>
+          <button
+            onClick={handleConfirm}
+            disabled={deleting}
+            style={{ background: '#dc2626', color: '#fff', border: 'none', borderRadius: 'var(--r-md)', padding: '8px 18px', fontSize: 13, fontWeight: 600, cursor: 'pointer', opacity: deleting ? 0.6 : 1 }}
+          >
+            {deleting ? 'Removing…' : `Remove ${userName.split(' ')[0]}`}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Edit slide-over ───────────────────────────────────────────────────────────
 
 function EditSlideOver({ user, onClose, onSaved, pushToast }) {
@@ -177,10 +260,11 @@ export default function AdminPage() {
   const { pushToast } = useToast();
   const [users,     setUsers]     = useState([]);
   const [invites,   setInvites]   = useState([]);
-  const [invite,    setInvite]    = useState(EMPTY_INVITE);
-  const [sending,   setSending]   = useState(false);
-  const [copiedId,  setCopiedId]  = useState(null);
-  const [editUser,  setEditUser]  = useState(null);   // user being edited
+  const [invite,      setInvite]      = useState(EMPTY_INVITE);
+  const [sending,     setSending]     = useState(false);
+  const [copiedId,    setCopiedId]    = useState(null);
+  const [editUser,    setEditUser]    = useState(null);   // user being edited
+  const [deleteTarget, setDeleteTarget] = useState(null); // user pending deletion
 
   const me = JSON.parse(localStorage.getItem('kartavya_user') || 'null');
 
@@ -233,14 +317,21 @@ export default function AdminPage() {
 
   // ── User actions ──────────────────────────────────────────────────────────
 
-  const removeUser = async (u) => {
+  const removeUser = (u) => {
     if (u.user_id === me?.user_id) { pushToast({ type: 'error', title: 'You cannot remove yourself' }); return; }
-    if (!window.confirm(`Remove ${u.full_name || u.name || u.email}? This cannot be undone.`)) return;
+    setDeleteTarget(u);
+  };
+
+  const confirmDeleteUser = async (u, reassignTo) => {
     try {
-      await api.delete(`/admin/users/${u.user_id}`);
+      const params = reassignTo ? `?reassign_to=${reassignTo}` : '';
+      await api.delete(`/admin/users/${u.user_id}${params}`);
       setUsers(prev => prev.filter(x => x.user_id !== u.user_id));
-      pushToast({ type: 'success', title: 'User removed' });
-    } catch (_) { pushToast({ type: 'error', title: 'Could not remove user' }); }
+      setDeleteTarget(null);
+      pushToast({ type: 'success', title: `${u.full_name || u.email} removed` });
+    } catch (e) {
+      pushToast({ type: 'error', title: e?.response?.data?.detail || 'Could not remove user' });
+    }
   };
 
   const handleUserSaved = (updated) => {
@@ -264,6 +355,16 @@ export default function AdminPage() {
           onClose={() => setEditUser(null)}
           onSaved={handleUserSaved}
           pushToast={pushToast}
+        />
+      )}
+
+      {/* Delete user modal */}
+      {deleteTarget && (
+        <DeleteUserModal
+          user={deleteTarget}
+          otherUsers={users.filter(u => u.user_id !== deleteTarget.user_id && u.user_id !== me?.user_id)}
+          onConfirm={confirmDeleteUser}
+          onClose={() => setDeleteTarget(null)}
         />
       )}
 
