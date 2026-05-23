@@ -32,7 +32,7 @@ export default function InboxPage() {
   useEffect(() => {
     setLoading(true);
     api.get('/notifications')
-      .then(r => setNotifications(r.data || []))
+      .then(r => setNotifications(Array.isArray(r.data) ? r.data : []))
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);

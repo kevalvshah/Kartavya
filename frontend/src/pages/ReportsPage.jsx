@@ -241,7 +241,7 @@ function SchedulesTab({ teams }) {
     if (!teamId) return;
     setLoading(true);
     api.get(`/reports/schedules/${teamId}`)
-       .then(r => setSchedules(r.data))
+       .then(r => setSchedules(Array.isArray(r.data) ? r.data : []))
        .catch(() => setSchedules([]))
        .finally(() => setLoading(false));
   }, [teamId]);
@@ -509,7 +509,7 @@ export default function ReportsPage({ teams: propTeams }) {
 
   useEffect(() => {
     if (propTeams?.length) { setTeams(propTeams); return; }
-    api.get('/teams').then(r => setTeams(r.data)).catch(() => {});
+    api.get('/teams').then(r => setTeams(Array.isArray(r.data) ? r.data : [])).catch(() => {});
   }, [propTeams]);
 
   const user       = currentUser();

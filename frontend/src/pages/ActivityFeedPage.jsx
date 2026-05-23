@@ -63,7 +63,7 @@ export default function ActivityFeedPage({ teamId }) {
       if (filterType)  params.event_type = filterType;
       if (filterActor) params.actor_id   = filterActor;
       const r = await api.get(`/activity/team/${teamId}`, { params, signal: ctrl.signal });
-      const data = r.data;
+      const data = Array.isArray(r.data) ? r.data : [];
       setEvents(prev => reset ? data : [...prev, ...data]);
       setHasMore(data.length === LIMIT);
       setOffset(off + data.length);

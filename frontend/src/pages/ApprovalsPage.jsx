@@ -34,9 +34,9 @@ export default function ApprovalsPage() {
     try {
       const endpoint = isClient ? '/client/approvals' : '/approvals/pending';
       const r = await api.get(endpoint);
-      setRequests(r.data || []);
+      setRequests(Array.isArray(r.data) ? r.data : []);
       if (!isClient) {
-        api.get('/approvals/history').then(h => setHistory(h.data || [])).catch(() => {});
+        api.get('/approvals/history').then(h => setHistory(Array.isArray(h.data) ? h.data : [])).catch(() => {});
       }
     } catch (_) {
       pushToast({ type: 'error', title: 'Could not load approvals' });
@@ -67,7 +67,7 @@ export default function ApprovalsPage() {
       setClientModal({ approvalId, teamId });
       if (teamId) {
         api.get(`/teams/${teamId}/clients`)
-          .then(r => setClientList(r.data || []))
+          .then(r => setClientList(Array.isArray(r.data) ? r.data : []))
           .catch(() => {});
       }
     } else {

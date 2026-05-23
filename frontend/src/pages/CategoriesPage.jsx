@@ -15,7 +15,7 @@ export default function CategoriesPage() {
   const [color, setColor] = useState(DEFAULT_COLOR);
 
   useEffect(() => {
-    api.get('/categories').then(r => setCats(r.data)).catch(() => {});
+    api.get('/categories').then(r => setCats(Array.isArray(r.data) ? r.data : [])).catch(() => {});
   }, []);
 
   const create = async () => {

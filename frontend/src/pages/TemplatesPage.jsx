@@ -46,9 +46,9 @@ export default function TemplatesPage() {
         api.get('/templates/tasks'),
         api.get('/teams'),
       ]);
-      setProjTemplates(pt.data);
-      setTaskTemplates(tt.data);
-      setProjects(pr.data);
+      setProjTemplates(Array.isArray(pt.data) ? pt.data : []);
+      setTaskTemplates(Array.isArray(tt.data) ? tt.data : []);
+      setProjects(Array.isArray(pr.data) ? pr.data : []);
     } catch (_) { pushToast({ type: 'error', title: 'Could not load templates' }); }
     finally { setLoading(false); }
   }, [pushToast]);

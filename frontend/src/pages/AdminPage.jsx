@@ -185,8 +185,8 @@ export default function AdminPage() {
   const me = JSON.parse(localStorage.getItem('kartavya_user') || 'null');
 
   const load = () => Promise.all([
-    api.get('/admin/users').then(r => setUsers(r.data)).catch(() => {}),
-    api.get('/admin/invites').then(r => setInvites(r.data)).catch(() => {}),
+    api.get('/admin/users').then(r => setUsers(Array.isArray(r.data) ? r.data : [])).catch(() => {}),
+    api.get('/admin/invites').then(r => setInvites(Array.isArray(r.data) ? r.data : [])).catch(() => {}),
   ]);
 
   useEffect(() => { load(); }, []);

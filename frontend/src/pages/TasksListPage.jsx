@@ -40,8 +40,8 @@ export default function TasksListPage() {
         api.get(endpoint),
         isClient ? api.get('/client/projects') : api.get('/teams'),
       ]);
-      setTasks(tRes.data || []);
-      setTeams((pRes.data || []).map(t => ({ team_id: t.team_id, name: t.name })));
+      setTasks(Array.isArray(tRes.data) ? tRes.data : []);
+      setTeams((Array.isArray(pRes.data) ? pRes.data : []).map(t => ({ team_id: t.team_id, name: t.name })));
     } catch (_) { pushToast({ type: 'error', title: 'Could not load tasks' }); }
     finally { setLoading(false); }
   }, [isClient, pushToast]);

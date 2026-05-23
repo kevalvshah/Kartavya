@@ -115,7 +115,7 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
     setTask(null); setFields([]); setFValues({});
     setComments([]); setActivity([]); setEntries([]); setTimer(null); setAttachments([]);
 
-    api.get('/categories').then(r => setCategories(r.data || [])).catch(() => {});
+    api.get('/categories').then(r => setCategories(Array.isArray(r.data) ? r.data : [])).catch(() => {});
 
     Promise.all([
       api.get(`/tasks/${taskId}`),
@@ -124,7 +124,7 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
       const t = tRes.data;
       setTask(t);
       setDraft({ title: t.title, description: t.description, priority: t.priority, due_at: t.due_at, status: t.status, category_id: t.category_id || '' });
-      setComments(cRes.data);
+      setComments(Array.isArray(cRes.data) ? cRes.data : []);
       // Parse existing attachments
       const att = t.attachments || [];
       setAttachments(Array.isArray(att) ? att.map(a => typeof a === 'string' ? { url: a, name: a.split('/').pop() } : a) : []);
@@ -148,7 +148,7 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
     if (tab !== 'activity' || !taskId) return;
     setActLoad(true);
     api.get(`/activity/task/${taskId}`)
-       .then(r => setActivity(r.data))
+       .then(r => setActivity(Array.isArray(r.data) ? r.data : []))
        .catch(console.error)
        .finally(() => setActLoad(false));
   }, [tab, taskId]);
@@ -237,7 +237,7 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
     setClientList([]); setClientUserId('');
     if (task?.team_id) {
       api.get(`/teams/${task.team_id}/clients`)
-        .then(r => setClientList(r.data || []))
+        .then(r => setClientList(Array.isArray(r.data) ? r.data : []))
         .catch(() => {});
     }
   };

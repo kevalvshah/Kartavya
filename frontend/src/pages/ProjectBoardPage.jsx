@@ -94,8 +94,8 @@ export default function ProjectBoardPage() {
         api.get('/tasks', { params: { team_id: projectId } }),
       ]);
       setProject(projR.data);
-      setColumns(colR.data);
-      setRawTasks(taskR.data);     // seeds useRealtimeTasks
+      setColumns(Array.isArray(colR.data) ? colR.data : []);
+      setRawTasks(Array.isArray(taskR.data) ? taskR.data : []);     // seeds useRealtimeTasks
       setTeamMembers(projR.data.members || []);
     } catch (e) {
       console.error('Board load failed', e);

@@ -54,8 +54,9 @@ export default function AutomationsPage({ teamId: propTeamId }) {
   useEffect(() => {
     if (!propTeamId) {
       api.get('/teams').then(r => {
-        setTeams(r.data);
-        if (r.data.length > 0) setTeamId(r.data[0].team_id);
+        const data = Array.isArray(r.data) ? r.data : [];
+        setTeams(data);
+        if (data.length > 0) setTeamId(data[0].team_id);
       }).catch(() => {});
     }
   }, [propTeamId]);
@@ -64,7 +65,7 @@ export default function AutomationsPage({ teamId: propTeamId }) {
     if (!teamId) { setLoading(false); return; }
     setLoading(true);
     api.get(`/automations/team/${teamId}`)
-       .then(r => setAutomations(r.data))
+       .then(r => setAutomations(Array.isArray(r.data) ? r.data : []))
        .catch(() => setAutomations([]))
        .finally(() => setLoading(false));
   }, [teamId]);

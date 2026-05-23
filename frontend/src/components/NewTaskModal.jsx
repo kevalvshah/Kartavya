@@ -42,11 +42,11 @@ export default function NewTaskModal({ open, onClose, onCreated }) {
     if (!open) return;
     setTitle(''); setProjectId(''); setStatus('todo'); setPriority('medium');
     setDueAt(''); setEstimate(''); setDescription(''); setAssignees([]); setFiles([]); setCategoryId('');
-    api.get('/categories').then(r => setCategories(r.data || [])).catch(() => {});
-    api.get('/teams').then(r => setProjects(r.data)).catch(() => {});
+    api.get('/categories').then(r => setCategories(Array.isArray(r.data) ? r.data : [])).catch(() => {});
+    api.get('/teams').then(r => setProjects(Array.isArray(r.data) ? r.data : [])).catch(() => {});
     api.get('/teams').then(r => {
       const allMembers = [];
-      r.data.forEach(t => (t.members || []).forEach(m => {
+      (Array.isArray(r.data) ? r.data : []).forEach(t => (t.members || []).forEach(m => {
         if (!allMembers.find(x => x.user_id === m.user_id)) allMembers.push(m);
       }));
       setMembers(allMembers);

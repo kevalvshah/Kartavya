@@ -17,7 +17,7 @@ export default function ProjectsPage() {
   const [creating, setCreating] = useState(false);
   const [showNew,  setShowNew]  = useState(false);
 
-  const load = () => api.get('/teams').then(r => setProjects(r.data)).catch(() => {});
+  const load = () => api.get('/teams').then(r => setProjects(Array.isArray(r.data) ? r.data : [])).catch(() => {});
   useEffect(() => { load(); }, []); // eslint-disable-line
 
   const create = async () => {
