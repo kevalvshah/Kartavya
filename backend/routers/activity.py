@@ -2,12 +2,15 @@
 activity.py — Activity feed read endpoints
 BUG FIX: removed spaces inside f-string braces for LIMIT/OFFSET params
 """
-from fastapi import APIRouter, Depends, Query
+import logging
+from fastapi import APIRouter, Depends, HTTPException, Query
 from typing import Optional
 import json
 
 from auth_router import require_user
 from db import get_pool
+
+logger = logging.getLogger(__name__)
 
 
 def _normalize(rows):
@@ -42,18 +45,22 @@ async def team_activity(
     where = " AND ".join(filters)
     limit_idx  = len(vals) + 1
     offset_idx = len(vals) + 2
-    rows = await pool.fetch(f"""
-        SELECT ae.*,
-               COALESCE(u.full_name, u.name, u.email) AS actor_name,
-               t.title AS task_title
-        FROM activity_events ae
-        LEFT JOIN users u ON u.user_id = ae.actor_id
-        LEFT JOIN tasks t ON t.task_id = ae.task_id
-        WHERE {where}
-        ORDER BY ae.created_at DESC
-        LIMIT ${limit_idx} OFFSET ${offset_idx}
-    """, *vals, limit, offset)
-    return _normalize(rows)
+    try:
+        rows = await pool.fetch(f"""
+            SELECT ae.*,
+                   COALESCE(u.full_name, u.name, u.email) AS actor_name,
+                   t.title AS task_title
+            FROM activity_events ae
+            LEFT JOIN users u ON u.user_id = ae.actor_id
+            LEFT JOIN tasks t ON t.task_id = ae.task_id
+            WHERE {where}
+            ORDER BY ae.created_at DESC
+            LIMIT ${limit_idx} OFFSET ${offset_idx}
+        """, *vals, limit, offset)
+        return _normalize(rows)
+    except Exception as exc:
+        logger.error(f"Activity fetch failed for {team_id}: {exc}", exc_info=True)
+        raise HTTPException(500, f"Activity error: {exc}")
 
 
 @router.get("/task/{task_id}")
