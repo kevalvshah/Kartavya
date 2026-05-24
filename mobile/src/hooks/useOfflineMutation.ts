@@ -28,6 +28,7 @@
  *   });
  */
 
+import { useRef } from 'react';
 import { useMutation, useQueryClient, type UseMutationOptions, type QueryClient } from '@tanstack/react-query';
 import NetInfo from '@react-native-community/netinfo';
 import { enqueueMutation, type EnqueueOptions } from '../offline/mutationQueue';
@@ -87,10 +88,7 @@ export function useOfflineMutation<TVariables, TData = unknown, TSnapshot = unkn
   opts: OfflineMutationOptions<TVariables, TData, TSnapshot>
 ): OfflineMutationResult<TVariables> {
   const qc = useQueryClient();
-
-  // We use a ref-like state via a regular variable that lives in closure.
-  // React state isn't needed here because isQueued is an ephemeral signal.
-  let _isQueued = false;
+  const isQueuedRef = useRef(false);
 
   const mutation = useMutation<TData, Error, TVariables, TSnapshot>({
     mutationFn: opts.mutationFn,
@@ -137,11 +135,11 @@ export function useOfflineMutation<TVariables, TData = unknown, TSnapshot = unkn
         entity_id:     opts.entityId?.(vars),
       });
 
-      _isQueued = true;
+      isQueuedRef.current = true;
       return;
     }
 
-    _isQueued = false;
+    isQueuedRef.current = false;
     await mutation.mutateAsync(vars);
   };
 
@@ -152,7 +150,7 @@ export function useOfflineMutation<TVariables, TData = unknown, TSnapshot = unkn
   return {
     mutate,
     mutateAsync,
-    get isQueued()  { return _isQueued; },
+    get isQueued()  { return isQueuedRef.current; },
     get isPending() { return mutation.isPending; },
     get isError()   { return mutation.isError; },
     get error()     { return mutation.error; },

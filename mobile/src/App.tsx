@@ -72,7 +72,7 @@ function OfflineBanner({ message, kind, onRetry, onClear }: BannerProps) {
 }
 
 // ── Splash screen (shown while auth is resolving) ─────────────────────────────
-function Splash() {
+export function Splash() {
   return (
     <View style={s.splash}>
       <Text style={s.splashBrand}>KARTAVYA</Text>

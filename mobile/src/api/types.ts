@@ -22,15 +22,16 @@ export interface User {
 }
 
 export interface Project {
-  team_id:    string;
-  name:       string;
-  created_by: string;
-  created_at: string;
-  updated_at: string;
-  task_count: number;
-  done_count: number;
-  color?:     string;
-  deleted_at?: string;
+  team_id:      string;
+  name:         string;
+  description?: string;
+  created_by:   string;
+  created_at:   string;
+  updated_at:   string;
+  task_count:   number;
+  done_count:   number;
+  color?:       string;
+  deleted_at?:  string;
 }
 
 export interface ProjectColumn {
