@@ -24,9 +24,10 @@ export function useRealtimeTasks(projectId, initialTasks = []) {
 
   // Keep tasks in sync when parent re-loads (e.g. initial fetch completes)
   // without nuking in-flight realtime patches.
+  const taskIds = initialTasks.map(t => t.task_id).join(',');
   useEffect(() => {
     setTasks(initialTasks);
-  }, [JSON.stringify(initialTasks.map(t => t.task_id))]);
+  }, [taskIds]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!supabase || !projectId) return;

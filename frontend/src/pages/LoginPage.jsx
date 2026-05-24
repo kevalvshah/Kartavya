@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '../components/ui/toast';
 import AuthShell, { authInput, authLabel, authBtn } from '../components/layout/AuthShell';
@@ -56,8 +57,8 @@ export function LoginPage() {
 export function AcceptInvitePage() {
   const navigate = useNavigate();
   const { pushToast } = useToast();
-  const [params]        = useState(() => new URLSearchParams(window.location.search));
-  const token           = params.get('token') || '';
+  const [searchParams]  = useSearchParams();
+  const token           = searchParams.get('token') || '';
   const [form, setForm] = useState({ name: '', password: '', confirm: '' });
   const [loading, setLoading] = useState(false);
   const set = (e) => setForm((f) => ({ ...f, [e.target.name]: e.target.value }));

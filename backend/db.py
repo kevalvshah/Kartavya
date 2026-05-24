@@ -3,11 +3,13 @@ db.py — Supabase PostgreSQL connection pool for Kartavya
 Lazy connection — does NOT connect at startup, connects on first request.
 This prevents Railway crashes if DATABASE_URL is misconfigured.
 """
+import asyncio
 import json
 import os
 import asyncpg
 
 _pool: asyncpg.Pool | None = None
+_pool_lock = asyncio.Lock()
 
 
 def _json_encoder(value):
@@ -29,19 +31,22 @@ async def _init_conn(conn):
 
 async def get_pool() -> asyncpg.Pool:
     global _pool
-    if _pool is None:
-        dsn = os.environ.get("DATABASE_URL", "")
-        if not dsn:
-            raise RuntimeError("DATABASE_URL environment variable is not set")
-        _pool = await asyncpg.create_pool(
-            dsn=dsn,
-            min_size=3,
-            max_size=15,
-            max_inactive_connection_lifetime=300,
-            command_timeout=60,
-            statement_cache_size=0,  # Required for PgBouncer transaction mode
-            init=_init_conn,
-        )
+    if _pool is not None:
+        return _pool
+    async with _pool_lock:
+        if _pool is None:
+            dsn = os.environ.get("DATABASE_URL", "")
+            if not dsn:
+                raise RuntimeError("DATABASE_URL environment variable is not set")
+            _pool = await asyncpg.create_pool(
+                dsn=dsn,
+                min_size=3,
+                max_size=15,
+                max_inactive_connection_lifetime=300,
+                command_timeout=60,
+                statement_cache_size=0,  # Required for PgBouncer transaction mode
+                init=_init_conn,
+            )
     return _pool
 
 

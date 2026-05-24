@@ -82,7 +82,7 @@ function ApprovalBanner({
   const canReview = userRole === 'admin' || userRole === 'owner';
 
   if (!status) {
-    if (task.user_id === userId || task.assignee_user_ids?.includes(userId) || canReview) {
+    if (task.created_by_user_id === userId || task.assignee_user_ids?.includes(userId) || canReview) {
       return (
         <TouchableOpacity onPress={() => onAction('request')} style={[s.approvalRow, { backgroundColor: t.surfaceLow, borderColor: t.outline }]}
           {...a11yButton('Request approval')}>
@@ -547,7 +547,7 @@ export default function TaskDetailScreen() {
     </View>
   );
 
-  const canEdit    = user?.role === 'admin' || user?.role === 'owner' || task.user_id === user?.user_id;
+  const canEdit    = user?.role === 'admin' || user?.role === 'owner' || task.created_by_user_id === user?.user_id;
   const priColor   = PRIORITY_COLOR[task.priority] ?? '#636366';
   const assignedMembers = members.filter(m => (task.assignee_user_ids ?? []).includes(memberId(m)));
 

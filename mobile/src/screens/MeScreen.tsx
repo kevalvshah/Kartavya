@@ -30,7 +30,9 @@ export default function MeScreen() {
     staleTime: 60_000,
   });
 
-  const done    = myTasks.filter(t => t.status === 'done').length;
+  const done    = myTasks.filter(t => t.status === 'done' && (
+    t.created_by_user_id === user?.user_id || (t.assignee_user_ids ?? []).includes(user?.user_id ?? '')
+  )).length;
   const open    = myTasks.filter(t => t.status !== 'done' && (
     t.user_id === user?.user_id || (t.assignee_user_ids ?? []).includes(user?.user_id ?? '')
   )).length;

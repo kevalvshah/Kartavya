@@ -50,6 +50,9 @@ from services.gita       import get_verse_of_the_day
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env")
 
+# Whitelist for column names used in dynamic SQL fragments — never interpolate user input
+_VALID_SCOPE_COLS: frozenset = frozenset({"team_id", "user_id"})
+
 # Per-task team_ids cache: keyed by (asyncio_task_id, user_id) so concurrent requests
 # never share entries. Entries are removed after each request completes.
 _team_ids_request_cache: dict = {}
@@ -155,6 +158,8 @@ async def is_project_member(pool, team_id: str, user: dict) -> dict | None:
     )
 
 async def normalize_orders(pool, scope_col, scope_val, column_id):
+    if scope_col not in _VALID_SCOPE_COLS:
+        raise ValueError(f"Invalid scope_col: {scope_col!r}")
     rows = await pool.fetch(
         f"SELECT task_id FROM tasks WHERE {scope_col}=$1 AND column_id=$2 ORDER BY sort_order ASC, updated_at ASC",
         scope_val, column_id,
@@ -1097,6 +1102,8 @@ async def create_task(payload:TaskCreate,pool=Depends(get_db),user=Depends(requi
         user_id_field,scope_col,scope_val=None,"team_id",payload.team_id
     else:
         user_id_field,scope_col,scope_val=user["user_id"],"user_id",user["user_id"]
+    if scope_col not in _VALID_SCOPE_COLS:
+        raise ValueError(f"Invalid scope_col: {scope_col!r}")
     column_id=payload.column_id
     if not column_id and payload.team_id:
         first_col=await pool.fetchrow("SELECT column_id FROM project_columns WHERE team_id=$1 ORDER BY sort_order ASC LIMIT 1",payload.team_id)

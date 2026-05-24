@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   Switch, ActivityIndicator, Platform, Alert, Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Notifications from 'expo-notifications';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTheme } from '../theme/ThemeProvider';
 import { useAuth } from '../hooks/useAuth';
@@ -63,6 +64,10 @@ export default function SettingsScreen() {
   const [registeringPush, setRegPush]    = useState(false);
   const [syncing, setSyncing]            = useState(false);
 
+  useEffect(() => {
+    AsyncStorage.getItem('push_enabled').then(v => { if (v === 'true') setPushEnabled(true); });
+  }, []);
+
   // Load prefs from server
   const { data: prefsData, isLoading } = useQuery<NotifPrefsResponse>({
     queryKey: ['notif-prefs'],
@@ -95,7 +100,11 @@ export default function SettingsScreen() {
   };
 
   const handlePushToggle = async (val: boolean) => {
-    if (!val) { setPushEnabled(false); return; }
+    if (!val) {
+      setPushEnabled(false);
+      await AsyncStorage.setItem('push_enabled', 'false');
+      return;
+    }
     setRegPush(true);
     try {
       const token = await registerPushToken();
@@ -103,9 +112,14 @@ export default function SettingsScreen() {
         Alert.alert('Permission denied', 'Enable notifications in your device Settings.');
         return;
       }
-      const deviceId = `expo_${Platform.OS}_${Date.now()}`;
+      let deviceId = await AsyncStorage.getItem('push_device_id');
+      if (!deviceId) {
+        deviceId = `expo_${Platform.OS}_${Math.random().toString(36).slice(2)}`;
+        await AsyncStorage.setItem('push_device_id', deviceId);
+      }
       await notificationsApi.registerToken(Platform.OS, token, deviceId);
       setPushEnabled(true);
+      await AsyncStorage.setItem('push_enabled', 'true');
     } catch (e: any) {
       Alert.alert('Error', e.message);
     } finally {

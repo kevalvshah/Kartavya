@@ -28,7 +28,6 @@ export default function Protected({ children, requiredRole }) {
     api.get('/auth/me')
       .then((r) => {
         if (!live) return;
-        window.__kartavya_user = r.data;
         localStorage.setItem('kartavya_user', JSON.stringify(r.data));
         setUser(r.data); setReady(true);
       })

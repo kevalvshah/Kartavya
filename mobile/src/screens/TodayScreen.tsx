@@ -32,7 +32,7 @@ interface Section { title: string; titleHindi: string; accent: string; data: Tas
 
 function bucketTasks(tasks: Task[], userId: string): Section[] {
   const mine = tasks.filter(t =>
-    t.user_id === userId ||
+    t.created_by_user_id === userId ||
     (Array.isArray(t.assignee_user_ids) && t.assignee_user_ids.includes(userId))
   );
 
@@ -94,12 +94,14 @@ export default function TodayScreen() {
     nav.navigate('TaskDetail', { taskId });
   }, [nav]);
 
+  const now = new Date();
   const greeting = useMemo(() => {
-    const h = new Date().getHours();
+    const h = now.getHours();
     if (h < 12) return 'Good morning';
     if (h < 17) return 'Good afternoon';
     return 'Good evening';
-  }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [now.toDateString()]);
 
   return (
     <View style={[s.root, { backgroundColor: t.bg }]}>

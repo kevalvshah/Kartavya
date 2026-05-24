@@ -23,6 +23,7 @@ import BoardScreen      from '../screens/BoardScreen';
 import LoginScreen      from '../screens/LoginScreen';
 import ClientPortalScreen from '../screens/ClientPortalScreen';
 import { useAuth } from '../hooks/useAuth';
+import { Splash } from '../App';
 
 // ── Param lists ───────────────────────────────────────────────────────────────
 export type RootStackParamList = {
@@ -122,7 +123,6 @@ function MainTabs() {
           tabBarButton: (props) => (
             <AddButton onPress={() => {
               // TODO Phase 2: open new-task sheet
-              console.log('open new-task sheet');
             }} />
           ),
         }}
@@ -135,10 +135,10 @@ function MainTabs() {
 
 // ── Root navigator ─────────────────────────────────────────────────────────────
 export default function RootStack() {
-  const { user, loading } = useAuth();
+  const { user, loading, logout } = useAuth();
   const { t, scheme }     = useTheme();
 
-  if (loading) return null; // App.tsx renders splash
+  if (loading) return <Splash />;
 
   return (
     <NavigationContainer
@@ -160,7 +160,7 @@ export default function RootStack() {
         {!user ? (
           <Stack.Screen name="Login"  component={LoginScreen} />
         ) : user.role === 'client' ? (
-          <Stack.Screen name="Client" component={ClientPortalScreen} />
+          <Stack.Screen name="Client">{() => <ClientPortalScreen onLogout={logout} />}</Stack.Screen>
         ) : (
           <>
             <Stack.Screen name="Main"       component={MainTabs} />

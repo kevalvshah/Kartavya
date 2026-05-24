@@ -88,12 +88,6 @@ export default function InboxScreen() {
     staleTime: 30_000,
   });
 
-  const { data: unreadCount = 0 } = useQuery<number>({
-    queryKey: ['notifications', 'count'],
-    queryFn:  notificationsApi.unreadCount,
-    staleTime: 30_000,
-  });
-
   const markAll = useMutation({
     mutationFn: () => notificationsApi.markRead(),
     onSuccess:  () => {

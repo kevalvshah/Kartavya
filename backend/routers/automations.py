@@ -64,8 +64,23 @@ async def create_automation(body: AutomationCreate, pool=Depends(get_pool), user
     return {"automation_id": auto_id, **body.dict()}
 
 
+async def _check_automation_access(pool, automation_id: str, user_id: str):
+    """Raises 403/404 if the user is not a member of the automation's team."""
+    automation = await pool.fetchrow("SELECT team_id FROM automations WHERE automation_id=$1", automation_id)
+    if not automation:
+        raise HTTPException(404, "Automation not found")
+    member = await pool.fetchrow(
+        "SELECT 1 FROM team_members WHERE team_id=$1 AND user_id=$2 AND status='active'",
+        automation["team_id"], user_id
+    )
+    if not member:
+        raise HTTPException(403, "You are not a member of this project")
+    return automation
+
+
 @router.put("/{automation_id}")
 async def update_automation(automation_id: str, body: AutomationUpdate, pool=Depends(get_pool), user=Depends(require_user)):
+    await _check_automation_access(pool, automation_id, user["user_id"])
     updates, vals = [], []
     if body.name is not None:    updates.append(f"name=${len(vals)+2}");    vals.append(body.name)
     if body.trigger is not None: updates.append(f"trigger=${len(vals)+2}"); vals.append(body.trigger)
@@ -78,6 +93,7 @@ async def update_automation(automation_id: str, body: AutomationUpdate, pool=Dep
 
 @router.delete("/{automation_id}")
 async def delete_automation(automation_id: str, pool=Depends(get_pool), user=Depends(require_user)):
+    await _check_automation_access(pool, automation_id, user["user_id"])
     await pool.execute("DELETE FROM automations WHERE automation_id=$1", automation_id)
     return {"ok": True}
 
@@ -88,6 +104,12 @@ async def run_automation_manually(automation_id: str, context: dict, pool=Depend
     automation = await pool.fetchrow("SELECT * FROM automations WHERE automation_id=$1", automation_id)
     if not automation:
         raise HTTPException(404, "Automation not found")
+    member = await pool.fetchrow(
+        "SELECT 1 FROM team_members WHERE team_id=$1 AND user_id=$2 AND status='active'",
+        automation["team_id"], user["user_id"]
+    )
+    if not member:
+        raise HTTPException(403, "You are not a member of this project")
     from services.automation_engine import run_automation
     result = await run_automation(dict(automation), context, pool)
     await pool.execute(

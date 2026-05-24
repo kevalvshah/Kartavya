@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from datetime import datetime
+from datetime import datetime, timezone
 from db import get_pool
 
 router = APIRouter(tags=["health"])
@@ -18,5 +18,5 @@ async def health():
         "db": "connected" if db_ok else "unreachable",
         "app": "Kartavya",
         "by": "Aekam Inc",
-        "time": datetime.utcnow().isoformat()
+        "time": datetime.now(timezone.utc).isoformat()
     }

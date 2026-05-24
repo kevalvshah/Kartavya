@@ -97,7 +97,9 @@ export default function NewTaskModal({ open, onClose, onCreated }) {
       await api.post('/tasks', payload);
       onCreated?.();
       onClose();
-    } catch (_) {}
+    } catch (err) {
+      console.error('Task creation failed', err);
+    }
     finally { setSaving(false); }
   };
 
