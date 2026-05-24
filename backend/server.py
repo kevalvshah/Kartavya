@@ -1142,6 +1142,18 @@ async def update_task(task_id:str,payload:TaskUpdate,pool=Depends(get_db),user=D
         if not existing: raise HTTPException(404)
     data=payload.model_dump(exclude_unset=True); updates,vals=[],[]
     old_status=existing["status"]; old_assignees=list(existing.get("assignee_user_ids") or [])
+    # approval_status gated: only admins/owners may approve or reject
+    if "approval_status" in data and data["approval_status"] in ("approved","rejected"):
+        is_sys_admin = user.get("role") == "admin"
+        member_role = None
+        if existing["team_id"]:
+            mr = await pool.fetchrow(
+                "SELECT role FROM project_assignments WHERE team_id=$1 AND user_id=$2",
+                existing["team_id"], user["user_id"]
+            )
+            member_role = mr["role"] if mr else None
+        if not is_sys_admin and member_role not in ("owner", "admin"):
+            raise HTTPException(403, "Only project admins and owners can approve or reject tasks")
     for k in ["title","description","status","priority","category_id","estimated_minutes","column_id","approval_status"]:
         if k in data: updates.append(f"{k}=${len(vals)+1}"); vals.append(data[k])
     if "approval_status" in data and data["approval_status"] in ("approved","rejected"):

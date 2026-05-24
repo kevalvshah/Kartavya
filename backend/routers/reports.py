@@ -12,6 +12,7 @@ import io
 import json
 import logging
 import os
+import re
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional
@@ -186,6 +187,8 @@ async def get_report_data(
     pool=Depends(get_pool),
     user=Depends(require_user),
 ):
+    if not re.match(r'^\d{4}-\d{2}-\d{2}$', from_date) or not re.match(r'^\d{4}-\d{2}-\d{2}$', to_date):
+        raise HTTPException(400, "Invalid date format — use YYYY-MM-DD")
     await _assert_project_owner(pool, team_id, user)
     try:
         return await _fetch_report_data(pool, team_id, from_date, to_date)
@@ -203,6 +206,10 @@ async def download_report(
     pool=Depends(get_pool),
     user=Depends(require_user),
 ):
+    _DATE_RE = re.compile(r'^\d{4}-\d{2}-\d{2}$')
+    if not _DATE_RE.match(from_date) or not _DATE_RE.match(to_date):
+        raise HTTPException(400, "Invalid date format — use YYYY-MM-DD")
+
     await _assert_project_owner(pool, team_id, user)
 
     team = await pool.fetchrow("SELECT name FROM teams WHERE team_id=$1", team_id)
@@ -212,16 +219,17 @@ async def download_report(
 
     data = await _fetch_report_data(pool, team_id, from_date, to_date)
 
+    safe_slug = re.sub(r'[^a-z0-9\-]', '', team_name.lower().replace(' ', '-'))
     try:
         if fmt == "excel":
             from services.report_generator import generate_excel
             content = generate_excel(data, team_name, from_date, to_date)
-            filename = f"kartavya-{team_name.lower().replace(' ','-')}-{from_date}-{to_date}.xlsx"
+            filename = f"kartavya-{safe_slug}-{from_date}-{to_date}.xlsx"
             media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         else:
             from services.report_generator import generate_pdf
             content = generate_pdf(data, team_name, from_date, to_date)
-            filename = f"kartavya-{team_name.lower().replace(' ','-')}-{from_date}-{to_date}.pdf"
+            filename = f"kartavya-{safe_slug}-{from_date}-{to_date}.pdf"
             media_type = "application/pdf"
     except Exception as exc:
         logger.error(f"Report generation failed for {team_id} fmt={fmt}: {exc}", exc_info=True)
@@ -314,7 +322,7 @@ async def dispatch_reports(
     - REPORT_DISPATCH_SECRET query param when the env var is set — an additional
       layer so cron callers don't need a real session cookie.
     """
-    if DISPATCH_SECRET and request_secret != DISPATCH_SECRET:
+    if not DISPATCH_SECRET or request_secret != DISPATCH_SECRET:
         raise HTTPException(403, "Invalid dispatch secret")
 
     now = datetime.now(timezone.utc)

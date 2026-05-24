@@ -108,7 +108,9 @@ def _page_shell(body_html: str, brand: str, meta_right: str, foot_left: str, pag
 
 
 def _build_html(data: dict, team_name: str, period_from: str, period_to: str) -> str:
-    team_name = html.escape(team_name)
+    team_name   = html.escape(team_name)
+    period_from = html.escape(period_from)
+    period_to   = html.escape(period_to)
     tasks          = data.get("tasks", {})
     entries        = data.get("entries", [])
     task_list      = data.get("task_list", [])

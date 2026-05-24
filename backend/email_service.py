@@ -582,7 +582,7 @@ def send_comment_email(user_email: str, user_name: str, actor_name: str,
         user_email,
         f"New comment on: {task_title}",
         _base(preheader, "COMMENT · टिप्पणी", "New comment", "टिप्पणी",
-              f"{actor_name} left a comment.", body),
+              f"{_h(actor_name)} left a comment.", body),
     )
 
 
@@ -605,7 +605,7 @@ def send_mention_email(user_email: str, user_name: str, actor_name: str,
         user_email,
         f"{actor_name} mentioned you",
         _base(preheader, "MENTION · उल्लेख", "You were mentioned", "उल्लेख",
-              f"{actor_name} referenced you in a comment.", body),
+              f"{_h(actor_name)} referenced you in a comment.", body),
     )
 
 
@@ -643,7 +643,7 @@ def send_team_sync_email(user_email: str, user_name: str, client_name: str,
         user_email,
         f"Client approved: {task_title}",
         _base(preheader, "APPROVED · स्वीकृत", "Client approved", "अनुमोदित",
-              f"{client_name} has signed off.", body),
+              f"{_h(client_name)} has signed off.", body),
     )
 
 
