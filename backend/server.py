@@ -28,7 +28,7 @@ from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request, UploadF
 from pydantic import BaseModel, ConfigDict, Field
 from starlette.middleware.cors import CORSMiddleware
 
-from auth_router import require_user, require_admin
+from auth_router import require_user, require_admin, JWT_SECRET as _JWT_SECRET
 from auth_router import router as auth_router
 from invite_router import router as invite_router
 from approvals_router import router as approvals_router
@@ -698,7 +698,7 @@ async def review_approval(approval_id:str,body:dict,pool=Depends(get_db),user=De
             token = _jwt.encode(
                 {"task_id": task_id, "client_user_id": client["user_id"], "type": "client_approval",
                  "exp": datetime.now(timezone.utc).timestamp() + 86400 * 7},
-                os.environ["JWT_SECRET"], algorithm="HS256"
+                _JWT_SECRET, algorithm="HS256"
             )
             await pool.execute("""
                 UPDATE tasks SET approval_status='pending_client', approval_requested_at=NOW(),
