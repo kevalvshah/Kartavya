@@ -226,7 +226,7 @@ async def reject_task(task_id: str, payload: ApprovalRequest,
         if not user_data or user_data["role"] != "admin":
             raise HTTPException(403, "Only project owner or admin can reject")
 
-    if not payload.notes:
+    if not payload.notes or not payload.notes.strip():
         raise HTTPException(400, _REJECTION_REQUIRED)
 
     await pool.execute("""
@@ -441,7 +441,7 @@ async def reject_by_token(token: str, payload_body: ApprovalRequest, pool=Depend
         raise HTTPException(404, _TASK_NOT_FOUND)
     if task["approval_status"] != "pending_client":
         raise HTTPException(400, "This approval link is no longer active")
-    if not payload_body.notes:
+    if not payload_body.notes or not payload_body.notes.strip():
         raise HTTPException(400, _REJECTION_REQUIRED)
     revision_col = await pool.fetchrow(
         "SELECT column_id FROM project_columns WHERE team_id=$1 AND is_done=FALSE ORDER BY sort_order ASC LIMIT 1",
@@ -470,7 +470,7 @@ async def client_reject_task(task_id: str, payload: ApprovalRequest,
     if not access and user.get("role") != "admin":
         raise HTTPException(403, "Only the assigned client can reject this task")
 
-    if not payload.notes:
+    if not payload.notes or not payload.notes.strip():
         raise HTTPException(400, _REJECTION_REQUIRED)
 
     revision_col = await pool.fetchrow(

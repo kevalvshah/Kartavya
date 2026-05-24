@@ -415,7 +415,7 @@ async def dispatch_reports(
             sent += 1
             logger.info("Report dispatched: %s", _log_safe(sched['schedule_id']))
         except Exception as exc:
-            logger.error("Report dispatch failed for %s: %s", _log_safe(sched['schedule_id']), _log_safe(exc))
+            logger.error("Report dispatch failed for %s: %s", _log_safe(sched['schedule_id']), _log_safe(exc), exc_info=True)
             errors.append(str(sched["schedule_id"]))
 
     return {"ok": True, "dispatched": sent, "errors": errors}

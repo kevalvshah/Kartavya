@@ -845,7 +845,8 @@ def generate_excel(data: dict, team_name: str, period_from: str, period_to: str)
     task_list  = data.get("task_list", [])
     by_mt      = data.get("by_member_tasks", [])
 
-    C_INK  = "FF1A2230"; C_INK3 = "FF6E7B91"
+    C_INK  = "FF1A2230"
+    C_INK3 = "FF6E7B91"
     C_DEEP = "FF0082c6"; C_BG   = "FFF6F3EC"; C_SURF = "FFFCFAF5"; C_HDR = "FF1A2230"
 
     thin = Border(bottom=Side(style="thin", color="FFE2DCC9"))
