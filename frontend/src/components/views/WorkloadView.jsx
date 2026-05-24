@@ -3,8 +3,7 @@
  */
 import React, { useMemo, useState } from 'react';
 import TaskDrawer from '../TaskDrawer';
-
-const PRIORITY_COLOR = { urgent: '#dc2626', high: '#ef4444', medium: '#f59e0b', low: '#22c55e' };
+import { priorityColor } from '../../lib/utils';
 const AVATAR_COLORS  = ['#0082c6','#05b7aa','#8b5cf6','#ec4899','#f59e0b','#10b981','#6366f1'];
 const STATUS_COLOR   = { todo: '#64748b', in_progress: '#0082c6', in_review: '#8b5cf6', done: '#16a34a', requested: '#9333ea' };
 
@@ -100,7 +99,7 @@ export default function WorkloadView({ tasks = [], teamMembers = [] }) {
               <div style={{ borderTop: '1px solid var(--rule-soft)' }}>
                 {open.map(t => {
                   const isOv = t.due_at && new Date(t.due_at) < now;
-                  const pColor = PRIORITY_COLOR[t.priority] || '#94a3b8';
+                  const pColor = priorityColor(t.priority);
                   const sColor = STATUS_COLOR[t.status] || '#64748b';
                   return (
                     <div key={t.task_id}

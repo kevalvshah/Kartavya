@@ -43,7 +43,7 @@ def _client():
         )
         return _s3
     except Exception as exc:
-        log.warning(f"R2 client init failed — file uploads will fall back to base64: {exc}")
+        log.warning("R2 client init failed — file uploads will fall back to base64: %s", exc)
         return None
 
 
@@ -102,5 +102,5 @@ async def delete_file(key: str) -> bool:
         client.delete_object(Bucket=BUCKET, Key=key)
         return True
     except Exception as exc:
-        log.warning(f"R2 delete failed for key={key}: {exc}")
+        log.warning("R2 delete failed for key=%s: %s", key, exc)
         return False

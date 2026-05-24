@@ -147,5 +147,5 @@ def delete_object(key: Optional[str]) -> bool:
         _get_s3().delete_object(Bucket=_BUCKET, Key=key)
         return True
     except Exception as e:
-        logger.warning(f"Could not delete object {key}: {e}")
+        logger.warning("Could not delete object %s: %s", key, e)
         return False

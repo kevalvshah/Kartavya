@@ -140,7 +140,7 @@ async def send_push(
             resp.raise_for_status()
 
     except Exception as exc:
-        logger.warning(f"push_service.send_push failed for {recipient_id}: {exc}")
+        logger.warning("push_service.send_push failed for %s: %s", recipient_id, exc)
 
 
 async def fan_out_push(

@@ -5,8 +5,9 @@ import React, { useState, useMemo } from 'react';
 import TaskDrawer from '../TaskDrawer';
 import FieldRenderer from '../fields/FieldRenderer';
 
+import { priorityColor } from '../../lib/utils';
+
 const PRIORITY_ORDER = { urgent: 0, high: 1, medium: 2, low: 3 };
-const PRIORITY_COLOR = { urgent: '#dc2626', high: '#ef4444', medium: '#f59e0b', low: '#22c55e' };
 
 function Th({ label, sortKey, sort, onSort, width }) {
   const active = sort?.key === sortKey;
@@ -26,7 +27,7 @@ function Th({ label, sortKey, sort, onSort, width }) {
 }
 
 function PriorityBadge({ priority }) {
-  const color = PRIORITY_COLOR[priority] || '#94a3b8';
+  const color = priorityColor(priority);
   return (
     <span style={{
       display: 'inline-flex', alignItems: 'center', gap: 5,

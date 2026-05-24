@@ -4,8 +4,7 @@
  */
 import React, { useState, useMemo } from 'react';
 import TaskDrawer from '../TaskDrawer';
-
-const PRIORITY_COLOR = { urgent: '#dc2626', high: '#ef4444', medium: '#f59e0b', low: '#22c55e' };
+import { priorityColor } from '../../lib/utils';
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
 function addDays(date, n) {
@@ -139,7 +138,7 @@ export default function TimelineView({ tasks = [], columns = [], teamMembers = [
                 const barEnd   = dueDate   ? Math.min(totalDays, daysBetween(rangeStart, dueDate) + 1) : null;
                 const barW     = (barStart !== null && barEnd !== null) ? Math.max((barEnd - barStart) * DAY_W, DAY_W) : 0;
                 const isOverdue = dueDate && dueDate < today && task.status !== 'done';
-                const pColor = PRIORITY_COLOR[task.priority] || '#94a3b8';
+                const pColor = priorityColor(task.priority);
 
                 return (
                   <div key={task.task_id} style={{ display: 'flex', alignItems: 'center', height: 40, borderBottom: '1px solid var(--rule-soft)', position: 'relative' }}

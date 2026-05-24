@@ -24,6 +24,17 @@ from pydantic import BaseModel, ConfigDict, Field
 from db import get_pool
 
 
+# ── 0. Logging helpers ───────────────────────────────────────────────────────
+
+def log_safe(value: object) -> str:
+    """Sanitize a value for use in log messages (CWE-117 log injection prevention).
+
+    Strips newline and carriage-return characters that could allow an attacker
+    to forge log entries when user-controlled input is logged.
+    """
+    return str(value).replace("\n", "").replace("\r", "")
+
+
 # ── 1. Datetime helpers ───────────────────────────────────────────────────────
 
 def now_utc() -> datetime:

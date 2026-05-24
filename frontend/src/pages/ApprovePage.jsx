@@ -5,8 +5,7 @@
  */
 import React, { useState, useEffect } from 'react';
 import { api } from '../lib/api';
-
-const PRIORITY_COLOR = { low: '#22c55e', medium: '#f59e0b', high: '#ef4444', urgent: '#dc2626' };
+import { PRIORITY_COLOR } from '../lib/utils';
 
 function Logo() {
   return (

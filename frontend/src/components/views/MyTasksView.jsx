@@ -4,8 +4,7 @@
 import React, { useMemo, useState } from 'react';
 import { currentUser } from '../../lib/auth';
 import TaskDrawer from '../TaskDrawer';
-
-const PRIORITY_COLOR = { urgent: '#dc2626', high: '#ef4444', medium: '#f59e0b', low: '#22c55e' };
+import { priorityColor } from '../../lib/utils';
 const STATUS_COLOR   = { todo: '#64748b', in_progress: '#0082c6', in_review: '#8b5cf6', done: '#16a34a', requested: '#9333ea' };
 const STATUS_LABEL   = { todo: 'To do', in_progress: 'In progress', in_review: 'In review', done: 'Done', requested: 'Requested' };
 
@@ -103,7 +102,7 @@ export default function MyTasksView({ tasks = [], teamMembers = [], onTasksChang
             </div>
 
             {!isCol && rows.map(t => {
-              const pColor = PRIORITY_COLOR[t.priority] || '#94a3b8';
+              const pColor = priorityColor(t.priority);
               const sColor = STATUS_COLOR[t.status]    || '#64748b';
               const isOverdue = t.due_at && new Date(t.due_at) < now && t.status !== 'done';
               return (

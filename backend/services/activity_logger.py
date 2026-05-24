@@ -48,7 +48,7 @@ async def log_event(
             __import__('json').dumps(data or {}),  # stored as jsonb — asyncpg accepts json string
         )
     except Exception as exc:
-        log.warning(f"activity_logger swallowed error: {exc}")
+        log.warning("activity_logger swallowed error: %s", exc)
 
 
 async def log_assigned(pool, *, task_id: str, actor_id: str, added: list, removed: list):

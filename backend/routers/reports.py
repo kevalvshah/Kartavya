@@ -23,15 +23,11 @@ from pydantic import BaseModel
 
 from auth_router import require_user, require_admin
 from db import get_pool
+from utils import log_safe as _log_safe
 
 _DATE_RE = re.compile(r'^\d{4}-\d{2}-\d{2}$')
 
 logger = logging.getLogger(__name__)
-
-
-def _log_safe(value: object) -> str:
-    """Strip newlines from user-controlled values before logging (CWE-117)."""
-    return str(value).replace("\n", "").replace("\r", "")
 router = APIRouter(prefix="/api/reports", tags=["reports"])
 
 DISPATCH_SECRET = os.environ.get("REPORT_DISPATCH_SECRET", "")

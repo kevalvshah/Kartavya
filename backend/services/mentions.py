@@ -65,7 +65,7 @@ async def process_mentions(pool, comment_id: str, body: str, task_id: str, actor
             )
         except Exception as exc:
             import logging
-            logging.getLogger(__name__).warning(f"mention email failed: {exc}")
+            logging.getLogger(__name__).warning("mention email failed: %s", exc)
 
         try:
             from services.push_service import send_push
@@ -81,4 +81,4 @@ async def process_mentions(pool, comment_id: str, body: str, task_id: str, actor
             ))
         except Exception as exc:
             import logging
-            logging.getLogger(__name__).warning(f"mention push failed: {exc}")
+            logging.getLogger(__name__).warning("mention push failed: %s", exc)

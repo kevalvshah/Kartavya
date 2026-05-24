@@ -806,7 +806,7 @@ async def edit_comment(task_id:str,comment_id:str,body:CommentCreate,pool=Depend
     try:
         from services.activity_logger import log_event
         await log_event(pool,task_id=task_id,actor_id=user["user_id"],event_type="comment_edited",data={"preview":body.body[:80]})
-    except Exception: pass
+    except Exception as _e: logger.debug("activity log failed (comment_edited): %s", _e)
     actor_name=user.get("full_name") or user.get("name") or user.get("email","")
     return CommentOut(comment_id=updated["comment_id"],task_id=updated["task_id"],user_id=updated["user_id"],user_name=actor_name,body=updated["body"],created_at=updated["created_at"])
 
@@ -820,7 +820,7 @@ async def delete_comment(task_id:str,comment_id:str,pool=Depends(get_db),user=De
     try:
         from services.activity_logger import log_event
         await log_event(pool,task_id=task_id,actor_id=user["user_id"],event_type="comment_deleted",data={})
-    except Exception: pass
+    except Exception as _e: logger.debug("activity log failed (comment_deleted): %s", _e)
     return {"ok":True}
 
 @api_router.post("/tasks/{task_id}/subtasks",response_model=TaskOut)
@@ -835,7 +835,7 @@ async def add_subtask(task_id:str,body:Subtask,pool=Depends(get_db),user=Depends
     try:
         from services.activity_logger import log_event
         await log_event(pool,task_id=task_id,actor_id=user["user_id"],event_type="subtask_added",data={"title":body.title})
-    except Exception: pass
+    except Exception as _e: logger.debug("activity log failed (subtask_added): %s", _e)
     return row_to_task(row)
 
 @api_router.patch("/tasks/{task_id}/subtasks/{subtask_id}",response_model=TaskOut)
@@ -862,7 +862,7 @@ async def delete_subtask(task_id:str,subtask_id:str,pool=Depends(get_db),user=De
         from services.activity_logger import log_event
         title=removed[0]["title"] if removed else ""
         await log_event(pool,task_id=task_id,actor_id=user["user_id"],event_type="subtask_deleted",data={"title":title})
-    except Exception: pass
+    except Exception as _e: logger.debug("activity log failed (subtask_deleted): %s", _e)
     return row_to_task(row)
 
 class SubtaskPatch(BaseModel):
@@ -1045,7 +1045,7 @@ async def purge_team(team_id:str,pool=Depends(get_db),user=Depends(require_admin
             await conn.execute("DELETE FROM project_columns WHERE team_id=$1", team_id)
             await conn.execute("DELETE FROM automations WHERE team_id=$1", team_id)
             try: await conn.execute("DELETE FROM approvals WHERE team_id=$1", team_id)
-            except Exception: pass
+            except Exception: pass  # table may not exist in all environments
             await conn.execute("DELETE FROM teams WHERE team_id=$1", team_id)
     return {"ok": True}
 
