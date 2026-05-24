@@ -7,6 +7,7 @@ import MentionTextarea from './MentionTextarea';
 import ActivityList from './ActivityList';
 import { Paperclip, ExternalLink, Trash2, Play, Square, Clock, Pencil, Check, X } from 'lucide-react';
 import { AVATAR_COLORS, userInitials, PRIORITY_COLOR as PRIORITY_COLORS } from '../lib/utils';
+import { useToast } from './ui/toast';
 const PRIORITY_LABELS  = { low: 'Low', medium: 'Medium', high: 'High', urgent: 'Urgent' };
 const STATUS_LABELS    = { todo: 'To do', in_progress: 'In progress', done: 'Done', requested: 'Requested' };
 const STATUS_COLORS    = { todo: '#64748b', in_progress: '#0082c6', done: '#16a34a', requested: '#9333ea' };
@@ -165,6 +166,7 @@ function SubtaskAssigneePicker({ subtaskId, assigneeUserId, assignedMember, aNam
 
 export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers = [] }) {
   const me = currentUser();
+  const { pushToast } = useToast();
 
   const [task,       setTask]       = useState(null);
   const [fields,     setFields]     = useState([]);

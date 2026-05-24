@@ -561,7 +561,7 @@ export function ClientPortal() {
   const [marking,  setMarking]  = useState(null);
   const [members,  setMembers]  = useState([]);
   const [confirmState, setConfirmState] = useState(null);
-  const user = JSON.parse(localStorage.getItem('kartavya_user') || 'null');
+  const user = JSON.parse(sessionStorage.getItem('kartavya_user') || 'null');
 
   const reloadTasks = () =>
     api.get('/client/tasks').then(r => setTasks(r.data)).catch(() => {});

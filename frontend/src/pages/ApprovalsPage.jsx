@@ -10,8 +10,6 @@ import { useToast } from '../components/ui/toast';
 import { PageHeader, StatTile, DueChip, PriorityDot } from '../components/editorial';
 import { relTime } from '../lib/utils';
 
-const PRIORITY_COLOR = { urgent: '#C0392B', high: '#B06A00', medium: '#0082c6', low: '#6E7B91' };
-
 export default function ApprovalsPage() {
   const { pushToast } = useToast();
   const [requests,    setRequests]    = useState([]);

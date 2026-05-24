@@ -382,7 +382,12 @@ export default function AutomationsPage({ teamId: propTeamId, embedded = false }
 
   // ── Render ────────────────────────────────────────────────────────────────
   if (embedded) {
-    return <div style={{ paddingTop: 'var(--sp-4)' }}>{body}</div>;
+    return (
+      <div style={{ paddingTop: 'var(--sp-4)' }}>
+        {body}
+        <ConfirmDialog state={confirmState} onClose={() => setConfirmState(null)} />
+      </div>
+    );
   }
 
   if (!teamId && teams.length === 0 && !loading) return (
