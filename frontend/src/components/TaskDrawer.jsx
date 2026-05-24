@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { api } from '../lib/api';
 import { currentUser } from '../lib/auth';
+import ConfirmDialog from './ui/ConfirmDialog';
 import FieldRenderer from './fields/FieldRenderer';
 import MentionTextarea from './MentionTextarea';
 import ActivityList from './ActivityList';
@@ -190,6 +191,7 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
 
   // Approval UI state
   const [deletingTask,    setDeletingTask]    = useState(false);
+  const [confirmState,    setConfirmState]    = useState(null);
 
   // Subtask state
   const [newSubtask,     setNewSubtask]     = useState('');
@@ -354,17 +356,22 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
     setTask(res.data);
   };
 
-  const handleDeleteTask = async () => {
-    if (!window.confirm('Delete this task? This cannot be undone.')) return;
-    setDeletingTask(true);
-    try {
-      await api.delete(`/tasks/${taskId}`);
-      onSaved?.(null);
-      onClose();
-    } catch (e) {
-      console.error(e);
-      setDeletingTask(false);
-    }
+  const handleDeleteTask = () => {
+    setConfirmState({
+      message: 'Delete this task? This cannot be undone.',
+      confirmLabel: 'Delete',
+      onConfirm: async () => {
+        setDeletingTask(true);
+        try {
+          await api.delete(`/tasks/${taskId}`);
+          onSaved?.(null);
+          onClose();
+        } catch (e) {
+          console.error(e);
+          setDeletingTask(false);
+        }
+      },
+    });
   };
 
   const startTimer = async () => { const res = await api.post(`/time/start?task_id=${taskId}`); setTimer(res.data); };
@@ -1105,5 +1112,6 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
 
       </div>
     </div>
+    <ConfirmDialog state={confirmState} onClose={() => setConfirmState(null)} />
   );
 }

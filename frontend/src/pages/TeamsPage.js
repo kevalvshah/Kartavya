@@ -6,6 +6,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { api } from '../lib/api';
 import { PageHeader, PriorityDot } from '../components/editorial';
 import { AVATAR_COLORS, userInitials } from '../lib/utils';
+import ConfirmDialog from '../components/ui/ConfirmDialog';
 
 export default function TeamsPage() {
   const [teams,          setTeams]          = useState([]);
@@ -20,6 +21,7 @@ export default function TeamsPage() {
   const [clientApproval,   setClientApproval]   = useState(true);
   const [clientCompany,    setClientCompany]    = useState('');
   const [showCreate,       setShowCreate]       = useState(false);
+  const [confirmState,     setConfirmState]     = useState(null);
 
   const loadTeams = async () => {
     const res = await api.get('/teams');
@@ -80,10 +82,15 @@ export default function TeamsPage() {
     setTeamDetail(prev => ({ ...prev, members: (prev?.members || []).map(m => m.member_id === memberId ? res.data : m) }));
   };
 
-  const removeMember = async (memberId) => {
-    if (!window.confirm('Remove this member?')) return;
-    await api.delete(`/teams/${selectedTeamId}/members/${memberId}`);
-    setTeamDetail(prev => ({ ...prev, members: (prev?.members || []).filter(m => m.member_id !== memberId) }));
+  const removeMember = (memberId) => {
+    setConfirmState({
+      message: 'Remove this member?',
+      confirmLabel: 'Remove',
+      onConfirm: async () => {
+        await api.delete(`/teams/${selectedTeamId}/members/${memberId}`);
+        setTeamDetail(prev => ({ ...prev, members: (prev?.members || []).filter(m => m.member_id !== memberId) }));
+      },
+    });
   };
 
   return (
@@ -310,6 +317,7 @@ export default function TeamsPage() {
           {teams.length === 0 ? 'No teams yet. Create one above.' : 'Loading…'}
         </div>
       )}
+      <ConfirmDialog state={confirmState} onClose={() => setConfirmState(null)} />
     </div>
   );
 }

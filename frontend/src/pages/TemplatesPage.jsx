@@ -7,6 +7,7 @@ import { api } from '../lib/api';
 import { useToast } from '../components/ui/toast';
 import { useNavigate } from 'react-router-dom';
 import { PageHeader } from '../components/editorial';
+import ConfirmDialog from '../components/ui/ConfirmDialog';
 
 const KICKER_COLORS = ['#0082c6','#05b7aa','#8b5cf6','#ec4899','#f59e0b','#10b981','#6366f1'];
 const KICKER_SANS   = ['राज्यस्व', 'स्वागत', 'विपणन', 'कार्यालय', 'विधि', 'सेवा', 'परियोजना'];
@@ -35,6 +36,7 @@ export default function TemplatesPage() {
   const [applyModal,     setApplyModal]     = useState(null); // { tmplId, tmplName }
   const [applyToProject, setApplyToProject] = useState('');
   const [applying,       setApplying]       = useState(false);
+  const [confirmState,   setConfirmState]   = useState(null);
 
   const [showSaveForm, setShowSaveForm] = useState(false);
 
@@ -88,10 +90,15 @@ export default function TemplatesPage() {
     finally { setApplying(false); }
   };
 
-  const deleteProjTmpl = async (id, name) => {
-    if (!window.confirm(`Delete template "${name}"?`)) return;
-    try { await api.delete(`/templates/projects/${id}`); load(); pushToast({ type: 'success', title: 'Template deleted' }); }
-    catch (_) { pushToast({ type: 'error', title: 'Could not delete' }); }
+  const deleteProjTmpl = (id, name) => {
+    setConfirmState({
+      message: `Delete template "${name}"?`,
+      confirmLabel: 'Delete',
+      onConfirm: async () => {
+        try { await api.delete(`/templates/projects/${id}`); load(); pushToast({ type: 'success', title: 'Template deleted' }); }
+        catch (_) { pushToast({ type: 'error', title: 'Could not delete' }); }
+      },
+    });
   };
 
   const currentTemplates = tab === 'project' ? projTemplates : taskTemplates;
@@ -186,7 +193,8 @@ export default function TemplatesPage() {
                         <button
                           className="k-iconbtn"
                           style={{ marginLeft: 'auto', color: 'var(--ink-faint)' }}
-                          title="Delete"
+                          title="Delete template"
+                          aria-label="Delete template"
                           onClick={() => deleteProjTmpl(t.template_id, t.name)}
                         >
                           <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4">
@@ -202,11 +210,15 @@ export default function TemplatesPage() {
                         <button
                           className="k-iconbtn"
                           style={{ marginLeft: 'auto', color: 'var(--ink-faint)' }}
-                          title="Delete"
-                          onClick={async () => {
-                            if (!window.confirm(`Delete template "${t.name}"?`)) return;
-                            try { await api.delete(`/templates/tasks/${t.template_id}`); load(); } catch (_) {}
-                          }}
+                          title="Delete task template"
+                          aria-label="Delete task template"
+                          onClick={() => setConfirmState({
+                            message: `Delete template "${t.name}"?`,
+                            confirmLabel: 'Delete',
+                            onConfirm: async () => {
+                              try { await api.delete(`/templates/tasks/${t.template_id}`); load(); } catch (_) {}
+                            },
+                          })}
                         >
                           <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4">
                             <path d="M3 4h10M5 4V3h6v1M6 7v5M10 7v5M4 4l1 9h6l1-9"/>
@@ -350,6 +362,7 @@ export default function TemplatesPage() {
           </div>
         </div>
       )}
+      <ConfirmDialog state={confirmState} onClose={() => setConfirmState(null)} />
     </div>
   );
 }

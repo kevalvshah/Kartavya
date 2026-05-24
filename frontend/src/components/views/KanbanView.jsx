@@ -3,6 +3,7 @@ import { api } from '../../lib/api';
 import KanbanCard from './KanbanCard';
 import TaskDrawer from '../TaskDrawer';
 import { useToast } from '../ui/toast';
+import ConfirmDialog from '../ui/ConfirmDialog';
 
 // Synthetic column injected at position 0 for admins/owners
 const REQUESTED_COL = {
@@ -51,6 +52,7 @@ export default function KanbanView({
   const [newColName,  setNewColName]  = useState('');
   const [newColColor, setNewColColor] = useState('#6366f1');
   const [newColDone,  setNewColDone]  = useState(false);
+  const [confirmState, setConfirmState] = useState(null);
   const addColRef = useRef(null);
 
   const canManageCols = !readOnly && !!teamId && ['admin','owner'].includes(currentUserRole);
@@ -74,15 +76,20 @@ export default function KanbanView({
     }
   };
 
-  const deleteCol = async (col) => {
-    if (!window.confirm(`Delete column "${col.name}"? Tasks will move to the next column.`)) return;
-    try {
-      await api.delete(`/projects/${teamId}/columns/${col.column_id}`);
-      onColumnsChange?.(prev => prev.filter(c => c.column_id !== col.column_id));
-      pushToast({ type: 'success', title: `"${col.name}" deleted` });
-    } catch (e) {
-      pushToast({ type: 'error', title: e?.response?.data?.detail || 'Could not delete column' });
-    }
+  const deleteCol = (col) => {
+    setConfirmState({
+      message: `Delete column "${col.name}"? Tasks will move to the next column.`,
+      confirmLabel: 'Delete',
+      onConfirm: async () => {
+        try {
+          await api.delete(`/projects/${teamId}/columns/${col.column_id}`);
+          onColumnsChange?.(prev => prev.filter(c => c.column_id !== col.column_id));
+          pushToast({ type: 'success', title: `"${col.name}" deleted` });
+        } catch (e) {
+          pushToast({ type: 'error', title: e?.response?.data?.detail || 'Could not delete column' });
+        }
+      },
+    });
   };
 
   const commitAddCol = async () => {
@@ -311,6 +318,7 @@ export default function KanbanView({
       </div>
       <TaskDrawer taskId={drawerTaskId} open={!!drawerTaskId} onClose={() => setDrawerTaskId(null)}
         teamMembers={teamMembers} onSaved={u => onTasksChange?.(p => p.map(t => t.task_id === u.task_id ? u : t))} />
+      <ConfirmDialog state={confirmState} onClose={() => setConfirmState(null)} />
     </>
   );
 }

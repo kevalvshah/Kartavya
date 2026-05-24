@@ -56,7 +56,7 @@ export default function Topbar({ unread = 0, onOpenNotifications, onNewTask }) {
 
       {/* Right: icon buttons + new task */}
       <div className="k-topbar__right">
-        <button className="k-iconbtn" title="Notifications" onClick={onOpenNotifications}>
+        <button className="k-iconbtn" title="Notifications" aria-label="Notifications" onClick={onOpenNotifications}>
           <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4">
             <path d="M13 11l-2-2H5L3 11V4a1 1 0 011-1h8a1 1 0 011 1v7z"/>
             <path d="M6.5 13.5a1.5 1.5 0 003 0"/>

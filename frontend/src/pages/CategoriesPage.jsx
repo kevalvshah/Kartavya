@@ -5,6 +5,7 @@ import React, { useState, useEffect } from 'react';
 import { api } from '../lib/api';
 import { useToast } from '../components/ui/toast';
 import { PageHeader } from '../components/editorial';
+import ConfirmDialog from '../components/ui/ConfirmDialog';
 
 const DEFAULT_COLOR = '#05b7aa';
 
@@ -13,6 +14,7 @@ export default function CategoriesPage() {
   const [cats,  setCats]  = useState([]);
   const [name,  setName]  = useState('');
   const [color, setColor] = useState(DEFAULT_COLOR);
+  const [confirmState, setConfirmState] = useState(null);
 
   useEffect(() => {
     api.get('/categories').then(r => setCats(Array.isArray(r.data) ? r.data : [])).catch(() => {});
@@ -27,12 +29,17 @@ export default function CategoriesPage() {
     } catch (_) { pushToast({ type: 'error', title: 'Could not create' }); }
   };
 
-  const remove = async (c) => {
-    if (!window.confirm(`Delete "${c.name}"?`)) return;
-    try {
-      await api.delete(`/categories/${c.category_id}`);
-      setCats(p => p.filter(x => x.category_id !== c.category_id));
-    } catch (_) { pushToast({ type: 'error', title: 'Could not delete' }); }
+  const remove = (c) => {
+    setConfirmState({
+      message: `Delete "${c.name}"?`,
+      confirmLabel: 'Delete',
+      onConfirm: async () => {
+        try {
+          await api.delete(`/categories/${c.category_id}`);
+          setCats(p => p.filter(x => x.category_id !== c.category_id));
+        } catch (_) { pushToast({ type: 'error', title: 'Could not delete' }); }
+      },
+    });
   };
 
   return (
@@ -77,6 +84,7 @@ export default function CategoriesPage() {
           </div>
         ))}
       </div>
+      <ConfirmDialog state={confirmState} onClose={() => setConfirmState(null)} />
     </div>
   );
 }

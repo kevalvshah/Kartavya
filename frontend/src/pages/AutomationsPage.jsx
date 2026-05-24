@@ -8,6 +8,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { api } from '../lib/api';
 import { PageHeader } from '../components/editorial';
 import { useToast } from '../components/ui/toast';
+import ConfirmDialog from '../components/ui/ConfirmDialog';
 
 const TRIGGERS = [
   { value: 'task_created',            label: 'Task created' },
@@ -58,6 +59,7 @@ export default function AutomationsPage({ teamId: propTeamId, embedded = false }
   const [teams,       setTeams]       = useState([]);
   const [teamId,      setTeamId]      = useState(propTeamId || '');
   const [testingId,   setTestingId]   = useState(null);   // automation_id being test-run
+  const [confirmState, setConfirmState] = useState(null);
 
   // ── Load teams for project picker ───────────────────────────────────────
   useEffect(() => {
@@ -93,11 +95,16 @@ export default function AutomationsPage({ teamId: propTeamId, embedded = false }
   };
 
   // ── Delete ───────────────────────────────────────────────────────────────
-  const handleDelete = async (id) => {
-    if (!window.confirm('Delete this automation?')) return;
-    await api.delete(`/automations/${id}`);
-    setAutomations(prev => prev.filter(a => a.automation_id !== id));
-    pushToast({ type: 'success', title: 'Automation deleted' });
+  const handleDelete = (id) => {
+    setConfirmState({
+      message: 'Delete this automation?',
+      confirmLabel: 'Delete',
+      onConfirm: async () => {
+        await api.delete(`/automations/${id}`);
+        setAutomations(prev => prev.filter(a => a.automation_id !== id));
+        pushToast({ type: 'success', title: 'Automation deleted' });
+      },
+    });
   };
 
   // ── Test run ─────────────────────────────────────────────────────────────
@@ -405,6 +412,7 @@ export default function AutomationsPage({ teamId: propTeamId, embedded = false }
         }
       />
       {body}
+      <ConfirmDialog state={confirmState} onClose={() => setConfirmState(null)} />
     </div>
   );
 }

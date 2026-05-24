@@ -193,7 +193,7 @@ export default function BoardsPage() {
             <div className="k-card__titles">
               <h3 className="k-card__title">Custom Fields</h3>
             </div>
-            <button className="k-iconbtn" style={{ marginLeft: 'auto', opacity: 0.5 }} onClick={() => setShowFieldMgr(false)} title="Close">
+            <button className="k-iconbtn" style={{ marginLeft: 'auto', opacity: 0.5 }} onClick={() => setShowFieldMgr(false)} title="Close" aria-label="Close custom fields panel">
               <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 3l10 10M13 3L3 13"/></svg>
             </button>
           </header>
@@ -245,7 +245,7 @@ export default function BoardsPage() {
               <h3 className="k-card__title">Automations</h3>
               <span className="k-card__sans">स्वचालन</span>
             </div>
-            <button className="k-iconbtn" style={{ marginLeft: 'auto', opacity: 0.5 }} onClick={() => setShowAutomations(false)} title="Close">
+            <button className="k-iconbtn" style={{ marginLeft: 'auto', opacity: 0.5 }} onClick={() => setShowAutomations(false)} title="Close" aria-label="Close automations panel">
               <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 3l10 10M13 3L3 13"/></svg>
             </button>
           </header>

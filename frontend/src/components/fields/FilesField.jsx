@@ -32,6 +32,7 @@ export default function FilesField({ field, value, onChange, readOnly }) {
           {!readOnly && (
             <button onClick={() => removeFile(i)}
               className="k-iconbtn"
+              aria-label="Remove file"
               style={{ color: "var(--danger)", fontSize: 14 }}
             >✕</button>
           )}

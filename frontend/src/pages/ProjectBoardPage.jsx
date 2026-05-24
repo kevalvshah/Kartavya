@@ -268,6 +268,7 @@ export default function ProjectBoardPage() {
               style={{ marginLeft: 'auto', opacity: 0.5 }}
               onClick={() => setShowAutomations(false)}
               title="Close"
+              aria-label="Close automations panel"
             >
               <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 3l10 10M13 3L3 13"/></svg>
             </button>

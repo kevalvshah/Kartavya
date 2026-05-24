@@ -13,6 +13,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { api } from '../lib/api';
 import { K, KLogo, KWordmark } from '../lib/brand';
 import { apiLogout, approvalBadgeStyle, formatDue } from '../lib/auth';
+import ConfirmDialog from '../components/ui/ConfirmDialog';
 import { useToast } from '../components/ui/toast';
 import MentionTextarea from '../components/MentionTextarea';
 import {
@@ -124,17 +125,22 @@ function ClientTaskDrawer({ open, onClose, task: initialTask, categories = [], t
     } finally { setSaving(false); }
   };
 
-  const deleteTask = async () => {
-    if (!window.confirm('Delete this task? This cannot be undone.')) return;
-    setDeleting(true);
-    try {
-      await api.delete(`/tasks/${initialTask.task_id}`);
-      pushToast({ type: 'success', title: 'Task deleted' });
-      onDeleted?.();
-      onClose();
-    } catch (_) {
-      pushToast({ type: 'error', title: 'Could not delete task' });
-    } finally { setDeleting(false); }
+  const deleteTask = () => {
+    setConfirmState({
+      message: 'Delete this task? This cannot be undone.',
+      confirmLabel: 'Delete',
+      onConfirm: async () => {
+        setDeleting(true);
+        try {
+          await api.delete(`/tasks/${initialTask.task_id}`);
+          pushToast({ type: 'success', title: 'Task deleted' });
+          onDeleted?.();
+          onClose();
+        } catch (_) {
+          pushToast({ type: 'error', title: 'Could not delete task' });
+        } finally { setDeleting(false); }
+      },
+    });
   };
 
   const postComment = async () => {
@@ -186,7 +192,7 @@ function ClientTaskDrawer({ open, onClose, task: initialTask, categories = [], t
             <div className="k-drawer__kicker">{isNew ? 'CLIENT · नया कार्य' : 'TASK · कार्य'}</div>
             <div className="k-drawer__title">{isNew ? 'New Request' : (initialTask?.title || 'Task')}</div>
           </div>
-          <button className="k-iconbtn" onClick={onClose} style={{ fontSize: 20 }}>×</button>
+          <button className="k-iconbtn" onClick={onClose} aria-label="Close" style={{ fontSize: 20 }}>×</button>
         </div>
 
         {/* Tabs */}
@@ -332,7 +338,7 @@ function ClientTaskDrawer({ open, onClose, task: initialTask, categories = [], t
                       {a.filename || a.file_name || 'Attachment'}
                     </a>
                     <button className="k-iconbtn" style={{ color: 'var(--danger)' }}
-                      onClick={() => deleteAttachment(a.attachment_id)} title="Remove">
+                      onClick={() => deleteAttachment(a.attachment_id)} title="Remove attachment" aria-label="Remove attachment">
                       <Trash2 size={13} />
                     </button>
                   </div>
@@ -554,6 +560,7 @@ export function ClientPortal() {
   const [posting,  setPosting]  = useState(false);
   const [marking,  setMarking]  = useState(null);
   const [members,  setMembers]  = useState([]);
+  const [confirmState, setConfirmState] = useState(null);
   const user = JSON.parse(localStorage.getItem('kartavya_user') || 'null');
 
   const reloadTasks = () =>
@@ -707,6 +714,7 @@ export function ClientPortal() {
           </div>
         )}
       </div>
+      <ConfirmDialog state={confirmState} onClose={() => setConfirmState(null)} />
     </div>
   );
 }

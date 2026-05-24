@@ -7,6 +7,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { api } from '../lib/api';
 import { useToast } from '../components/ui/toast';
 import { PageHeader, StatTile } from '../components/editorial';
+import ConfirmDialog from '../components/ui/ConfirmDialog';
 
 const ROLE_COLORS = { admin: '#0082c6', member: '#6E7B91', client: '#ec4899', owner: '#8b5cf6' };
 const AVATARS     = ['#0082c6','#05b7aa','#8b5cf6','#ec4899','#f59e0b','#10b981'];
@@ -265,6 +266,7 @@ export default function AdminPage() {
   const [copiedId,    setCopiedId]    = useState(null);
   const [editUser,    setEditUser]    = useState(null);   // user being edited
   const [deleteTarget, setDeleteTarget] = useState(null); // user pending deletion
+  const [confirmState, setConfirmState] = useState(null);
 
   const me = useMemo(() => {
     try { return JSON.parse(localStorage.getItem('kartavya_user') || 'null'); } catch { return null; }
@@ -306,15 +308,20 @@ export default function AdminPage() {
     setTimeout(() => setCopiedId(null), 2000);
   };
 
-  const revokeInvite = async (id) => {
-    if (!window.confirm('Revoke this invite? The link will stop working immediately.')) return;
-    try {
-      await api.delete(`/admin/invites/${id}`);
-      setInvites(prev => prev.filter(i => i.invite_id !== id));
-      pushToast({ type: 'success', title: 'Invite revoked' });
-    } catch (_) {
-      pushToast({ type: 'error', title: 'Could not revoke invite' }); load();
-    }
+  const revokeInvite = (id) => {
+    setConfirmState({
+      message: 'Revoke this invite? The link will stop working immediately.',
+      confirmLabel: 'Revoke',
+      onConfirm: async () => {
+        try {
+          await api.delete(`/admin/invites/${id}`);
+          setInvites(prev => prev.filter(i => i.invite_id !== id));
+          pushToast({ type: 'success', title: 'Invite revoked' });
+        } catch (_) {
+          pushToast({ type: 'error', title: 'Could not revoke invite' }); load();
+        }
+      },
+    });
   };
 
   // ── User actions ──────────────────────────────────────────────────────────
@@ -540,7 +547,7 @@ export default function AdminPage() {
 
                 {/* Remove button */}
                 <button className="k-iconbtn" style={{ color: 'var(--danger)', opacity: isSelf ? 0.3 : 1 }}
-                  onClick={() => removeUser(u)} disabled={isSelf} title="Remove user">
+                  onClick={() => removeUser(u)} disabled={isSelf} title="Remove user" aria-label="Remove user">
                   <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4"><path d="M3 4h10M5 4V3h6v1M6 7v5M10 7v5M4 4l1 9h6l1-9"/></svg>
                 </button>
               </div>
@@ -567,6 +574,7 @@ export default function AdminPage() {
           );
         })}
       </div>
+      <ConfirmDialog state={confirmState} onClose={() => setConfirmState(null)} />
     </div>
   );
 }
