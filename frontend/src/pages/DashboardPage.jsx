@@ -81,7 +81,7 @@ export default function DashboardPage({ teams = [] }) {
     myPlate, openTasks, openProjectCount, dueToday, overdue, completedWeek, inProgress, inReview, upcoming,
   } = useMemo(() => {
     const safeTasks = Array.isArray(tasks) ? tasks : [];
-    const myTasks   = safeTasks.filter(t => t.user_id === myId || t.assignee_user_ids?.includes(myId));
+    const myTasks   = safeTasks.filter(t => t.created_by_user_id === myId || t.user_id === myId || t.assignee_user_ids?.includes(myId));
     const open      = safeTasks.filter(t => t.status !== 'done');
     return {
       myPlate:       myTasks.filter(t => t.status !== 'done').slice(0, 6),
