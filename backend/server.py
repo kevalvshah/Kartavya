@@ -470,7 +470,8 @@ async def client_projects(pool=Depends(get_db),user=Depends(require_user)):
 @api_router.get("/client/approvals")
 async def client_approvals(pool=Depends(get_db), user=Depends(require_user)):
     uid = user["user_id"]
-    approval_rows = await pool.fetch("""
+    approval_rows, task_rows = await asyncio.gather(
+      pool.fetch("""
         SELECT a.*,
                COALESCE(u.full_name, u.name, u.email) AS requested_by_name,
                u.email                                AS requested_by_email
@@ -482,8 +483,8 @@ async def client_approvals(pool=Depends(get_db), user=Depends(require_user)):
                  WHERE  team_id = a.team_id AND user_id = $1
                )
         ORDER BY a.created_at DESC
-    """, uid)
-    task_rows = await pool.fetch("""
+    """, uid),
+      pool.fetch("""
         SELECT
             CONCAT('task_approval::', t.task_id)              AS approval_id,
             t.task_id,
@@ -505,7 +506,8 @@ async def client_approvals(pool=Depends(get_db), user=Depends(require_user)):
             OR EXISTS (SELECT 1 FROM task_clients WHERE task_id = t.task_id AND user_id = $1)
           )
         ORDER BY t.approval_requested_at DESC NULLS LAST
-    """, uid)
+    """, uid),
+    )
     return [dict(r) for r in approval_rows] + [dict(r) for r in task_rows]
 
 @api_router.post("/tasks/{task_id}/clients/{target_user_id}")

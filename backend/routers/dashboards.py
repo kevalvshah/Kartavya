@@ -2,10 +2,12 @@
 dashboards.py — User dashboard widget grid
 Widgets: count | chart | my_work | deadlines
 """
+import asyncio
+import uuid
+from typing import Optional
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from typing import Optional
-import uuid
 
 from auth_router import require_user
 from db import get_pool
@@ -71,20 +73,19 @@ async def get_dashboard_data(dashboard_id: str, pool=Depends(get_pool), user=Dep
     if not dash:
         raise HTTPException(404, "Dashboard not found")
 
-    data = {}
-    for widget in (dash["widgets"] or []):
+    widgets = dash["widgets"] or []
+
+    async def _fetch_widget(widget: dict):
         wtype = widget.get("type")
         wid   = widget.get("id", wtype)
         cfg   = widget.get("config", {})
 
         if wtype == "count":
-            team_id = cfg.get("team_id")
-            status  = cfg.get("status")
-            count   = await pool.fetchval(
+            count = await pool.fetchval(
                 "SELECT COUNT(*) FROM tasks WHERE team_id=$1 AND ($2::text IS NULL OR status=$2)",
-                team_id, status
+                cfg.get("team_id"), cfg.get("status"),
             )
-            data[wid] = {"count": count}
+            return wid, {"count": count}
 
         elif wtype == "my_work":
             tasks = await pool.fetch("""
@@ -92,7 +93,7 @@ async def get_dashboard_data(dashboard_id: str, pool=Depends(get_pool), user=Dep
                 FROM tasks WHERE $1=ANY(assignee_user_ids) AND status != 'done'
                 ORDER BY due_at ASC NULLS LAST LIMIT 10
             """, user["user_id"])
-            data[wid] = {"tasks": [dict(t) for t in tasks]}
+            return wid, {"tasks": [dict(t) for t in tasks]}
 
         elif wtype == "deadlines":
             tasks = await pool.fetch("""
@@ -104,14 +105,16 @@ async def get_dashboard_data(dashboard_id: str, pool=Depends(get_pool), user=Dep
                   AND ($1::text IS NULL OR t.team_id=$1)
                 ORDER BY t.due_at ASC LIMIT 15
             """, cfg.get("team_id"))
-            data[wid] = {"tasks": [dict(t) for t in tasks]}
+            return wid, {"tasks": [dict(t) for t in tasks]}
 
         elif wtype == "chart":
-            team_id = cfg.get("team_id")
             rows = await pool.fetch(
                 "SELECT status, COUNT(*) as count FROM tasks WHERE team_id=$1 GROUP BY status",
-                team_id
+                cfg.get("team_id"),
             )
-            data[wid] = {"series": [dict(r) for r in rows]}
+            return wid, {"series": [dict(r) for r in rows]}
 
-    return data
+        return wid, {}
+
+    results = await asyncio.gather(*[_fetch_widget(w) for w in widgets])
+    return dict(results)
