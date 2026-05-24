@@ -59,13 +59,14 @@ export default function LoginScreen() {
     try {
       await login(email.trim().toLowerCase(), password);
       // RootStack re-renders automatically when user changes
-    } catch (err: any) {
-      const detail = err?.response?.data?.detail;
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { data?: { detail?: unknown } }; message?: string } | null;
+      const detail   = axiosErr?.response?.data?.detail;
       setErrMsg(
         typeof detail === 'string' ? detail
-        : err?.message === 'Your session expired. Please sign in again.'
-          ? 'Incorrect email or password.'
-          : (err?.message ?? 'Could not sign in. Try again.')
+        : typeof axiosErr?.message === 'string' && axiosErr.message.length > 0
+          ? axiosErr.message
+          : 'Could not sign in. Try again.'
       );
       doShake();
     } finally {

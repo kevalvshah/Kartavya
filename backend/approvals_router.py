@@ -13,12 +13,12 @@ import jwt as _jwt
 
 from auth_router import require_user, JWT_SECRET as _JWT_SECRET
 from db import get_pool
+from utils import SQL_USER_ROLE as _SQL_USER_ROLE
 
 _JWT_ALG = "HS256"
 
-_TASK_NOT_FOUND      = "Task not found"
-_REJECTION_REQUIRED  = "Rejection reason is required"
-_SQL_USER_ROLE       = "SELECT role FROM users WHERE user_id=$1"
+_TASK_NOT_FOUND     = "Task not found"
+_REJECTION_REQUIRED = "Rejection reason is required"
 
 
 def _make_client_token(task_id: str, client_user_id: str) -> str:
@@ -412,6 +412,12 @@ async def approve_by_token(token: str, payload_body: ApprovalRequest, pool=Depen
         raise HTTPException(404, _TASK_NOT_FOUND)
     if task["approval_status"] != "pending_client":
         raise HTTPException(400, "This approval link is no longer active")
+    # Verify the client is still authorized at decision time (token alone is not sufficient)
+    access = await pool.fetchrow(
+        "SELECT 1 FROM task_clients WHERE task_id=$1 AND user_id=$2", task_id, client_user_id
+    )
+    if not access:
+        raise HTTPException(403, "Client is not authorized to approve this task")
     done_col = await pool.fetchrow(
         "SELECT column_id FROM project_columns WHERE team_id=$1 AND is_done=TRUE ORDER BY sort_order DESC LIMIT 1",
         task["team_id"]
@@ -440,6 +446,12 @@ async def reject_by_token(token: str, payload_body: ApprovalRequest, pool=Depend
         raise HTTPException(404, _TASK_NOT_FOUND)
     if task["approval_status"] != "pending_client":
         raise HTTPException(400, "This approval link is no longer active")
+    # Verify the client is still authorized at decision time (token alone is not sufficient)
+    access = await pool.fetchrow(
+        "SELECT 1 FROM task_clients WHERE task_id=$1 AND user_id=$2", task_id, client_user_id
+    )
+    if not access:
+        raise HTTPException(403, "Client is not authorized to reject this task")
     if not payload_body.notes or not payload_body.notes.strip():
         raise HTTPException(400, _REJECTION_REQUIRED)
     revision_col = await pool.fetchrow(

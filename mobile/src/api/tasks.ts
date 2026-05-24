@@ -50,7 +50,7 @@ export const tasksApi = {
   requestApproval: (taskId: string, notes?: string) =>
     apiClient.post(`/tasks/${taskId}/request-approval`, { notes }).then(r => r.data),
 
-  reviewApproval: (taskId: string, status: string, opts?: {
+  reviewApproval: (taskId: string, status: 'approved' | 'rejected' | 'pending_client', opts?: {
     notes?: string; send_to_client?: boolean; client_email?: string;
   }) => apiClient.post(`/approvals/task_approval::${taskId}/review`, {
     status, ...opts,

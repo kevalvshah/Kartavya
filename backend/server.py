@@ -46,12 +46,13 @@ from routers.time_entries import router as time_router
 from routers.uploads     import router as uploads_router   # R2-backed upload
 from routers.reports     import router as reports_router
 from services.gita       import get_verse_of_the_day
+from utils import SQL_USER_ROLE
 
 # ── Shared constants ──────────────────────────────────────
-_NOT_TEAM_MEMBER    = "Not a team member"
-_SQL_USER_ROLE      = "SELECT role FROM users WHERE user_id=$1"
-_SQL_GET_SUBTASKS   = "SELECT subtasks FROM tasks WHERE task_id=$1"
-_SQL_SET_SUBTASKS   = "UPDATE tasks SET subtasks=$1,updated_at=NOW() WHERE task_id=$2 RETURNING *"
+_NOT_TEAM_MEMBER  = "Not a team member"
+_SQL_USER_ROLE    = SQL_USER_ROLE          # local alias kept for backward compat
+_SQL_GET_SUBTASKS = "SELECT subtasks FROM tasks WHERE task_id=$1"
+_SQL_SET_SUBTASKS = "UPDATE tasks SET subtasks=$1,updated_at=NOW() WHERE task_id=$2 RETURNING *"
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env")
@@ -84,7 +85,8 @@ ALLOWED_ORIGINS = list(dict.fromkeys(DEFAULT_ORIGINS + _extra))
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
-    allow_origin_regex=r"https://kartavya-[a-z0-9-]+\.vercel\.app",
+    # No allow_origin_regex: a regex matching *.vercel.app is too broad because
+    # any Vercel user can register kartavya-*.vercel.app and make credentialed requests.
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -107,23 +109,11 @@ async def clear_request_cache(request, call_next):
 
 
 # ── Helpers ───────────────────────────────────────────────────
+# now_utc(), parse_dt(), get_db() live in utils.py — use those for new code.
+# The local get_visible_team_ids below is kept because it adds request-level
+# caching (_team_ids_request_cache) that the utils version does not have.
 
-def now_utc():
-    """Return the current UTC datetime as a timezone-aware object."""
-    return datetime.now(timezone.utc)
-
-def parse_dt(value):
-    """Parse an ISO-8601 string to a timezone-aware datetime, or return None."""
-    if not value: return None
-    try:
-        dt = datetime.fromisoformat(value)
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Invalid datetime: {value}") from e
-    return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
-
-async def get_db():
-    """FastAPI dependency — return the shared asyncpg connection pool."""
-    return await get_pool()
+from utils import now_utc, parse_dt, get_db  # noqa: E402 — after FastAPI imports
 
 async def get_visible_team_ids(pool, user_id, role=None, _user_dict=None):
     """Return team IDs visible to user_id.

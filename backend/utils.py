@@ -57,6 +57,9 @@ def parse_dt(value: Optional[str]) -> Optional[datetime]:
     return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
 
 
+# Shared SQL fragments — import these instead of duplicating across routers
+SQL_USER_ROLE = "SELECT role FROM users WHERE user_id=$1"
+
 # ── 2. DB dependency ──────────────────────────────────────────────────────────
 
 async def get_db():
@@ -279,7 +282,10 @@ def row_to_task(r) -> TaskOut:
     """Convert an asyncpg Record (from the tasks table) to a TaskOut model."""
     def pj(v, d):
         if isinstance(v, str):
-            return json.loads(v)
+            try:
+                return json.loads(v)
+            except (json.JSONDecodeError, ValueError):
+                return d
         return v if v is not None else d
 
     def col(key, default=None):

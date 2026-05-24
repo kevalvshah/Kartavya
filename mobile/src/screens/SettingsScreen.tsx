@@ -126,8 +126,8 @@ export default function SettingsScreen() {
       await notificationsApi.registerToken(Platform.OS, token, deviceId);
       setPushEnabled(true);
       await AsyncStorage.setItem('push_enabled', 'true');
-    } catch (e: any) {
-      Alert.alert('Error', e.message);
+    } catch (e: unknown) {
+      Alert.alert('Error', e instanceof Error ? e.message : 'Could not enable notifications.');
     } finally {
       setRegPush(false);
     }

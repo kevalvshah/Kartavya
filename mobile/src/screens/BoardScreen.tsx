@@ -100,8 +100,8 @@ function NewTaskModal({
       });
       reset();
       onCreated();
-    } catch (err: any) {
-      Alert.alert('Error', err?.message ?? 'Could not create task.');
+    } catch (err: unknown) {
+      Alert.alert('Error', err instanceof Error ? err.message : 'Could not create task.');
     } finally {
       setSaving(false);
     }

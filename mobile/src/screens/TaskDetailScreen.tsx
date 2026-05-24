@@ -193,7 +193,19 @@ function ApprovalModal({
               <TouchableOpacity onPress={onClose} style={[s.approvalModalCancelBtn, { borderColor: t.outline }]}>
                 <Text style={{ color: t.ink3, fontWeight: '700' }}>Cancel</Text>
               </TouchableOpacity>
-              <TouchableOpacity onPress={() => { onConfirm(notes, email ? { client_email: email } : undefined); setNotes(''); setEmail(''); }} style={{ flex: 1 }}>
+              <TouchableOpacity onPress={() => {
+                if (action === 'client') {
+                  const emailTrimmed = email.trim();
+                  if (!emailTrimmed || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailTrimmed)) {
+                    Alert.alert('Invalid email', 'Please enter a valid client email address.');
+                    return;
+                  }
+                  onConfirm(notes, { client_email: emailTrimmed });
+                } else {
+                  onConfirm(notes);
+                }
+                setNotes(''); setEmail('');
+              }} style={{ flex: 1 }}>
                 <LinearGradient colors={GRAD} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={s.approvalModalConfirmBtn}>
                   <Text style={{ color: '#fff', fontWeight: '900', fontSize: 13 }}>Confirm</Text>
                 </LinearGradient>
@@ -416,8 +428,8 @@ export default function TaskDetailScreen() {
       }
       setApprovalAction(null);
       invalidate();
-    } catch (e: any) {
-      Alert.alert('Error', e.message);
+    } catch (e: unknown) {
+      Alert.alert('Error', e instanceof Error ? e.message : 'Something went wrong.');
     }
   };
 
@@ -457,8 +469,8 @@ export default function TaskDetailScreen() {
       fd.append('file', { uri, name, type } as unknown as Blob);
       await tasksApi.uploadAttachment(taskId, fd);
       invalidate();
-    } catch (e: any) {
-      Alert.alert('Upload failed', e.message ?? 'Could not upload file.');
+    } catch (e: unknown) {
+      Alert.alert('Upload failed', e instanceof Error ? e.message : 'Could not upload file.');
     } finally {
       setUploadingFile(false);
     }

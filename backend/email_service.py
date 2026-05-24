@@ -26,11 +26,11 @@ if AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY:
             aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
             region_name=AWS_REGION,
         )
-        logger.info(f"✅ AWS SES configured (Region: {AWS_REGION})")
+        logger.info("✅ AWS SES configured (Region: %s)", AWS_REGION)
     except ImportError:
         logger.error("❌ boto3 not installed — pip install boto3")
     except Exception as e:
-        logger.error(f"❌ AWS SES init failed: {e}")
+        logger.error("❌ AWS SES init failed: %s", e)
 else:
     logger.warning("⚠️  AWS SES not configured — emails logged to console only")
 
@@ -251,7 +251,7 @@ def send_email(to_email: str, subject: str, html_content: str,
     """Send an HTML email via AWS SES in a background thread, logging in dev mode."""
     def _send():
         if not ses_client:
-            logger.info(f"[EMAIL-DEV] To:{to_email} | Subject:{subject}")
+            logger.info("[EMAIL-DEV] To:%s | Subject:%s", to_email, subject)
             return
         try:
             msg = {
@@ -266,9 +266,9 @@ def send_email(to_email: str, subject: str, html_content: str,
             if reply_to:
                 kwargs["ReplyToAddresses"] = [reply_to]
             r = ses_client.send_email(**kwargs)
-            logger.info(f"✅ Email sent → {to_email} [{r['MessageId']}]")
+            logger.info("✅ Email sent → %s [%s]", to_email, r['MessageId'])
         except Exception as exc:
-            logger.error(f"❌ Email failed → {to_email}: {exc}")
+            logger.error("❌ Email failed → %s: %s", to_email, exc)
 
     threading.Thread(target=_send, daemon=True).start()
     return True
@@ -1004,7 +1004,7 @@ def send_report_email(
 
     def _send():
         if not ses_client:
-            logger.info(f"[EMAIL-DEV] Report → {to_email} | {team_name} | {period_from}–{period_to}")
+            logger.info("[EMAIL-DEV] Report → %s | %s | %s–%s", to_email, team_name, period_from, period_to)
             return
         try:
             msg = MIMEMultipart("mixed")
@@ -1038,9 +1038,9 @@ def send_report_email(
                 Destinations=[to_email],
                 RawMessage={"Data": msg.as_bytes()},
             )
-            logger.info(f"✅ Report email sent → {to_email}")
+            logger.info("✅ Report email sent → %s", to_email)
         except Exception as exc:
-            logger.error(f"❌ Report email failed → {to_email}: {exc}")
+            logger.error("❌ Report email failed → %s: %s", to_email, exc)
 
     threading.Thread(target=_send, daemon=True).start()
     return True

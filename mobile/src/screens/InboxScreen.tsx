@@ -97,8 +97,12 @@ export default function InboxScreen() {
 
   const markOne = useCallback(async (n: Notification) => {
     if (!n.read_at) {
-      await notificationsApi.markRead([n.notification_id]);
-      qc.invalidateQueries({ queryKey: ['notifications'] });
+      try {
+        await notificationsApi.markRead([n.notification_id]);
+        qc.invalidateQueries({ queryKey: ['notifications'] });
+      } catch {
+        // Non-fatal — navigate to task regardless of mark-read failure
+      }
     }
     if (n.task_id) {
       nav.navigate('TaskDetail', { taskId: n.task_id });
