@@ -292,7 +292,7 @@ async def request_client_approval(task_id: str, payload: ClientApprovalRequest,
         from email_service import send_approval_request_email
         send_approval_request_email(
             payload.client_email, client["name"] or payload.client_email,
-            requester_name, task["title"], task_id,
+            requester_name, task["title"],
             notes=payload.notes, approve_token=token
         )
     except Exception as exc:

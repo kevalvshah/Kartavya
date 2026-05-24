@@ -5,7 +5,7 @@
  * attachments, approval workflow.
  */
 import React, {
-  useState, useCallback, useRef, useMemo, useEffect,
+  useState, useRef, useMemo,
 } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
@@ -154,7 +154,6 @@ function ApprovalModal({
     : action === 'client'            ? 'Send to Client'
     : '';
 
-  const btnColor = action === 'reject' ? '#ef4444' : '#16a34a';
   const GRAD: [string, string] = action === 'reject'
     ? ['#ef4444', '#dc2626']
     : ['#0082c6', '#05b7aa'];

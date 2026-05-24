@@ -14,7 +14,6 @@ import { api } from '../lib/api';
 import { K, KLogo, KWordmark } from '../lib/brand';
 import { apiLogout, approvalBadgeStyle, formatDue } from '../lib/auth';
 import { useToast } from '../components/ui/toast';
-import { Button } from '../components/ui/button';
 import MentionTextarea from '../components/MentionTextarea';
 import {
   FolderKanban,

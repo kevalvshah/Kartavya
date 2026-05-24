@@ -24,7 +24,6 @@ interface BannerProps {
   onClear?:   () => void;
 }
 function OfflineBanner({ message, kind, onRetry, onClear }: BannerProps) {
-  const { t } = useTheme();
   if (!message) return null;
 
   // Colours matched to iOS pill / Android strip spec
@@ -193,7 +192,7 @@ function InnerApp() {
 
 // ── Root ──────────────────────────────────────────────────────────────────────
 export default function App() {
-  const [fontsLoaded] = useFonts();
+  useFonts();
   // Fonts gate rendering to avoid FOUT; fall through on failure (fonts not critical)
 
   return (

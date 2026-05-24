@@ -343,7 +343,6 @@ export default function AdminPage() {
   // ── Derived ───────────────────────────────────────────────────────────────
 
   const pendingInvites  = invites.filter(i => !i.accepted_at && new Date(i.expires_at) > new Date());
-  const acceptedInvites = invites.filter(i => i.accepted_at);
   const roleCounts      = users.reduce((acc, u) => { acc[u.role] = (acc[u.role] || 0) + 1; return acc; }, {});
 
   const labelSt = { fontSize: 11, fontWeight: 700, color: 'var(--ink-3)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 5, display: 'block' };

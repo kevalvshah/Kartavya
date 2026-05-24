@@ -1,6 +1,6 @@
 import React from 'react';
 import {
-  View, Text, TouchableOpacity, StyleSheet, Platform,
+  View, TouchableOpacity, StyleSheet, Platform,
 } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -48,7 +48,6 @@ const Tab   = createBottomTabNavigator<MainTabParamList>();
 
 // ── Centre "+" tab button ─────────────────────────────────────────────────────
 function AddButton({ onPress }: { onPress: () => void }) {
-  const { t } = useTheme();
   return (
     <TouchableOpacity onPress={onPress} activeOpacity={0.85} style={s.addWrap}>
       <LinearGradient
@@ -64,7 +63,7 @@ function AddButton({ onPress }: { onPress: () => void }) {
 
 // ── Main tabs ─────────────────────────────────────────────────────────────────
 function MainTabs() {
-  const { t, scheme } = useTheme();
+  const { t } = useTheme();
 
   return (
     <Tab.Navigator

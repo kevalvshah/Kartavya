@@ -45,11 +45,6 @@ export default function MeScreen() {
   const initials = user ? userInitials(user.name ?? user.full_name ?? '?') : '?';
   const bgColor  = user ? avatarColor(user.user_id) : '#0082c6';
 
-  const menuItems: Array<{ icon: string; label: string; onPress: () => void; danger?: boolean }> = [
-    { icon: 'settings-outline',        label: 'Settings & Notifications', onPress: () => (nav as any).navigate('Settings') },
-    { icon: 'notifications-outline',   label: 'Notification preferences', onPress: () => (nav as any).navigate('Settings') },
-  ];
-
   return (
     <ScrollView style={[s.root, { backgroundColor: t.bg }]} contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
       {/* Header */}

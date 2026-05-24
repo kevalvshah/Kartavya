@@ -12,7 +12,6 @@
 import React, { useEffect, useState } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { api } from '../../lib/api';
-import { KWordmark } from '../../lib/brand';
 import { NotificationsModal } from '../NotificationsModal';
 import NewTaskModal from '../NewTaskModal';
 import Sidebar from './Sidebar';

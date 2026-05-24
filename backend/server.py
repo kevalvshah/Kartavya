@@ -681,7 +681,7 @@ async def review_approval(approval_id:str,body:dict,pool=Depends(get_db),user=De
                 approver_name = user.get("full_name") or user.get("name") or user.get("email", "Team")
                 send_approval_request_email(
                     client_email, client["name"] or client_email,
-                    approver_name, task["title"], task_id,
+                    approver_name, task["title"],
                     notes=notes, approve_token=token
                 )
             except Exception as exc:

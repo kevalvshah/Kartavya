@@ -199,7 +199,7 @@ async def get_report_data(
     try:
         return await _fetch_report_data(pool, team_id, from_date, to_date)
     except Exception as exc:
-        logger.error(f"Report data fetch failed for {team_id}: {exc}", exc_info=True)
+        logger.error("Report data fetch failed for %s: %s", team_id.replace('\n','').replace('\r',''), str(exc).replace('\n','').replace('\r',''), exc_info=True)
         raise HTTPException(500, f"Report data error: {exc}")
 
 
@@ -238,7 +238,7 @@ async def download_report(
             filename = f"kartavya-{safe_slug}-{from_date}-{to_date}.pdf"
             media_type = "application/pdf"
     except Exception as exc:
-        logger.error(f"Report generation failed for {team_id} fmt={fmt}: {exc}", exc_info=True)
+        logger.error("Report generation failed for %s fmt=%s: %s", team_id.replace('\n','').replace('\r',''), str(fmt).replace('\n','').replace('\r',''), str(exc).replace('\n','').replace('\r',''), exc_info=True)
         raise HTTPException(500, f"Report generation failed: {exc}")
 
     return StreamingResponse(
@@ -397,9 +397,9 @@ async def dispatch_reports(
                 WHERE schedule_id=$3
             """, now, next_run, sched["schedule_id"])
             sent += 1
-            logger.info(f"Report dispatched: {sched['schedule_id']} → {sched['recipients']}")
+            logger.info("Report dispatched: %s", str(sched['schedule_id']).replace('\n','').replace('\r',''))
         except Exception as exc:
-            logger.error(f"Report dispatch failed for {sched['schedule_id']}: {exc}")
+            logger.error("Report dispatch failed for %s: %s", str(sched['schedule_id']).replace('\n','').replace('\r',''), str(exc).replace('\n','').replace('\r',''))
             errors.append(str(sched["schedule_id"]))
 
     return {"ok": True, "dispatched": sent, "errors": errors}

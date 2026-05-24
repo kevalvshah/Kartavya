@@ -137,11 +137,6 @@ def _build_html(data: dict, team_name: str, period_from: str, period_to: str) ->
     period_label = f"{period_from} – {period_to}"
 
     # ── PAGE 1 — COVER ─────────────────────────────────────────────────────────
-    # kpi tones
-    done_kpi_cls  = "kpi--ok"
-    over_kpi_cls  = "kpi--bad" if overdue > 0 else ""
-    prog_kpi_cls  = "kpi--blue"
-
     # executive summary (auto-generated)
     champion_name = html.escape(by_member_t[0]["user_name"] if by_member_t else (time_sorted[0][0] if time_sorted else "the team"))
     exec_summary = (
@@ -223,10 +218,6 @@ def _build_html(data: dict, team_name: str, period_from: str, period_to: str) ->
 
     # ── PAGE 2 — TASK BREAKDOWN ────────────────────────────────────────────────
     total_nz = max(total_tasks, 1)
-    def status_bar(count, color):
-        pct = round(count / total_nz * 100)
-        return f'<div style="flex:1;height:8px;background:{_RULE_SOFT};border-radius:99px;overflow:hidden;"><div style="height:100%;width:{pct}%;background:{color};border-radius:99px;min-width:4px;"></div></div>'
-
     breakdown_rows = ""
     for label, count, color, hi in [
         ("Done",        done,        _OK,    "पूर्ण"),
@@ -235,7 +226,6 @@ def _build_html(data: dict, team_name: str, period_from: str, period_to: str) ->
         ("Overdue",     overdue,     _DANGER,"विलंबित"),
     ]:
         pct = round(count / total_nz * 100)
-        bd_color = _DANGER if label == "Overdue" and count > 0 else _INK
         breakdown_rows += f"""
         <tr>
           <td style="padding:12px 10px;font-size:12px;font-weight:600;color:{_INK};vertical-align:middle;">{label} <span style="font-family:{_FONT_HINDI};font-size:11px;color:{_INK3};font-weight:400;">{hi}</span></td>
@@ -847,7 +837,7 @@ def generate_excel(data: dict, team_name: str, period_from: str, period_to: str)
     task_list  = data.get("task_list", [])
     by_mt      = data.get("by_member_tasks", [])
 
-    C_INK  = "FF1A2230"; C_INK3 = "FF6E7B91"; C_TEAL = "FF05b7aa"
+    C_INK  = "FF1A2230"; C_INK3 = "FF6E7B91"
     C_DEEP = "FF0082c6"; C_BG   = "FFF6F3EC"; C_SURF = "FFFCFAF5"; C_HDR = "FF1A2230"
 
     thin = Border(bottom=Side(style="thin", color="FFE2DCC9"))

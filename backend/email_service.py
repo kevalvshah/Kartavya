@@ -355,8 +355,7 @@ def send_invite_email(to_email: str, inviter_name: str, role: str,
 
 
 # ── 2. Welcome email ───────────────────────────────────────────────────────────
-def send_welcome_email(user_email: str, user_name: str,
-                       workspace_name: str = "Kartavya"):
+def send_welcome_email(user_email: str, user_name: str):
     first_name = _h(user_name.split()[0] if user_name else "there")
     preheader  = f"Your Kartavya account is live. Here's the shortest path to doing what must be done."
 
@@ -419,7 +418,7 @@ def send_welcome_email(user_email: str, user_name: str,
 # ── 3. Approval request email (to admin/owners) ────────────────────────────────
 def send_approval_request_email(user_email: str, user_name: str,
                                 requester_name: str, task_title: str,
-                                task_id: str, notes: str = None,
+                                notes: str = None,
                                 project: str = None, priority: str = None,
                                 due_date: str = None, approve_token: str = None):
     approve_url = (f"{FRONTEND_URL}/approve?token={approve_token}"
@@ -461,7 +460,7 @@ def send_approval_request_email(user_email: str, user_name: str,
 # ── 4. Request approved (to client/requester) ─────────────────────────────────
 def send_request_approved_email(user_email: str, user_name: str,
                                 reviewer_name: str, task_title: str,
-                                task_id: str, assignees: str = None,
+                                assignees: str = None,
                                 due_date: str = None):
     task_url   = f"{FRONTEND_URL}/client/projects"
     first_name = _h(user_name.split()[0] if user_name else "there")
@@ -492,7 +491,7 @@ def send_request_approved_email(user_email: str, user_name: str,
 # ── 5. Task done (to client/requester) ────────────────────────────────────────
 def send_task_done_email(user_email: str, user_name: str,
                          completer_name: str, task_title: str,
-                         task_id: str, time_spent: str = None,
+                         time_spent: str = None,
                          completer_note: str = None,
                          attachments: list = None,
                          approve_token: str = None):
@@ -654,7 +653,6 @@ def send_approval_decision_email(user_email: str, user_name: str, reviewer_name:
     task_url   = f"{FRONTEND_URL}/tasks/{task_id}"
     approved   = decision == "approved"
     verb       = "approved" if approved else "rejected"
-    color      = _OK_BORDER if approved else _DANGER_BOR
     first_name = _h(user_name.split()[0] if user_name else "there")
     preheader  = f"Task {verb}: {task_title} — {reviewer_name}"
     body = (
@@ -694,7 +692,6 @@ def send_report_email(
     data_summary     = data_summary or {}
     by_member_tasks  = by_member_tasks or []
     daily_throughput = daily_throughput or []
-    total_h  = f"{total_minutes // 60}h {total_minutes % 60}m" if total_minutes else "0h"
     freq_cap = frequency.capitalize()
 
     safe_name   = team_name.lower().replace(" ", "-")
@@ -1036,7 +1033,7 @@ def send_approval_notification_email(user_email: str, user_name: str, task_title
                                      task_id: str = None):
     if notification_type == "request":
         return send_approval_request_email(
-            user_email, user_name, "A team member", task_title, task_id or "", notes)
+            user_email, user_name, "A team member", task_title, notes=notes)
     else:
         return send_approval_decision_email(
             user_email, user_name, "The reviewer", task_title, task_id or "", notification_type, notes)
