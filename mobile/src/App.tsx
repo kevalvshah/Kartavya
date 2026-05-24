@@ -1,0 +1,277 @@
+import React, { useEffect, useState, useCallback } from 'react';
+import {
+  View, Text, ActivityIndicator, StyleSheet, StatusBar,
+  TouchableOpacity, Alert, Platform,
+} from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
+import NetInfo from '@react-native-community/netinfo';
+
+import { ThemeProvider, useTheme } from './theme/ThemeProvider';
+import { AuthProvider } from './hooks/useAuth';
+import { queryClient, persister, setupQueryPersistence } from './offline/queryClient';
+import { useFonts } from './theme/fonts';
+import { flushQueue, getQueueCount, clearQueue, friendlyFlushError } from './offline/mutationQueue';
+import { usePushNotifications } from './hooks/usePushNotifications';
+import RootStack from './nav/RootStack';
+
+// ── Offline banner ────────────────────────────────────────────────────────────
+interface BannerProps {
+  message:    string | null;
+  kind:       'error' | 'warn' | 'info' | 'syncing';
+  onRetry?:   () => void;
+  onClear?:   () => void;
+}
+function OfflineBanner({ message, kind, onRetry, onClear }: BannerProps) {
+  const { t } = useTheme();
+  if (!message) return null;
+
+  // Colours matched to iOS pill / Android strip spec
+  const bg =
+    kind === 'error'   ? 'rgba(186,26,26,0.92)'   :
+    kind === 'warn'    ? 'rgba(255,159,10,0.14)'   :
+    kind === 'syncing' ? 'rgba(0,130,198,0.12)'    :
+                         'rgba(0,130,198,0.12)';
+  const textColor =
+    kind === 'error'   ? '#fff'     :
+    kind === 'warn'    ? '#92400e'  :
+                         '#0082c6';
+  const borderColor =
+    kind === 'error'   ? 'rgba(186,26,26,0.3)'   :
+    kind === 'warn'    ? 'rgba(255,159,10,0.35)'  :
+                         'rgba(0,130,198,0.3)';
+
+  const iconName =
+    kind === 'error'   ? 'alert-circle-outline'  :
+    kind === 'warn'    ? 'wifi-outline'           :
+    kind === 'syncing' ? 'sync-outline'           : 'wifi-outline';
+
+  return (
+    <View style={s.bannerRow}>
+      <View style={[s.bannerPill, { backgroundColor: bg, borderColor }]}>
+        <Ionicons name={iconName as any} size={13} color={textColor} />
+        <Text style={[s.bannerText, { color: textColor, flex: 1 }]} numberOfLines={2}>
+          {message}
+        </Text>
+        {onRetry && (
+          <TouchableOpacity onPress={onRetry} style={[s.bannerBtn, { borderColor }]}
+            accessibilityLabel="Retry syncing offline changes" accessibilityRole="button">
+            <Text style={[s.bannerBtnText, { color: textColor }]}>Retry</Text>
+          </TouchableOpacity>
+        )}
+        {onClear && (
+          <TouchableOpacity onPress={onClear} style={[s.bannerBtn, { borderColor, marginLeft: 4 }]}
+            accessibilityLabel="Discard offline changes" accessibilityRole="button">
+            <Text style={[s.bannerBtnText, { color: textColor }]}>Discard</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+    </View>
+  );
+}
+
+// ── Splash screen (shown while auth is resolving) ─────────────────────────────
+function Splash() {
+  return (
+    <View style={s.splash}>
+      <Text style={s.splashBrand}>KARTAVYA</Text>
+      <Text style={s.splashSub}>BY AEKAM INC</Text>
+      <ActivityIndicator color="#0082c6" size="large" style={{ marginTop: 32 }} />
+    </View>
+  );
+}
+
+// ── Inner app (needs ThemeProvider) ──────────────────────────────────────────
+type BannerState = { message: string; kind: BannerProps['kind']; canRetry: boolean; canClear: boolean } | null;
+
+function InnerApp() {
+  const { scheme } = useTheme();
+  const [banner, setBanner] = useState<BannerState>(null);
+
+  // Push notification registration + tap-to-navigate
+  usePushNotifications();
+
+  const doFlush = useCallback(async () => {
+    const count = getQueueCount();
+    if (count === 0) { setBanner(null); return; }
+
+    setBanner({
+      message:  `Syncing ${count} offline change${count === 1 ? '' : 's'}…`,
+      kind:     'syncing',
+      canRetry: false,
+      canClear: false,
+    });
+
+    const result = await flushQueue();
+
+    if (result.failed.length > 0) {
+      const permanent = result.failed.filter(f => f.permanent);
+      const transient = result.failed.filter(f => !f.permanent);
+      if (permanent.length > 0) {
+        setBanner({
+          message:  `${permanent.length} change${permanent.length > 1 ? 's' : ''} couldn't sync: ${friendlyFlushError(permanent[0].error)}`,
+          kind:     'error',
+          canRetry: false,
+          canClear: false,
+        });
+        setTimeout(() => setBanner(null), 7000);
+      } else if (transient.length > 0) {
+        setBanner({
+          message:  `Sync incomplete — ${transient.length} change${transient.length > 1 ? 's' : ''} will retry.`,
+          kind:     'warn',
+          canRetry: true,
+          canClear: true,
+        });
+      }
+    } else {
+      setBanner(null);
+      queryClient.invalidateQueries();
+    }
+  }, []);
+
+  const handleRetry = useCallback(() => {
+    doFlush();
+  }, [doFlush]);
+
+  const handleClear = useCallback(() => {
+    const count = getQueueCount();
+    Alert.alert(
+      'Discard offline changes?',
+      `You have ${count} unsynced change${count === 1 ? '' : 's'}. This cannot be undone.`,
+      [
+        { text: 'Keep', style: 'cancel' },
+        {
+          text: 'Discard', style: 'destructive',
+          onPress: () => { clearQueue(); setBanner(null); },
+        },
+      ]
+    );
+  }, []);
+
+  // Flush offline queue when connectivity restored
+  useEffect(() => {
+    setupQueryPersistence();
+
+    const unsub = NetInfo.addEventListener(async (state) => {
+      const online = !!(state.isConnected && state.isInternetReachable !== false);
+      if (online) {
+        await doFlush();
+      } else {
+        const queued = getQueueCount();
+        setBanner({
+          message:  queued > 0
+            ? `You're offline — ${queued} change${queued === 1 ? '' : 's'} queued.`
+            : "You're offline — changes will sync when reconnected.",
+          kind:     'info',
+          canRetry: false,
+          canClear: queued > 0,
+        });
+      }
+    });
+
+    return () => unsub();
+  }, [doFlush]);
+
+  return (
+    <>
+      <StatusBar
+        barStyle={scheme === 'dark' ? 'light-content' : 'dark-content'}
+        translucent
+        backgroundColor="transparent"
+      />
+      <OfflineBanner
+        message={banner?.message ?? null}
+        kind={banner?.kind ?? 'info'}
+        onRetry={banner?.canRetry ? handleRetry : undefined}
+        onClear={banner?.canClear ? handleClear : undefined}
+      />
+      <RootStack />
+    </>
+  );
+}
+
+// ── Root ──────────────────────────────────────────────────────────────────────
+export default function App() {
+  const [fontsLoaded] = useFonts();
+  // Fonts gate rendering to avoid FOUT; fall through on failure (fonts not critical)
+
+  return (
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <PersistQueryClientProvider
+        client={queryClient}
+        persistOptions={{ persister }}
+        onSuccess={() => queryClient.resumePausedMutations()}
+      >
+        <ThemeProvider>
+          <AuthProvider>
+            <InnerApp />
+          </AuthProvider>
+        </ThemeProvider>
+      </PersistQueryClientProvider>
+    </GestureHandlerRootView>
+  );
+}
+
+const s = StyleSheet.create({
+  splash: {
+    flex: 1,
+    backgroundColor: '#020d1a',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  splashBrand: {
+    color: '#fff',
+    fontSize: 28,
+    fontWeight: '900',
+    letterSpacing: 5,
+  },
+  splashSub: {
+    color: '#05b7aa',
+    fontSize: 9,
+    fontWeight: '700',
+    letterSpacing: 4,
+    marginTop: 6,
+  },
+  // Offline banner — pill design matching iOS/Android spec
+  bannerRow: {
+    position:        'absolute',
+    top:             Platform.OS === 'ios' ? 56 : 36,
+    left:            0,
+    right:           0,
+    zIndex:          999,
+    alignItems:      'center',
+    pointerEvents:   'box-none',
+  },
+  bannerPill: {
+    flexDirection:   'row',
+    alignItems:      'center',
+    gap:             6,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius:    12,
+    borderWidth:     1,
+    maxWidth:        340,
+    marginHorizontal: 20,
+    shadowColor:     '#000',
+    shadowOffset:    { width: 0, height: 2 },
+    shadowOpacity:   0.12,
+    shadowRadius:    6,
+    elevation:       4,
+  },
+  bannerText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  bannerBtn: {
+    borderRadius:    6,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderWidth:     1,
+    marginLeft:      4,
+  },
+  bannerBtnText: {
+    fontSize: 11,
+    fontWeight: '800',
+  },
+});

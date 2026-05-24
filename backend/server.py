@@ -201,7 +201,7 @@ class TeamCreate(BaseModel):
     name:str
 class TeamOut(BaseModel):
     team_id:str; name:str; created_by:str; created_at:datetime; updated_at:datetime
-    task_count:int=0; done_count:int=0
+    task_count:int=0; done_count:int=0; color:Optional[str]=None
 class TeamMemberAdd(BaseModel):
     email:str; role:str="member"
 class TeamMemberUpdate(BaseModel):
@@ -304,6 +304,67 @@ async def me(user=Depends(require_user)):
 
 @api_router.post("/auth/logout")
 async def logout(): return {"ok":True}
+
+
+# ── Mobile: push tokens ───────────────────────────────────────────────────────
+
+@api_router.post("/me/push_tokens")
+async def register_push_token(body:dict,pool=Depends(get_db),user=Depends(require_user)):
+    platform  = body.get("platform","unknown")
+    token     = body.get("token","")
+    device_id = body.get("device_id","")
+    if not token or not device_id:
+        raise HTTPException(400,"token and device_id are required")
+    await pool.execute("""
+        INSERT INTO push_tokens (user_id,platform,token,device_id)
+        VALUES ($1,$2,$3,$4)
+        ON CONFLICT (device_id) DO UPDATE SET token=EXCLUDED.token, user_id=EXCLUDED.user_id, platform=EXCLUDED.platform
+    """, user["user_id"], platform, token, device_id)
+    return {"ok":True}
+
+@api_router.delete("/me/push_tokens/{device_id}")
+async def unregister_push_token(device_id:str,pool=Depends(get_db),user=Depends(require_user)):
+    await pool.execute("DELETE FROM push_tokens WHERE device_id=$1 AND user_id=$2", device_id, user["user_id"])
+    return {"ok":True}
+
+
+# ── Mobile: notification prefs ────────────────────────────────────────────────
+
+DEFAULT_PREFS = {
+    "mention":          "always",
+    "approval_request": "always",
+    "approved":         "always",
+    "rejected":         "always",
+    "assigned":         "always",
+    "comment":          "mine_only",
+    "status_changed":   "project",
+    "done":             "project",
+    "created":          "off",
+}
+
+@api_router.get("/me/notification_prefs")
+async def get_notification_prefs(pool=Depends(get_db),user=Depends(require_user)):
+    row = await pool.fetchrow("SELECT prefs, quiet_start, quiet_end FROM notification_prefs WHERE user_id=$1", user["user_id"])
+    if not row:
+        return {"prefs": DEFAULT_PREFS, "quiet_start": "22:00", "quiet_end": "07:00"}
+    import json as _json
+    prefs = row["prefs"] if isinstance(row["prefs"], dict) else _json.loads(row["prefs"] or "{}")
+    merged = {**DEFAULT_PREFS, **prefs}
+    return {"prefs": merged, "quiet_start": row["quiet_start"], "quiet_end": row["quiet_end"]}
+
+@api_router.put("/me/notification_prefs")
+async def set_notification_prefs(body:dict,pool=Depends(get_db),user=Depends(require_user)):
+    import json as _json
+    prefs       = body.get("prefs", {})
+    quiet_start = body.get("quiet_start", "22:00")
+    quiet_end   = body.get("quiet_end",   "07:00")
+    await pool.execute("""
+        INSERT INTO notification_prefs (user_id, prefs, quiet_start, quiet_end)
+        VALUES ($1, $2::jsonb, $3, $4)
+        ON CONFLICT (user_id) DO UPDATE
+          SET prefs=$2::jsonb, quiet_start=$3, quiet_end=$4, updated_at=NOW()
+    """, user["user_id"], _json.dumps(prefs), quiet_start, quiet_end)
+    return {"ok":True}
 
 
 @api_router.get("/projects/{team_id}/columns",response_model=List[ProjectColumnOut])
@@ -669,6 +730,21 @@ async def add_comment(task_id:str,body:CommentCreate,pool=Depends(get_db),user=D
             actor_name=user.get("full_name") or user.get("name") or user.get("email","")
             for rid in recipients:
                 await create_notification(pool,rid,"comment",f"New comment on {task['title']}",f"{actor_name}: {preview}",task_id,task["team_id"],"/tasks")
+            if recipients:
+                try:
+                    from services.push_service import fan_out_push
+                    task_owner_ids={task["created_by_user_id"]}|(set(task["assignee_user_ids"] or []))
+                    asyncio.create_task(fan_out_push(
+                        pool,
+                        recipient_ids=list(recipients),
+                        kind="comment",
+                        title=f"New comment on {task['title']}",
+                        body=f"{actor_name}: {preview}",
+                        task_id=task_id,
+                        is_mine_for=task_owner_ids,
+                    ))
+                except Exception as _pe:
+                    logger.warning(f"comment push failed: {_pe}")
             from services.mentions import process_mentions
             await process_mentions(pool,comment_id,body.body,task_id,user["user_id"])
             from services.activity_logger import log_event
@@ -927,6 +1003,15 @@ async def purge_team(team_id:str,pool=Depends(get_db),user=Depends(require_admin
             await conn.execute("DELETE FROM teams WHERE team_id=$1", team_id)
     return {"ok": True}
 
+@api_router.patch("/teams/{team_id}/color")
+async def set_team_color(team_id:str,body:dict,pool=Depends(get_db),user=Depends(require_user)):
+    """Set project colour (hex string). Any project member can update."""
+    color = body.get("color")
+    if not color or not isinstance(color, str) or not color.startswith("#"):
+        raise HTTPException(400, "color must be a hex string e.g. #05b7aa")
+    await pool.execute("UPDATE teams SET color=$1 WHERE team_id=$2", color, team_id)
+    return {"ok": True, "color": color}
+
 @api_router.delete("/teams/{team_id}/members/{member_id}")
 async def remove_team_member(team_id:str,member_id:str,pool=Depends(get_db),user=Depends(require_user)):
     mem=await pool.fetchrow("SELECT role FROM project_assignments WHERE team_id=$1 AND user_id=$2",team_id,user["user_id"])
@@ -1091,6 +1176,21 @@ async def update_task(task_id:str,payload:TaskUpdate,pool=Depends(get_db),user=D
         removed=[u for u in old_assignees if u not in new_assignees]
         if added or removed:
             await log_assigned(pool,task_id=task_id,actor_id=user["user_id"],added=added,removed=removed)
+        if added:
+            try:
+                from services.push_service import fan_out_push
+                actor_name=user.get("full_name") or user.get("name") or user.get("email","Someone")
+                asyncio.create_task(fan_out_push(
+                    pool,
+                    recipient_ids=[u for u in added if u!=user["user_id"]],
+                    kind="assigned",
+                    title=f"You were assigned to {row['title']}",
+                    body=f"Assigned by {actor_name}.",
+                    task_id=task_id,
+                    is_mine_for=set(added),
+                ))
+            except Exception as _pe:
+                logger.warning(f"assignee push failed: {_pe}")
     return row_to_task(row)
 
 
@@ -1294,6 +1394,28 @@ async def startup():
         # Soft-delete columns on teams
         await pool.execute("ALTER TABLE teams ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ")
         await pool.execute("ALTER TABLE teams ADD COLUMN IF NOT EXISTS deleted_by TEXT")
+        # Project colour
+        await pool.execute("ALTER TABLE teams ADD COLUMN IF NOT EXISTS color TEXT")
+        # Mobile: push tokens + notification prefs
+        await pool.execute("""
+            CREATE TABLE IF NOT EXISTS push_tokens (
+                id          TEXT PRIMARY KEY DEFAULT ('pt_' || substr(md5(random()::text),1,12)),
+                user_id     TEXT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+                platform    TEXT NOT NULL,
+                token       TEXT NOT NULL,
+                device_id   TEXT NOT NULL UNIQUE,
+                created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            )
+        """)
+        await pool.execute("""
+            CREATE TABLE IF NOT EXISTS notification_prefs (
+                user_id     TEXT PRIMARY KEY REFERENCES users(user_id) ON DELETE CASCADE,
+                prefs       JSONB NOT NULL DEFAULT '{}',
+                quiet_start TEXT NOT NULL DEFAULT '22:00',
+                quiet_end   TEXT NOT NULL DEFAULT '07:00',
+                updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            )
+        """)
         # Custom fields tables
         await pool.execute("""
             CREATE TABLE IF NOT EXISTS field_definitions (

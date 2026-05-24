@@ -1,0 +1,128 @@
+/**
+ * usePushNotifications — Expo push token registration + tap-to-navigate.
+ *
+ * Call once inside InnerApp (after AuthProvider).
+ * - Requests permissions on first mount when user is authenticated.
+ * - Registers/refreshes token with backend via POST /me/push_tokens.
+ * - Handles notification tap: navigates to TaskDetail when task_id is present.
+ */
+import { useEffect, useRef } from 'react';
+import * as Notifications from 'expo-notifications';
+import Constants from 'expo-constants';
+import { Platform } from 'react-native';
+import { MMKV } from 'react-native-mmkv';
+
+import { useAuth } from './useAuth';
+import { navigationRef } from '../nav/navigationRef';
+import { apiClient } from '../api/client';
+
+const storage = new MMKV({ id: 'push_tokens' });
+const DEVICE_ID_KEY = 'push_device_id';
+
+// Generate a stable device id once per install
+function getDeviceId(): string {
+  let id = storage.getString(DEVICE_ID_KEY);
+  if (!id) {
+    id = `device_${Math.random().toString(36).slice(2)}_${Date.now()}`;
+    storage.set(DEVICE_ID_KEY, id);
+  }
+  return id;
+}
+
+// Configure how notifications are handled while app is in foreground
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: true,
+  }),
+});
+
+async function registerForPushNotificationsAsync(): Promise<string | null> {
+  // Expo Go / simulators may not support push
+  if (!Constants.isDevice) return null;
+
+  const { status: existingStatus } = await Notifications.getPermissionsAsync();
+  let finalStatus = existingStatus;
+
+  if (existingStatus !== 'granted') {
+    const { status } = await Notifications.requestPermissionsAsync();
+    finalStatus = status;
+  }
+
+  if (finalStatus !== 'granted') return null;
+
+  // Android requires a notification channel
+  if (Platform.OS === 'android') {
+    await Notifications.setNotificationChannelAsync('default', {
+      name: 'Default',
+      importance: Notifications.AndroidImportance.MAX,
+      vibrationPattern: [0, 250, 250, 250],
+      lightColor: '#0082C6',
+    });
+  }
+
+  try {
+    const projectId =
+      Constants.expoConfig?.extra?.eas?.projectId ??
+      Constants.easConfig?.projectId;
+    const tokenData = await Notifications.getExpoPushTokenAsync(
+      projectId ? { projectId } : undefined
+    );
+    return tokenData.data;
+  } catch {
+    return null;
+  }
+}
+
+export function usePushNotifications() {
+  const { user } = useAuth();
+  const notifListener = useRef<Notifications.Subscription>();
+  const responseListener = useRef<Notifications.Subscription>();
+
+  useEffect(() => {
+    if (!user) return;
+
+    let cancelled = false;
+
+    (async () => {
+      const token = await registerForPushNotificationsAsync();
+      if (!token || cancelled) return;
+
+      const deviceId = getDeviceId();
+      const platform = Platform.OS === 'ios' ? 'ios' : 'android';
+
+      try {
+        await apiClient.post('/me/push_tokens', { token, device_id: deviceId, platform });
+      } catch {
+        // Non-fatal — push will just not work until next launch
+      }
+    })();
+
+    // Foreground notification listener (optional — handler above shows it)
+    notifListener.current = Notifications.addNotificationReceivedListener(
+      (_notification) => {
+        // Could update badge count here if needed
+      }
+    );
+
+    // Tap listener: navigate to task when notification is tapped
+    responseListener.current = Notifications.addNotificationResponseReceivedListener(
+      (response) => {
+        const data   = response.notification.request.content.data as Record<string, unknown>;
+        const taskId = data?.taskId as string | undefined;
+        // Validate format before navigating — guards against crafted payloads
+        const isValidId = taskId && /^[0-9a-f-]{32,36}$/i.test(taskId);
+        if (isValidId && navigationRef.isReady()) {
+          navigationRef.navigate('TaskDetail', { taskId });
+        }
+      }
+    );
+
+    return () => {
+      cancelled = true;
+      notifListener.current?.remove();
+      responseListener.current?.remove();
+    };
+  }, [user?.user_id]);  // re-register if user changes (e.g. logout → login)
+}

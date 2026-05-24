@@ -66,3 +66,19 @@ async def process_mentions(pool, comment_id: str, body: str, task_id: str, actor
         except Exception as exc:
             import logging
             logging.getLogger(__name__).warning(f"mention email failed: {exc}")
+
+        try:
+            from services.push_service import send_push
+            import asyncio
+            asyncio.ensure_future(send_push(
+                pool,
+                recipient_id=user["user_id"],
+                kind="mention",
+                title=f"You were mentioned in {task['title'] if task else 'a task'}",
+                body=f"{actor_name} mentioned you in a comment.",
+                task_id=task_id,
+                is_mine=True,
+            ))
+        except Exception as exc:
+            import logging
+            logging.getLogger(__name__).warning(f"mention push failed: {exc}")

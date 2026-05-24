@@ -301,8 +301,19 @@ async def delete_schedule(
 
 
 @router.post("/dispatch")
-async def dispatch_reports(request_secret: str = Query(""), pool=Depends(get_pool)):
-    """Called hourly by Railway cron. Processes all due schedules."""
+async def dispatch_reports(
+    request_secret: str = Query(""),
+    pool = Depends(get_pool),
+    _caller = Depends(require_admin),
+):
+    """Called hourly by Railway cron. Processes all due schedules.
+
+    Requires both:
+    - A valid admin session (require_admin) — prevents unauthenticated access
+      when REPORT_DISPATCH_SECRET is unset.
+    - REPORT_DISPATCH_SECRET query param when the env var is set — an additional
+      layer so cron callers don't need a real session cookie.
+    """
     if DISPATCH_SECRET and request_secret != DISPATCH_SECRET:
         raise HTTPException(403, "Invalid dispatch secret")
 

@@ -113,6 +113,31 @@ async def send_approval_notification(pool, task_id: str, task_title: str,
         except Exception as exc:
             import logging; logging.getLogger(__name__).warning(f"approval email failed: {exc}")
 
+        try:
+            from services.push_service import send_push
+            import asyncio
+            _push_title = {
+                "request":  f"Approval Requested: {task_title}",
+                "approved": f"✅ Task Approved: {task_title}",
+                "rejected": f"Task Rejected: {task_title}",
+            }.get(notification_type, f"Update: {task_title}")
+            _push_body = notes or {
+                "request":  "Your review is needed.",
+                "approved": "The task has been approved.",
+                "rejected": "The task was sent back for revision.",
+            }.get(notification_type, "")
+            asyncio.ensure_future(send_push(
+                pool,
+                recipient_id=recipient_id,
+                kind=notification_type if notification_type in ("approved", "rejected") else "approval_request",
+                title=_push_title,
+                body=_push_body,
+                task_id=task_id,
+                is_mine=True,
+            ))
+        except Exception as exc:
+            import logging; logging.getLogger(__name__).warning(f"approval push failed: {exc}")
+
 
 # ── Endpoints ──────────────────────────────────────────────────────────────────
 

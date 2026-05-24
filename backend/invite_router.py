@@ -54,7 +54,7 @@ class UserOut(BaseModel):
     member_role: Optional[str] = None
     receives_approval_emails: Optional[bool] = True
     avatar: Optional[str] = None
-    provider: Optional[str] = None
+    # provider intentionally omitted — OAuth provider type is internal metadata
     created_at: datetime
 
 
@@ -72,7 +72,7 @@ class UserUpdate(BaseModel):
 async def list_users(pool=Depends(get_pool), admin=Depends(require_admin)):
     rows = await pool.fetch(
         """SELECT user_id, email, name, full_name, role, position, company_name,
-                  member_role, receives_approval_emails, avatar, provider, created_at
+                  member_role, receives_approval_emails, avatar, created_at
            FROM users ORDER BY created_at DESC"""
     )
     return [UserOut(**dict(r)) for r in rows]
@@ -106,7 +106,7 @@ async def update_user(user_id: str, body: UserUpdate, pool=Depends(get_pool), ad
     )
     row = await pool.fetchrow(
         """SELECT user_id, email, name, full_name, role, position, company_name,
-                  member_role, receives_approval_emails, avatar, provider, created_at
+                  member_role, receives_approval_emails, avatar, created_at
            FROM users WHERE user_id=$1""", user_id
     )
     if not row:
@@ -130,9 +130,15 @@ async def remove_user(user_id: str, reassign_to: Optional[str] = None, pool=Depe
     if reassign_to == user_id:
         raise HTTPException(status_code=400, detail="Cannot reassign to the same user")
     if reassign_to:
-        target = await pool.fetchrow("SELECT user_id FROM users WHERE user_id=$1", reassign_to)
+        target = await pool.fetchrow(
+            "SELECT user_id, role FROM users WHERE user_id=$1", reassign_to
+        )
         if not target:
             raise HTTPException(status_code=404, detail="Reassign target user not found")
+        # Prevent reassigning to a client account — clients should not appear
+        # as task creators or team leads.
+        if target["role"] == "client":
+            raise HTTPException(status_code=400, detail="Cannot reassign work to a client account")
 
     r = reassign_to  # shorthand
 

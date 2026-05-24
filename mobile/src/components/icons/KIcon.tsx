@@ -1,0 +1,103 @@
+/**
+ * KIcon — Kartavya brand mark
+ *
+ * Renders the Devanagari क on a 135° brand gradient with:
+ *   • inner shine overlay (radial highlight)
+ *   • bottom-left accent orb
+ *
+ * Matches the app-icon.jsx design spec exactly.
+ * Use on LoginScreen, splash, and anywhere the brand mark is needed.
+ *
+ * Props:
+ *   size      — outer box size in px (default 80)
+ *   radius    — corner radius (default 24; 999 for pill)
+ */
+
+import React from 'react';
+import { View, Text, StyleSheet } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+
+interface KIconProps {
+  size?:   number;
+  radius?: number;
+}
+
+export function KIcon({ size = 80, radius = 24 }: KIconProps) {
+  const fontSize = size * 0.52;
+  const orbSize  = size * 0.30;
+
+  return (
+    <LinearGradient
+      colors={['#0082c6', '#03a1b6', '#05b7aa']}
+      start={{ x: 0.14, y: 0 }}
+      end={{   x: 0.86, y: 1 }}
+      style={[s.wrap, { width: size, height: size, borderRadius: radius }]}
+    >
+      {/* Inner shine */}
+      <View
+        style={[
+          s.shine,
+          {
+            width:        size * 0.7,
+            height:       size * 0.5,
+            borderRadius: size * 0.35,
+            top:          -size * 0.08,
+            left:         size * 0.15,
+          },
+        ]}
+        pointerEvents="none"
+      />
+
+      {/* Bottom-left accent orb */}
+      <View
+        style={[
+          s.orb,
+          {
+            width:        orbSize,
+            height:       orbSize,
+            borderRadius: orbSize / 2,
+            bottom:       -orbSize * 0.25,
+            left:         -orbSize * 0.15,
+          },
+        ]}
+        pointerEvents="none"
+      />
+
+      {/* Devanagari brand glyph */}
+      <Text
+        style={[s.glyph, { fontSize, lineHeight: size }]}
+        accessibilityElementsHidden
+      >
+        क
+      </Text>
+    </LinearGradient>
+  );
+}
+
+const s = StyleSheet.create({
+  wrap: {
+    alignItems:      'center',
+    justifyContent:  'center',
+    overflow:        'hidden',
+    shadowColor:     '#0082c6',
+    shadowOffset:    { width: 0, height: 8 },
+    shadowOpacity:   0.45,
+    shadowRadius:    16,
+    elevation:       12,
+  },
+  shine: {
+    position:        'absolute',
+    backgroundColor: 'rgba(255,255,255,0.18)',
+  },
+  orb: {
+    position:        'absolute',
+    backgroundColor: '#05b7aa',
+    opacity:         0.55,
+  },
+  glyph: {
+    color:       '#fff',
+    fontFamily:  'TiroDevanagariHindi',
+    textAlign:   'center',
+    includeFontPadding: false,
+  },
+});
