@@ -48,10 +48,10 @@ from routers.reports     import router as reports_router
 from services.gita       import get_verse_of_the_day
 
 # ── Shared constants ──────────────────────────────────────
-_NOT_TEAM_MEMBER    = _NOT_TEAM_MEMBER
-_SQL_USER_ROLE      = _SQL_USER_ROLE
-_SQL_GET_SUBTASKS   = _SQL_GET_SUBTASKS
-_SQL_SET_SUBTASKS   = _SQL_SET_SUBTASKS
+_NOT_TEAM_MEMBER    = "Not a team member"
+_SQL_USER_ROLE      = "SELECT role FROM users WHERE user_id=$1"
+_SQL_GET_SUBTASKS   = "SELECT subtasks FROM tasks WHERE task_id=$1"
+_SQL_SET_SUBTASKS   = "UPDATE tasks SET subtasks=$1,updated_at=NOW() WHERE task_id=$2 RETURNING *"
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env")

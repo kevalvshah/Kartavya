@@ -11,7 +11,7 @@ from db import get_pool
 
 router = APIRouter(prefix="/api/templates", tags=["templates"])
 
-_TEMPLATE_NOT_FOUND = _TEMPLATE_NOT_FOUND
+_TEMPLATE_NOT_FOUND = "Template not found"
 
 
 class ProjectTemplateCreate(BaseModel):

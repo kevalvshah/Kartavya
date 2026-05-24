@@ -27,6 +27,11 @@ from db import get_pool
 _DATE_RE = re.compile(r'^\d{4}-\d{2}-\d{2}$')
 
 logger = logging.getLogger(__name__)
+
+
+def _log_safe(value: object) -> str:
+    """Strip newlines from user-controlled values before logging (CWE-117)."""
+    return str(value).replace("\n", "").replace("\r", "")
 router = APIRouter(prefix="/api/reports", tags=["reports"])
 
 DISPATCH_SECRET = os.environ.get("REPORT_DISPATCH_SECRET", "")
@@ -201,8 +206,8 @@ async def get_report_data(
     try:
         return await _fetch_report_data(pool, team_id, from_date, to_date)
     except Exception as exc:
-        logger.error("Report data fetch failed for %s: %s", team_id.replace('\n','').replace('\r',''), str(exc).replace('\n','').replace('\r',''), exc_info=True)
-        raise HTTPException(500, f"Report data error: {exc}") from exc
+        logger.error("Report data fetch failed for %s: %s", _log_safe(team_id), _log_safe(exc), exc_info=True)
+        raise HTTPException(500, "Report data error") from exc
 
 
 @router.get("/download/{team_id}")
@@ -239,8 +244,8 @@ async def download_report(
             filename = f"kartavya-{safe_slug}-{from_date}-{to_date}.pdf"
             media_type = "application/pdf"
     except Exception as exc:
-        logger.error("Report generation failed for %s fmt=%s: %s", team_id.replace('\n','').replace('\r',''), str(fmt).replace('\n','').replace('\r',''), str(exc).replace('\n','').replace('\r',''), exc_info=True)
-        raise HTTPException(500, f"Report generation failed: {exc}") from exc
+        logger.error("Report generation failed for %s fmt=%s: %s", _log_safe(team_id), _log_safe(fmt), _log_safe(exc), exc_info=True)
+        raise HTTPException(500, "Report generation failed") from exc
 
     return StreamingResponse(
         io.BytesIO(content),
@@ -398,9 +403,9 @@ async def dispatch_reports(
                 WHERE schedule_id=$3
             """, now, next_run, sched["schedule_id"])
             sent += 1
-            logger.info("Report dispatched: %s", str(sched['schedule_id']).replace('\n','').replace('\r',''))
+            logger.info("Report dispatched: %s", _log_safe(sched['schedule_id']))
         except Exception as exc:
-            logger.error("Report dispatch failed for %s: %s", str(sched['schedule_id']).replace('\n','').replace('\r',''), str(exc).replace('\n','').replace('\r',''))
+            logger.error("Report dispatch failed for %s: %s", _log_safe(sched['schedule_id']), _log_safe(exc))
             errors.append(str(sched["schedule_id"]))
 
     return {"ok": True, "dispatched": sent, "errors": errors}
