@@ -7,6 +7,7 @@ PDF matches the 5-page editorial design from report-pdf.jsx / report-pdf.css:
   Page 4 — Detailed task list with priority / status badges
   Page 5 — Daily throughput bar chart + methodology + colophon
 """
+import html
 import io
 from datetime import datetime
 
@@ -107,6 +108,7 @@ def _page_shell(body_html: str, brand: str, meta_right: str, foot_left: str, pag
 
 
 def _build_html(data: dict, team_name: str, period_from: str, period_to: str) -> str:
+    team_name = html.escape(team_name)
     tasks          = data.get("tasks", {})
     entries        = data.get("entries", [])
     task_list      = data.get("task_list", [])
@@ -139,7 +141,7 @@ def _build_html(data: dict, team_name: str, period_from: str, period_to: str) ->
     prog_kpi_cls  = "kpi--blue"
 
     # executive summary (auto-generated)
-    champion_name = by_member_t[0]["user_name"] if by_member_t else (time_sorted[0][0] if time_sorted else "the team")
+    champion_name = html.escape(by_member_t[0]["user_name"] if by_member_t else (time_sorted[0][0] if time_sorted else "the team"))
     exec_summary = (
         f"<b>{done} tasks completed</b> during this period across {len(time_sorted)} active members, "
         f"logging a combined {total_h} of tracked time. "
@@ -315,7 +317,7 @@ def _build_html(data: dict, team_name: str, period_from: str, period_to: str) ->
           <tbody>
             {''.join(
                 f"""<tr>
-                  <td style="font-size:12px;font-weight:500;">{nm}</td>
+                  <td style="font-size:12px;font-weight:500;">{html.escape(nm)}</td>
                   <td><div style="height:7px;background:{_RULE_SOFT};border-radius:99px;overflow:hidden;"><div style="height:100%;width:{round(mins/max(total_mins,1)*100)}%;background:linear-gradient(90deg,{_TEAL},{_DEEP});border-radius:99px;"></div></div></td>
                   <td class="num" style="font-size:14px;">{_fmt_mins(mins)}</td>
                   <td style="text-align:right;font-family:{_FONT_MONO};font-size:10px;color:{_INK3};">{round(mins/max(total_mins,1)*100)}%</td>
@@ -345,6 +347,7 @@ def _build_html(data: dict, team_name: str, period_from: str, period_to: str) ->
     max_tasks = max((x[1] for x in leaderboard), default=1) or 1
 
     champion = leaderboard[0] if leaderboard else ("—", 0, 0)
+    champ_name_esc = html.escape(champion[0])
     champ_initials = _initials(champion[0])
     champ_color = _MEMBER_COLORS[0]
 
@@ -354,7 +357,7 @@ def _build_html(data: dict, team_name: str, period_from: str, period_to: str) ->
         <div class="pdf__champ-row">
           <div class="pdf__champ-av" style="background:{champ_color};">{champ_initials}</div>
           <div>
-            <div class="pdf__champ-name">{champion[0]}</div>
+            <div class="pdf__champ-name">{champ_name_esc}</div>
             <div class="pdf__champ-role">{team_name}</div>
           </div>
           <div class="pdf__champ-stats">
@@ -370,6 +373,7 @@ def _build_html(data: dict, team_name: str, period_from: str, period_to: str) ->
 
     board_rows = ""
     for i, (nm, tc, mins) in enumerate(leaderboard[:8]):
+        nm_esc = html.escape(nm)
         color = _MEMBER_COLORS[i % len(_MEMBER_COLORS)]
         bar_pct = round(tc / max_tasks * 100) if tc else 0
         board_rows += f"""
@@ -377,7 +381,7 @@ def _build_html(data: dict, team_name: str, period_from: str, period_to: str) ->
           <span class="pdf__board-rank">{i+1}</span>
           <span class="pdf__board-av" style="background:{color};">{_initials(nm)}</span>
           <div class="pdf__board-id">
-            <div class="pdf__board-name">{nm}</div>
+            <div class="pdf__board-name">{nm_esc}</div>
             <div class="pdf__board-role">{_fmt_mins(mins)} logged</div>
           </div>
           <div class="pdf__board-bar"><div style="width:{bar_pct}%;background:{color};"></div></div>
@@ -432,8 +436,8 @@ def _build_html(data: dict, team_name: str, period_from: str, period_to: str) ->
         st_bg, st_color, st_bd = _status_style(st)
         st_label = st.replace("_", " ").title()
         due_str  = _fmt_date(t.get("due_at"))
-        owner    = (t.get("owner_name") or "—")[:18]
-        title    = (t.get("title") or "Untitled")[:55]
+        owner    = html.escape((t.get("owner_name") or "—")[:18])
+        title    = html.escape((t.get("title") or "Untitled")[:55])
         short_id = f"#{str(t.get('task_id', ''))[-5:]}"
         task_rows += f"""
         <tr>
