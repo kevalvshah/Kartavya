@@ -2,17 +2,17 @@
  * BoardsPage.jsx — dedicated Boards page with project switcher + view toggle.
  * Route: /boards
  */
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, lazy, Suspense } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api }          from '../lib/api';
 import { currentUser }  from '../lib/auth';
-import KanbanView    from '../components/views/KanbanView';
-import TableView     from '../components/views/TableView';
-import CalendarView  from '../components/views/CalendarView';
-import TimelineView  from '../components/views/TimelineView';
-import WorkloadView  from '../components/views/WorkloadView';
-import PriorityView  from '../components/views/PriorityView';
-import MyTasksView   from '../components/views/MyTasksView';
+const KanbanView   = lazy(() => import('../components/views/KanbanView'));
+const TableView    = lazy(() => import('../components/views/TableView'));
+const CalendarView = lazy(() => import('../components/views/CalendarView'));
+const TimelineView = lazy(() => import('../components/views/TimelineView'));
+const WorkloadView = lazy(() => import('../components/views/WorkloadView'));
+const PriorityView = lazy(() => import('../components/views/PriorityView'));
+const MyTasksView  = lazy(() => import('../components/views/MyTasksView'));
 import { useFields }    from '../hooks/useFields';
 import { useRealtimeTasks } from '../hooks/useRealtimeTasks';
 import { usePresence }  from '../hooks/usePresence';
@@ -275,7 +275,7 @@ export default function BoardsPage() {
           Loading…
         </div>
       ) : (
-        <>
+        <Suspense fallback={<div style={{padding:'40px',textAlign:'center',color:'var(--ink3)'}}>Loading view…</div>}>
           {view === 'kanban' && (
             <KanbanView
               columns={columns}
@@ -336,7 +336,7 @@ export default function BoardsPage() {
               onTasksChange={handleTasksChange}
             />
           )}
-        </>
+        </Suspense>
       )}
 
       <TaskEditor

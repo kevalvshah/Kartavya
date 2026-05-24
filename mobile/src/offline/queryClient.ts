@@ -14,7 +14,7 @@ export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime:         60_000,          // 1 min — don't refetch if fresh
-      gcTime:            1000 * 60 * 60 * 24, // 24h cache
+      gcTime:            1000 * 60 * 60 * 2,  // 2h cache — keeps MMKV write size small
       retry:             2,
       refetchOnWindowFocus: false,        // mobile: refetch on app-foreground instead
     },
@@ -34,7 +34,7 @@ export function setupQueryPersistence() {
   persistQueryClient({
     queryClient,
     persister,
-    maxAge: 1000 * 60 * 60 * 24,   // 24h
+    maxAge: 1000 * 60 * 60 * 2,    // 2h — matches gcTime
     buster: '2.0.0',                 // bump to invalidate on major deploys
   });
 }

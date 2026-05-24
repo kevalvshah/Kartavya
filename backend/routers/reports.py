@@ -102,12 +102,18 @@ async def _fetch_report_data(pool, team_id: str, from_date: str, to_date: str) -
     total_mins = sum(e["minutes"] or 0 for e in entries)
 
     now = datetime.now(timezone.utc)
-    todo        = await pool.fetchval("SELECT COUNT(*) FROM tasks WHERE team_id=$1 AND status='todo'", team_id)
-    in_progress = await pool.fetchval("SELECT COUNT(*) FROM tasks WHERE team_id=$1 AND status='in_progress'", team_id)
-    done        = await pool.fetchval("SELECT COUNT(*) FROM tasks WHERE team_id=$1 AND status='done'", team_id)
-    overdue     = await pool.fetchval(
-        "SELECT COUNT(*) FROM tasks WHERE team_id=$1 AND status!='done' AND due_at < $2", team_id, now
-    )
+    counts = await pool.fetchrow("""
+        SELECT
+          COUNT(*) FILTER (WHERE status='todo')                         AS todo,
+          COUNT(*) FILTER (WHERE status='in_progress')                  AS in_progress,
+          COUNT(*) FILTER (WHERE status='done')                         AS done,
+          COUNT(*) FILTER (WHERE status!='done' AND due_at < $2)        AS overdue
+        FROM tasks WHERE team_id=$1
+    """, team_id, now)
+    todo        = counts["todo"]
+    in_progress = counts["in_progress"]
+    done        = counts["done"]
+    overdue     = counts["overdue"]
 
     # Detailed task list (up to 50) — no array subquery, owner derived from created_by
     try:
@@ -322,7 +328,9 @@ async def dispatch_reports(
     - REPORT_DISPATCH_SECRET query param when the env var is set — an additional
       layer so cron callers don't need a real session cookie.
     """
-    if not DISPATCH_SECRET or request_secret != DISPATCH_SECRET:
+    # When REPORT_DISPATCH_SECRET is set, callers must supply it.
+    # When unset, require_admin (applied to this route) is the sole guard.
+    if DISPATCH_SECRET and request_secret != DISPATCH_SECRET:
         raise HTTPException(403, "Invalid dispatch secret")
 
     now = datetime.now(timezone.utc)

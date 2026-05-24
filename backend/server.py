@@ -50,7 +50,8 @@ from services.gita       import get_verse_of_the_day
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env")
 
-# Per-request team_ids cache: keyed by user_id, cleared after each request via middleware.
+# Per-task team_ids cache: keyed by (asyncio_task_id, user_id) so concurrent requests
+# never share entries. Entries are removed after each request completes.
 _team_ids_request_cache: dict = {}
 
 logger = logging.getLogger(__name__)
@@ -83,8 +84,15 @@ app.add_middleware(
 
 @app.middleware("http")
 async def clear_request_cache(request, call_next):
-    _team_ids_request_cache.clear()
-    return await call_next(request)
+    import asyncio
+    task_id = id(asyncio.current_task())
+    try:
+        return await call_next(request)
+    finally:
+        # Remove only entries belonging to this request's asyncio task
+        keys_to_remove = [k for k in _team_ids_request_cache if k[0] == task_id]
+        for k in keys_to_remove:
+            _team_ids_request_cache.pop(k, None)
 
 
 
@@ -108,7 +116,10 @@ async def get_visible_team_ids(pool, user_id, role=None, _user_dict=None):
     Caches result in _team_ids_request_cache for the duration of a request.
     FIX #4: UNIONs team_members so users invited before registering still see teams.
     """
-    cached = _team_ids_request_cache.get(user_id)
+    import asyncio
+    task_id = id(asyncio.current_task())
+    cache_key = (task_id, user_id)
+    cached = _team_ids_request_cache.get(cache_key)
     if cached is not None:
         return cached
 
@@ -131,7 +142,7 @@ async def get_visible_team_ids(pool, user_id, role=None, _user_dict=None):
         )
         result = [r["team_id"] for r in rows]
 
-    _team_ids_request_cache[user_id] = result
+    _team_ids_request_cache[cache_key] = result
     return result
 
 async def is_project_member(pool, team_id: str, user: dict) -> dict | None:
@@ -148,11 +159,19 @@ async def normalize_orders(pool, scope_col, scope_val, column_id):
         f"SELECT task_id FROM tasks WHERE {scope_col}=$1 AND column_id=$2 ORDER BY sort_order ASC, updated_at ASC",
         scope_val, column_id,
     )
+    if not rows:
+        return
+    # Bulk-update all sort_orders in a single query using a VALUES list
+    values_sql = ",".join(f"(${i*2+1}::int, ${i*2+2}::text)" for i in range(len(rows)))
+    params = []
     for idx, row in enumerate(rows):
-        await pool.execute(
-            "UPDATE tasks SET sort_order=$1, updated_at=NOW() WHERE task_id=$2 AND sort_order!=$1",
-            idx, row["task_id"],
-        )
+        params.extend([idx, row["task_id"]])
+    await pool.execute(
+        f"UPDATE tasks SET sort_order=v.idx, updated_at=NOW() "
+        f"FROM (VALUES {values_sql}) AS v(idx, task_id) "
+        f"WHERE tasks.task_id=v.task_id",
+        *params,
+    )
 
 async def create_notification(pool, user_id, notif_type, title, message, task_id=None, team_id=None, url=None):
     await pool.execute(
@@ -415,8 +434,18 @@ async def delete_column(team_id:str,column_id:str,pool=Depends(get_db),user=Depe
 async def reorder_columns(team_id:str,body:dict,pool=Depends(get_db),user=Depends(require_user)):
     mem=await is_project_member(pool,team_id,user)
     if not mem or mem["role"] not in ("owner","admin"): raise HTTPException(403)
-    for idx,cid in enumerate(body.get("ordered_ids",[])):
-        await pool.execute("UPDATE project_columns SET sort_order=$1 WHERE column_id=$2 AND team_id=$3",idx,cid,team_id)
+    ordered_ids = body.get("ordered_ids", [])
+    if ordered_ids:
+        values_sql = ",".join(f"(${i*2+1}::int, ${i*2+2}::text)" for i in range(len(ordered_ids)))
+        params = []
+        for idx, cid in enumerate(ordered_ids):
+            params.extend([idx, cid])
+        await pool.execute(
+            f"UPDATE project_columns SET sort_order=v.idx "
+            f"FROM (VALUES {values_sql}) AS v(idx, column_id) "
+            f"WHERE project_columns.column_id=v.column_id AND project_columns.team_id=${ len(params)+1 }",
+            *params, team_id,
+        )
     return {"ok":True}
 
 # ── Client-scoped endpoints ──────────────────────────────────────────
@@ -1295,13 +1324,17 @@ async def process_notifications(pool=Depends(get_db),user=Depends(require_user))
 @api_router.get("/dashboard/summary",response_model=DashboardSummaryOut)
 async def dashboard_summary(pool=Depends(get_db),user=Depends(require_user)):
     team_ids=await get_visible_team_ids(pool,user["user_id"],_user_dict=user); now=now_utc()
-    base="(user_id=$1 OR team_id=ANY($2::text[]))"
-    todo=await pool.fetchval(f"SELECT COUNT(*) FROM tasks WHERE {base} AND status='todo'",user["user_id"],team_ids)
-    in_progress=await pool.fetchval(f"SELECT COUNT(*) FROM tasks WHERE {base} AND status='in_progress'",user["user_id"],team_ids)
-    done=await pool.fetchval(f"SELECT COUNT(*) FROM tasks WHERE {base} AND status='done'",user["user_id"],team_ids)
-    overdue=await pool.fetchval(f"SELECT COUNT(*) FROM tasks WHERE {base} AND status!='done' AND due_at<$3",user["user_id"],team_ids,now)
-    due_24h=await pool.fetchval(f"SELECT COUNT(*) FROM tasks WHERE {base} AND status!='done' AND due_at>=$3 AND due_at<$4",user["user_id"],team_ids,now,now+timedelta(hours=24))
-    return DashboardSummaryOut(todo=todo,in_progress=in_progress,done=done,overdue=overdue,due_24h=due_24h)
+    row=await pool.fetchrow("""
+        SELECT
+          COUNT(*) FILTER (WHERE status='todo')        AS todo,
+          COUNT(*) FILTER (WHERE status='in_progress') AS in_progress,
+          COUNT(*) FILTER (WHERE status='done')        AS done,
+          COUNT(*) FILTER (WHERE status!='done' AND due_at<$3)                         AS overdue,
+          COUNT(*) FILTER (WHERE status!='done' AND due_at>=$3 AND due_at<$4)          AS due_24h
+        FROM tasks
+        WHERE (user_id=$1 OR team_id=ANY($2::text[]))
+    """,user["user_id"],team_ids,now,now+timedelta(hours=24))
+    return DashboardSummaryOut(todo=row["todo"],in_progress=row["in_progress"],done=row["done"],overdue=row["overdue"],due_24h=row["due_24h"])
 
 @api_router.get("/notifications/poll")
 async def poll_notifications(pool=Depends(get_db),user=Depends(require_user)):
