@@ -55,18 +55,12 @@
       "env": {
         "APP_ENV": "production",
         "EXPO_PUBLIC_API_URL": "https://kartavya-production.up.railway.app"
-        // Future: switch to "https://api.kartavya.aekaminc.com" here only
       }
     }
   },
   "submit": {
     "production": {
-      "ios": {
-        // appleId, ascAppId, appleTeamId moved to EAS secrets
-        // Run: eas secret:create --scope project --name EXPO_APPLE_ID --value "keval@aekaminc.com"
-        //      eas secret:create --scope project --name EXPO_ASC_APP_ID --value "com.aekaminc.kartavya"
-        //      eas secret:create --scope project --name EXPO_APPLE_TEAM_ID --value "AEKAMINC"
-      },
+      "ios": {},
       "android": {
         "serviceAccountKeyPath": "./google-service-account.json",
         "track": "internal"
