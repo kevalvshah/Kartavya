@@ -5,7 +5,7 @@ Token-based magic-link endpoints for client approval via email.
 """
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 from typing import Optional, List
 from datetime import datetime, timezone
 import uuid
@@ -271,7 +271,7 @@ async def get_pending_approvals(pool=Depends(get_pool), user=Depends(require_use
 
 
 class ClientApprovalRequest(BaseModel):
-    client_email: str
+    client_email: EmailStr
     notes: Optional[str] = None
 
 

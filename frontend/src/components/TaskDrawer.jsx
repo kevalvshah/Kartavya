@@ -370,6 +370,7 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
           onClose();
         } catch (e) {
           logger.error(e);
+          pushToast({ type: 'error', title: e?.response?.data?.detail || 'Could not delete task' });
           setDeletingTask(false);
         }
       },

@@ -100,9 +100,13 @@ export default function AutomationsPage({ teamId: propTeamId, embedded = false }
       message: 'Delete this automation?',
       confirmLabel: 'Delete',
       onConfirm: async () => {
-        await api.delete(`/automations/${id}`);
-        setAutomations(prev => prev.filter(a => a.automation_id !== id));
-        pushToast({ type: 'success', title: 'Automation deleted' });
+        try {
+          await api.delete(`/automations/${id}`);
+          setAutomations(prev => prev.filter(a => a.automation_id !== id));
+          pushToast({ type: 'success', title: 'Automation deleted' });
+        } catch (err) {
+          pushToast({ type: 'error', title: err?.response?.data?.detail || 'Could not delete automation' });
+        }
       },
     });
   };

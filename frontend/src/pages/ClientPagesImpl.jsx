@@ -46,6 +46,7 @@ const statusLabel = (s) => ({
 function ClientTaskDrawer({ open, onClose, task: initialTask, categories = [], teams = [], defaultTeamId, members = [], onSaved, onDeleted }) {
   const { pushToast } = useToast();
   const fileRef = useRef();
+  const [confirmState, setConfirmState] = useState(null);
 
   const isNew = !initialTask;
 
@@ -367,6 +368,7 @@ function ClientTaskDrawer({ open, onClose, task: initialTask, categories = [], t
         </div>
       </div>
     </div>
+    <ConfirmDialog state={confirmState} onClose={() => setConfirmState(null)} />
   );
 }
 
@@ -561,7 +563,7 @@ export function ClientPortal() {
   const [marking,  setMarking]  = useState(null);
   const [members,  setMembers]  = useState([]);
   const [confirmState, setConfirmState] = useState(null);
-  const user = JSON.parse(sessionStorage.getItem('kartavya_user') || 'null');
+  const user = (() => { try { return JSON.parse(sessionStorage.getItem('kartavya_user') || 'null'); } catch { return null; } })();
 
   const reloadTasks = () =>
     api.get('/client/tasks').then(r => setTasks(r.data)).catch(() => {});

@@ -14,6 +14,7 @@ Sections:
 """
 
 import json
+import re
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
@@ -26,13 +27,16 @@ from db import get_pool
 
 # ── 0. Logging helpers ───────────────────────────────────────────────────────
 
+_CTRL_RE = re.compile(r'[\x00-\x1f\x7f]|\x1b\[[0-?]*[ -/]*[@-~]')
+
+
 def log_safe(value: object) -> str:
     """Sanitize a value for use in log messages (CWE-117 log injection prevention).
 
-    Strips newline and carriage-return characters that could allow an attacker
-    to forge log entries when user-controlled input is logged.
+    Strips all ASCII control characters (including CR/LF that could forge log
+    entries) and ANSI escape sequences that could corrupt log output or terminals.
     """
-    return str(value).replace("\n", "").replace("\r", "")
+    return _CTRL_RE.sub('', str(value))
 
 
 # ── 1. Datetime helpers ───────────────────────────────────────────────────────
