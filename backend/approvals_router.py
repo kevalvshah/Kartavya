@@ -61,13 +61,12 @@ class ApprovalResponse(BaseModel):
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
 async def get_task_with_permission(pool, task_id: str, user_id: str):
-    """Fetch a task by ID joined with the user's team role, raising 404 if not found."""
-    task = await pool.fetchrow("""
-        SELECT t.*, tm.role AS user_team_role
-        FROM tasks t
-        LEFT JOIN team_members tm ON tm.team_id = t.team_id AND tm.user_id = $2
-        WHERE t.task_id = $1
-    """, task_id, user_id)
+    """Fetch a task by ID, raising 404 if not found.
+
+    Permission checks (owner/admin) are done by callers via is_project_owner().
+    The previous LEFT JOIN on team_members was unused — removed to avoid drift.
+    """
+    task = await pool.fetchrow("SELECT * FROM tasks WHERE task_id=$1", task_id)
     if not task:
         raise HTTPException(status_code=404, detail=_TASK_NOT_FOUND)
     return task
