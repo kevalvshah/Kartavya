@@ -33,7 +33,7 @@
     "expo-document-picker": "~12.0.2",
     "expo-file-system": "~17.0.1",
     "expo-font": "~12.0.10",
-    "expo-image-picker": "~15.0.7",
+    "expo-image-picker": "~15.1.0",
     "expo-linear-gradient": "^13.0.2",
     "expo-notifications": "~0.28.19",
     "expo-splash-screen": "~0.27.6",
