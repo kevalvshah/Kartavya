@@ -525,6 +525,7 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
   ];
 
   return (
+    <>
     <div className="k-dr-scrim" onClick={e => e.target === e.currentTarget && onClose()}>
       <div className="k-dr">
 
@@ -1113,5 +1114,6 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
       </div>
     </div>
     <ConfirmDialog state={confirmState} onClose={() => setConfirmState(null)} />
+    </>
   );
 }
