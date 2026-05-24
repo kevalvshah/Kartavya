@@ -13,11 +13,13 @@ export function Modal({ open, onOpenChange, title, children, footer, dataTestId 
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onOpenChange]);
 
-  // Return focus to the element that opened the modal when it closes
+  // Return focus to the element that opened the modal when it closes.
+  // Captured at open-time from the trigger element, not document.activeElement on close,
+  // so it survives focus changes that happen inside the modal.
   useEffect(() => {
     if (!open) return;
-    const prev = document.activeElement;
-    return () => { prev?.focus?.(); };
+    const trigger = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    return () => { trigger?.focus?.(); };
   }, [open]);
 
   if (!open) return null;

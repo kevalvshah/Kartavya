@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useCallback } from "react";
 
 /**
  * Accessible confirm dialog — replaces window.confirm throughout the app.
@@ -9,20 +9,44 @@ import React, { useEffect, useRef } from "react";
  *   // render:   <ConfirmDialog state={confirm} onClose={() => setConfirm(null)} />
  */
 export default function ConfirmDialog({ state, onClose }) {
-  const cancelRef = useRef(null);
+  const cancelRef  = useRef(null);
+  const confirmRef = useRef(null);
+  const dialogRef  = useRef(null);
 
   // Focus the cancel button when dialog opens (safe default)
   useEffect(() => {
     if (state) cancelRef.current?.focus();
   }, [state]);
 
-  // Close on Escape
+  // Return focus to the element that opened the dialog when it closes
   useEffect(() => {
     if (!state) return;
-    const handler = (e) => { if (e.key === "Escape") onClose(); };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [state, onClose]);
+    const trigger = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    return () => { trigger?.focus?.(); };
+  }, [state]);
+
+  // Close on Escape + trap focus inside the dialog
+  const handleKeyDown = useCallback((e) => {
+    if (e.key === 'Escape') { onClose(); return; }
+    if (e.key !== 'Tab') return;
+    const focusable = dialogRef.current?.querySelectorAll(
+      'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+    );
+    if (!focusable || focusable.length === 0) return;
+    const first = focusable[0];
+    const last  = focusable[focusable.length - 1];
+    if (e.shiftKey) {
+      if (document.activeElement === first) { e.preventDefault(); last.focus(); }
+    } else {
+      if (document.activeElement === last) { e.preventDefault(); first.focus(); }
+    }
+  }, [onClose]);
+
+  useEffect(() => {
+    if (!state) return;
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [state, handleKeyDown]);
 
   if (!state) return null;
 
@@ -44,6 +68,7 @@ export default function ConfirmDialog({ state, onClose }) {
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div
+        ref={dialogRef}
         role="alertdialog"
         aria-modal="true"
         aria-labelledby="cd-title"
@@ -80,6 +105,7 @@ export default function ConfirmDialog({ state, onClose }) {
             Cancel
           </button>
           <button
+            ref={confirmRef}
             className="k-btn"
             style={{ ...confirmBtnStyle, minWidth: 80 }}
             onClick={async () => { await onConfirm(); onClose(); }}

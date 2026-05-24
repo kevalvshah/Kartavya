@@ -32,7 +32,9 @@ export function priorityColor(priority) {
 
 export function relTime(ts) {
   if (!ts) return '';
-  const s = Math.floor((Date.now() - new Date(ts)) / 1000);
+  const ms = Date.now() - new Date(ts).getTime();
+  if (Number.isNaN(ms)) return '';
+  const s = Math.floor(Math.abs(ms) / 1000);
   if (s < 60)    return `${s}s ago`;
   if (s < 3600)  return `${Math.floor(s / 60)}m ago`;
   if (s < 86400) return `${Math.floor(s / 3600)}h ago`;

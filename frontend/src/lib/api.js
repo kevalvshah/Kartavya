@@ -2,12 +2,14 @@ import axios from "axios";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 if (!BACKEND_URL) {
-  // In production a missing env var shows a friendly error screen instead of a white crash
-  document.body.innerHTML =
-    '<div style="display:flex;height:100vh;align-items:center;justify-content:center;font-family:sans-serif;flex-direction:column;gap:12px">' +
-    '<h2 style="color:#dc2626">Configuration Error</h2>' +
-    '<p style="color:#555">REACT_APP_BACKEND_URL is not set. Please check your deployment environment.</p>' +
-    '</div>';
+  // Guard: only touch DOM in a real browser context (not SSR / test / Storybook)
+  if (typeof document !== 'undefined' && document.body) {
+    document.body.innerHTML =
+      '<div style="display:flex;height:100vh;align-items:center;justify-content:center;font-family:sans-serif;flex-direction:column;gap:12px">' +
+      '<h2 style="color:#dc2626">Configuration Error</h2>' +
+      '<p style="color:#555">REACT_APP_BACKEND_URL is not set. Please check your deployment environment.</p>' +
+      '</div>';
+  }
   throw new Error('REACT_APP_BACKEND_URL is not set');
 }
 const API = `${BACKEND_URL}/api`;

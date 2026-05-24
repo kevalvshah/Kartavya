@@ -25,7 +25,11 @@ self.addEventListener('fetch', (e) => {
         caches.open(CACHE).then((c) => c.put(e.request, clone));
       }
       return res;
-    }).catch(() => caches.match('/')))
+    }).catch(() => {
+      // Only fall back to the app shell for navigation requests, not for assets/XHR
+      if (e.request.mode === 'navigate') return caches.match('/index.html');
+      return new Response('', { status: 408, statusText: 'Offline' });
+    }))
   );
 });
 
