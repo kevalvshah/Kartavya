@@ -453,7 +453,8 @@ export default function TaskDetailScreen() {
 
       if (!uri) return;
       const fd = new FormData();
-      (fd as any).append('file', { uri, name, type });
+      // React Native FormData accepts a file-like object with uri/name/type
+      fd.append('file', { uri, name, type } as unknown as Blob);
       await tasksApi.uploadAttachment(taskId, fd);
       invalidate();
     } catch (e: any) {
