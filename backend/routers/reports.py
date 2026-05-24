@@ -24,6 +24,8 @@ from pydantic import BaseModel
 from auth_router import require_user, require_admin
 from db import get_pool
 
+_DATE_RE = re.compile(r'^\d{4}-\d{2}-\d{2}$')
+
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/reports", tags=["reports"])
 
@@ -193,14 +195,14 @@ async def get_report_data(
     pool=Depends(get_pool),
     user=Depends(require_user),
 ):
-    if not re.match(r'^\d{4}-\d{2}-\d{2}$', from_date) or not re.match(r'^\d{4}-\d{2}-\d{2}$', to_date):
+    if not _DATE_RE.match(from_date) or not _DATE_RE.match(to_date):
         raise HTTPException(400, "Invalid date format — use YYYY-MM-DD")
     await _assert_project_owner(pool, team_id, user)
     try:
         return await _fetch_report_data(pool, team_id, from_date, to_date)
     except Exception as exc:
         logger.error("Report data fetch failed for %s: %s", team_id.replace('\n','').replace('\r',''), str(exc).replace('\n','').replace('\r',''), exc_info=True)
-        raise HTTPException(500, f"Report data error: {exc}")
+        raise HTTPException(500, f"Report data error: {exc}") from exc
 
 
 @router.get("/download/{team_id}")
@@ -212,7 +214,6 @@ async def download_report(
     pool=Depends(get_pool),
     user=Depends(require_user),
 ):
-    _DATE_RE = re.compile(r'^\d{4}-\d{2}-\d{2}$')
     if not _DATE_RE.match(from_date) or not _DATE_RE.match(to_date):
         raise HTTPException(400, "Invalid date format — use YYYY-MM-DD")
 
@@ -239,7 +240,7 @@ async def download_report(
             media_type = "application/pdf"
     except Exception as exc:
         logger.error("Report generation failed for %s fmt=%s: %s", team_id.replace('\n','').replace('\r',''), str(fmt).replace('\n','').replace('\r',''), str(exc).replace('\n','').replace('\r',''), exc_info=True)
-        raise HTTPException(500, f"Report generation failed: {exc}")
+        raise HTTPException(500, f"Report generation failed: {exc}") from exc
 
     return StreamingResponse(
         io.BytesIO(content),

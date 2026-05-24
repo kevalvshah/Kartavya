@@ -26,12 +26,12 @@ function timeAgo(iso) {
 }
 
 function DiffBadge({ from, to }) {
-  if (from == null && to == null) return null;
+  if (from === null && to === null) return null;
   return (
     <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, marginLeft: 6 }}>
-      {from != null && <span style={{ background: "#fee2e2", color: "var(--danger)", borderRadius: 4, padding: "1px 5px" }}>{String(from)}</span>}
-      {from != null && to != null && <span style={{ color: "var(--ink-3)" }}>→</span>}
-      {to   != null && <span style={{ background: "#dcfce7", color: "#16a34a", borderRadius: 4, padding: "1px 5px" }}>{String(to)}</span>}
+      {from !== null && from !== undefined && <span style={{ background: "#fee2e2", color: "var(--danger)", borderRadius: 4, padding: "1px 5px" }}>{String(from)}</span>}
+      {from !== null && from !== undefined && to !== null && to !== undefined && <span style={{ color: "var(--ink-3)" }}>→</span>}
+      {to   !== null && to !== undefined && <span style={{ background: "#dcfce7", color: "#16a34a", borderRadius: 4, padding: "1px 5px" }}>{String(to)}</span>}
     </span>
   );
 }

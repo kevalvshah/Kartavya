@@ -9,7 +9,7 @@ export default function Hero({ name, dateLine, lede, weekDates, dotsByDay, today
         {dateLine && (
           <div className="k-hero__meta">
             {dateLine.map((seg, i) => (
-              <React.Fragment key={i}>
+              <React.Fragment key={seg.label ?? i}>
                 {i > 0 && <span className="k-hero__sep">·</span>}
                 <span className={seg.hindi ? 'k-hero__samvat' : 'k-hero__date'}>{seg.label}</span>
               </React.Fragment>

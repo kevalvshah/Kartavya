@@ -11,6 +11,8 @@ from db import get_pool
 
 router = APIRouter(prefix="/api/templates", tags=["templates"])
 
+_TEMPLATE_NOT_FOUND = _TEMPLATE_NOT_FOUND
+
 
 class ProjectTemplateCreate(BaseModel):
     name: str
@@ -46,7 +48,7 @@ async def create_project_template(body: ProjectTemplateCreate, pool=Depends(get_
 async def delete_project_template(template_id: str, pool=Depends(get_pool), user=Depends(require_user)):
     tmpl = await pool.fetchrow("SELECT created_by FROM project_templates WHERE template_id=$1", template_id)
     if not tmpl:
-        raise HTTPException(404, "Template not found")
+        raise HTTPException(404, _TEMPLATE_NOT_FOUND)
     if tmpl["created_by"] != user["user_id"] and user.get("role") != "admin":
         raise HTTPException(403, "Not authorised")
     await pool.execute("DELETE FROM project_templates WHERE template_id=$1", template_id)
@@ -61,7 +63,7 @@ async def apply_project_template(
     """Create columns and sample tasks from template into existing team."""
     tmpl = await pool.fetchrow("SELECT config FROM project_templates WHERE template_id=$1", template_id)
     if not tmpl:
-        raise HTTPException(404, "Template not found")
+        raise HTTPException(404, _TEMPLATE_NOT_FOUND)
     import json
     cfg = tmpl["config"] if isinstance(tmpl["config"], dict) else json.loads(tmpl["config"])
     created = {"columns": 0, "fields": 0, "tasks": 0}
@@ -128,6 +130,6 @@ async def create_task_template(body: TaskTemplateCreate, pool=Depends(get_pool),
 async def delete_task_template(template_id: str, pool=Depends(get_pool), user=Depends(require_user)):
     tmpl = await pool.fetchrow("SELECT template_id FROM task_templates WHERE template_id=$1", template_id)
     if not tmpl:
-        raise HTTPException(404, "Template not found")
+        raise HTTPException(404, _TEMPLATE_NOT_FOUND)
     await pool.execute("DELETE FROM task_templates WHERE template_id=$1", template_id)
     return {"ok": True}

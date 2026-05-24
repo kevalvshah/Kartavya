@@ -47,6 +47,12 @@ from routers.uploads     import router as uploads_router   # R2-backed upload
 from routers.reports     import router as reports_router
 from services.gita       import get_verse_of_the_day
 
+# ── Shared constants ──────────────────────────────────────
+_NOT_TEAM_MEMBER    = _NOT_TEAM_MEMBER
+_SQL_USER_ROLE      = _SQL_USER_ROLE
+_SQL_GET_SUBTASKS   = _SQL_GET_SUBTASKS
+_SQL_SET_SUBTASKS   = _SQL_SET_SUBTASKS
+
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env")
 
@@ -128,7 +134,7 @@ async def get_visible_team_ids(pool, user_id, role=None, _user_dict=None):
 
     effective_role = role or (_user_dict and _user_dict.get("role"))
     if effective_role != "admin":
-        user_row = await pool.fetchrow("SELECT role FROM users WHERE user_id=$1", user_id)
+        user_row = await pool.fetchrow(_SQL_USER_ROLE, user_id)
         effective_role = user_row.get("role") if user_row else None
 
     if effective_role == "admin":
@@ -635,7 +641,7 @@ async def review_approval(approval_id:str,body:dict,pool=Depends(get_db),user=De
             "SELECT 1 FROM team_members WHERE team_id=$1 AND user_id=$2 AND role IN ('owner','admin') AND status='active'",
             task["team_id"], user["user_id"]
         )
-        user_data = await pool.fetchrow("SELECT role FROM users WHERE user_id=$1", user["user_id"])
+        user_data = await pool.fetchrow(_SQL_USER_ROLE, user["user_id"])
         is_admin = user_data and user_data["role"] == "admin"
         if not (is_pa or is_tm or is_admin):
             raise HTTPException(403, "Only project owner/admin can review task approvals")
@@ -708,7 +714,7 @@ async def review_approval(approval_id:str,body:dict,pool=Depends(get_db),user=De
     approval=await pool.fetchrow("SELECT * FROM approvals WHERE approval_id=$1",approval_id)
     if not approval: raise HTTPException(404)
     mem=await pool.fetchrow("SELECT role FROM project_assignments WHERE team_id=$1 AND user_id=$2",approval["team_id"],user["user_id"])
-    user_data=await pool.fetchrow("SELECT role FROM users WHERE user_id=$1",user["user_id"])
+    user_data=await pool.fetchrow(_SQL_USER_ROLE,user["user_id"])
     is_owner_admin = mem and mem["role"] in ("owner","admin")
     is_system_admin = user_data and user_data["role"] == "admin"
     is_client_member = bool(mem)
@@ -819,12 +825,12 @@ async def delete_comment(task_id:str,comment_id:str,pool=Depends(get_db),user=De
 
 @api_router.post("/tasks/{task_id}/subtasks",response_model=TaskOut)
 async def add_subtask(task_id:str,body:Subtask,pool=Depends(get_db),user=Depends(require_user)):
-    task=await pool.fetchrow("SELECT subtasks FROM tasks WHERE task_id=$1",task_id)
+    task=await pool.fetchrow(_SQL_GET_SUBTASKS,task_id)
     if not task: raise HTTPException(404)
     subtasks=json.loads(task["subtasks"] or "[]")
     new_sub={"subtask_id":f"sub_{uuid.uuid4().hex[:12]}","title":body.title,"is_done":False,"order":len(subtasks)}
     subtasks.append(new_sub)
-    row=await pool.fetchrow("UPDATE tasks SET subtasks=$1,updated_at=NOW() WHERE task_id=$2 RETURNING *",json.dumps(subtasks),task_id)
+    row=await pool.fetchrow(_SQL_SET_SUBTASKS,json.dumps(subtasks),task_id)
     try:
         from services.activity_logger import log_event
         await log_event(pool,task_id=task_id,actor_id=user["user_id"],event_type="subtask_added",data={"title":body.title})
@@ -833,22 +839,22 @@ async def add_subtask(task_id:str,body:Subtask,pool=Depends(get_db),user=Depends
 
 @api_router.patch("/tasks/{task_id}/subtasks/{subtask_id}",response_model=TaskOut)
 async def toggle_subtask(task_id:str,subtask_id:str,pool=Depends(get_db),user=Depends(require_user)):
-    task=await pool.fetchrow("SELECT subtasks FROM tasks WHERE task_id=$1",task_id)
+    task=await pool.fetchrow(_SQL_GET_SUBTASKS,task_id)
     if not task: raise HTTPException(404)
     subtasks=json.loads(task["subtasks"] or "[]")
     for s in subtasks:
         if s["subtask_id"]==subtask_id: s["is_done"]=not s.get("is_done",False)
-    row=await pool.fetchrow("UPDATE tasks SET subtasks=$1,updated_at=NOW() WHERE task_id=$2 RETURNING *",json.dumps(subtasks),task_id)
+    row=await pool.fetchrow(_SQL_SET_SUBTASKS,json.dumps(subtasks),task_id)
     return row_to_task(row)
 
 @api_router.delete("/tasks/{task_id}/subtasks/{subtask_id}",response_model=TaskOut)
 async def delete_subtask(task_id:str,subtask_id:str,pool=Depends(get_db),user=Depends(require_user)):
-    task=await pool.fetchrow("SELECT subtasks FROM tasks WHERE task_id=$1",task_id)
+    task=await pool.fetchrow(_SQL_GET_SUBTASKS,task_id)
     if not task: raise HTTPException(404)
     subtasks=json.loads(task["subtasks"] or "[]")
     removed=[s for s in subtasks if s["subtask_id"]==subtask_id]
     subtasks=[s for s in subtasks if s["subtask_id"]!=subtask_id]
-    row=await pool.fetchrow("UPDATE tasks SET subtasks=$1,updated_at=NOW() WHERE task_id=$2 RETURNING *",json.dumps(subtasks),task_id)
+    row=await pool.fetchrow(_SQL_SET_SUBTASKS,json.dumps(subtasks),task_id)
     try:
         from services.activity_logger import log_event
         title=removed[0]["title"] if removed else ""
@@ -862,14 +868,14 @@ class SubtaskPatch(BaseModel):
 
 @api_router.put("/tasks/{task_id}/subtasks/{subtask_id}",response_model=TaskOut)
 async def update_subtask(task_id:str,subtask_id:str,body:SubtaskPatch,pool=Depends(get_db),user=Depends(require_user)):
-    task=await pool.fetchrow("SELECT subtasks FROM tasks WHERE task_id=$1",task_id)
+    task=await pool.fetchrow(_SQL_GET_SUBTASKS,task_id)
     if not task: raise HTTPException(404)
     subtasks=json.loads(task["subtasks"] or "[]")
     for s in subtasks:
         if s["subtask_id"]==subtask_id:
             if body.assignee_user_id is not None: s["assignee_user_id"]=body.assignee_user_id
             if body.title is not None: s["title"]=body.title
-    row=await pool.fetchrow("UPDATE tasks SET subtasks=$1,updated_at=NOW() WHERE task_id=$2 RETURNING *",json.dumps(subtasks),task_id)
+    row=await pool.fetchrow(_SQL_SET_SUBTASKS,json.dumps(subtasks),task_id)
     return row_to_task(row)
 
 # ── Teams ────────────────────────────────────────────────────────
@@ -930,7 +936,7 @@ async def get_team(team_id:str,pool=Depends(get_db),user=Depends(require_user)):
     mem=await pool.fetchrow("SELECT role FROM project_assignments WHERE team_id=$1 AND user_id=$2",team_id,user["user_id"])
     if not mem:
         tm=await pool.fetchrow("SELECT role FROM team_members WHERE team_id=$1 AND user_id=$2 AND status='active'",team_id,user["user_id"])
-        if not tm: raise HTTPException(403,"Not a team member")
+        if not tm: raise HTTPException(403,_NOT_TEAM_MEMBER)
         mem=tm
     team=await pool.fetchrow("SELECT * FROM teams WHERE team_id=$1",team_id)
     members=await pool.fetch("""
@@ -944,7 +950,7 @@ async def get_team(team_id:str,pool=Depends(get_db),user=Depends(require_user)):
 async def list_team_clients(team_id:str,pool=Depends(get_db),user=Depends(require_user)):
     """Returns users with role='client' in the team — for the send-to-client dropdown."""
     mem=await is_project_member(pool,team_id,user)
-    if not mem: raise HTTPException(403,"Not a team member")
+    if not mem: raise HTTPException(403,_NOT_TEAM_MEMBER)
     rows=await pool.fetch("""
         SELECT tm.user_id, COALESCE(u.full_name,u.name,u.email) AS display_name, u.email
         FROM team_members tm
@@ -959,7 +965,7 @@ async def list_team_clients(team_id:str,pool=Depends(get_db),user=Depends(requir
 async def list_team_members(team_id:str,pool=Depends(get_db),user=Depends(require_user)):
     """Returns member list for @mention autocomplete. Accessible to all project members incl. clients."""
     mem=await is_project_member(pool,team_id,user)
-    if not mem: raise HTTPException(403,"Not a team member")
+    if not mem: raise HTTPException(403,_NOT_TEAM_MEMBER)
     rows=await pool.fetch("""
         SELECT tm.user_id, COALESCE(u.full_name,u.name,u.email) AS display_name, u.email
         FROM team_members tm

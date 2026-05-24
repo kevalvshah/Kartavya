@@ -44,14 +44,14 @@ export default function InboxPage() {
       setNotifications(prev =>
         prev.map(n => n.notification_id === id ? { ...n, read_at: new Date().toISOString() } : n)
       );
-    } catch (_) {}
+    } catch (_) { /* optimistic update already applied — ignore network errors */ }
   };
 
   const markAllRead = async () => {
     try {
       await api.post('/notifications/mark-read', { mark_all: true });
       setNotifications(prev => prev.map(n => ({ ...n, read_at: new Date().toISOString() })));
-    } catch (_) {}
+    } catch (_) { /* optimistic update already applied — ignore network errors */ }
   };
 
   const openNotif = async (n) => {

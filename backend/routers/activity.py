@@ -60,7 +60,7 @@ async def team_activity(
         return _normalize(rows)
     except Exception as exc:
         logger.error(f"Activity fetch failed for {team_id}: {exc}", exc_info=True)
-        raise HTTPException(500, f"Activity error: {exc}")
+        raise HTTPException(500, f"Activity error: {exc}") from exc
 
 
 @router.get("/task/{task_id}")

@@ -18,7 +18,7 @@ export async function apiAcceptInvite(token, name, password) {
 }
 
 export async function apiLogout() {
-  try { await api.post('/auth/logout'); } catch (_) {}
+  try { await api.post('/auth/logout'); } catch (_) { /* fire-and-forget: logout always proceeds */ }
   localStorage.removeItem('auth_token');
   localStorage.removeItem('kartavya_user');
 }

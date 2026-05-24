@@ -10,7 +10,7 @@ export async function apiLogin(email: string, password: string): Promise<User> {
 }
 
 export async function apiLogout(): Promise<void> {
-  try { await apiClient.post('/auth/logout'); } catch (_) {}
+  try { await apiClient.post('/auth/logout'); } catch (_) { /* fire-and-forget: logout always proceeds */ }
   storage.delete('auth_user');
 }
 

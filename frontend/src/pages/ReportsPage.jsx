@@ -537,7 +537,7 @@ export default function ReportsPage({ teams: propTeams }) {
                   onClick={() => toggleProject(t.team_id)}>
                   <i className="gr__chip-dot" style={{ background: colorFor(i) }} />
                   <span className="gr__chip-name">{t.name}</span>
-                  {t.task_count != null && (
+                  {t.task_count !== null && t.task_count !== undefined && (
                     <span className="gr__chip-hi">{t.task_count} tasks</span>
                   )}
                 </button>

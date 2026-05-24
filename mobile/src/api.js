@@ -8,7 +8,7 @@ api.interceptors.request.use(async (config) => {
   try {
     const token = await SecureStore.getItemAsync('auth_token');
     if (token) config.headers.Authorization = `Bearer ${token}`;
-  } catch (_) {}
+  } catch (_) { /* token not yet stored — proceed without auth header */ }
   return config;
 });
 
@@ -20,7 +20,7 @@ export async function apiLogin(email, password) {
 }
 
 export async function apiLogout() {
-  try { await api.post('/auth/logout'); } catch (_) {}
+  try { await api.post('/auth/logout'); } catch (_) { /* fire-and-forget: logout always proceeds */ }
   await SecureStore.deleteItemAsync('auth_token');
   await SecureStore.deleteItemAsync('auth_user');
 }
