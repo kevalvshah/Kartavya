@@ -19,7 +19,8 @@
       "infoPlist": {
         "NSCameraUsageDescription": "Capture site photos and receipts to attach to tasks.",
         "NSMicrophoneUsageDescription": "Record voice notes that turn into task comments.",
-        "NSPhotoLibraryUsageDescription": "Attach photos from your library to tasks."
+        "NSPhotoLibraryUsageDescription": "Attach photos from your library to tasks.",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
