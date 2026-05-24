@@ -11,9 +11,8 @@ from datetime import datetime, timezone
 import uuid
 import jwt as _jwt
 
-from auth_router import require_user, require_admin, JWT_SECRET as _JWT_SECRET
+from auth_router import require_user, JWT_SECRET as _JWT_SECRET
 from db import get_pool
-import asyncpg
 
 _JWT_ALG = "HS256"
 

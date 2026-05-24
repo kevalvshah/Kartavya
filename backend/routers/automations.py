@@ -60,11 +60,19 @@ async def create_automation(body: AutomationCreate, pool=Depends(get_pool), user
     )
     if not member:
         raise HTTPException(403, "You are not a member of this project")
+    # Structural validation: trigger must be a dict, actions a non-empty list of dicts
+    if not isinstance(body.trigger, dict):
+        raise HTTPException(400, "trigger must be an object")
+    if not isinstance(body.actions, list) or len(body.actions) == 0:
+        raise HTTPException(400, "actions must be a non-empty list")
+    for action in body.actions:
+        if not isinstance(action, dict):
+            raise HTTPException(400, "each action must be an object")
     if body.trigger.get("event") not in VALID_TRIGGERS:
-        raise HTTPException(400, f"trigger.event must be one of {VALID_TRIGGERS}")
+        raise HTTPException(400, f"trigger.event must be one of {sorted(VALID_TRIGGERS)}")
     for action in body.actions:
         if action.get("type") not in VALID_ACTIONS:
-            raise HTTPException(400, f"action.type must be one of {VALID_ACTIONS}")
+            raise HTTPException(400, f"action.type must be one of {sorted(VALID_ACTIONS)}")
     auto_id = f"auto_{uuid.uuid4().hex[:12]}"
     await pool.execute(
         "INSERT INTO automations (automation_id, team_id, name, trigger, actions, enabled, created_by) VALUES ($1,$2,$3,$4,$5,$6,$7)",

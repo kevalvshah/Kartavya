@@ -19,7 +19,7 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator, EmailStr
 
 from auth_router import require_user, require_admin
 from db import get_pool
@@ -40,13 +40,62 @@ if not DISPATCH_SECRET:
 
 # ── Models ─────────────────────────────────────────────────────────────────────
 
+_VALID_FREQUENCIES   = {"daily", "weekly", "monthly"}
+_VALID_FILE_FORMATS  = {"pdf", "excel"}
+
+
 class ScheduleCreate(BaseModel):
     frequency:     str           # daily | weekly | monthly
     file_formats:  List[str]     # ["pdf"] | ["excel"] | ["pdf","excel"]
-    recipients:    List[str]     # email addresses
+    recipients:    List[EmailStr]  # validated email addresses
     day_of_week:   Optional[int] = None   # 0–6 (weekly)
     day_of_month:  Optional[int] = None   # 1–28 (monthly)
     send_hour_utc: int = 2
+
+    @field_validator("frequency")
+    @classmethod
+    def validate_frequency(cls, v: str) -> str:
+        if v not in _VALID_FREQUENCIES:
+            raise ValueError(f"frequency must be one of {sorted(_VALID_FREQUENCIES)}")
+        return v
+
+    @field_validator("file_formats")
+    @classmethod
+    def validate_file_formats(cls, v: List[str]) -> List[str]:
+        if not v:
+            raise ValueError("file_formats must not be empty")
+        for fmt in v:
+            if fmt not in _VALID_FILE_FORMATS:
+                raise ValueError(f"file format '{fmt}' must be one of {sorted(_VALID_FILE_FORMATS)}")
+        return v
+
+    @field_validator("recipients")
+    @classmethod
+    def validate_recipients(cls, v: list) -> list:
+        if not v:
+            raise ValueError("recipients must not be empty")
+        return v
+
+    @field_validator("send_hour_utc")
+    @classmethod
+    def validate_send_hour(cls, v: int) -> int:
+        if not 0 <= v <= 23:
+            raise ValueError("send_hour_utc must be between 0 and 23")
+        return v
+
+    @field_validator("day_of_week")
+    @classmethod
+    def validate_day_of_week(cls, v: Optional[int]) -> Optional[int]:
+        if v is not None and not 0 <= v <= 6:
+            raise ValueError("day_of_week must be between 0 and 6")
+        return v
+
+    @field_validator("day_of_month")
+    @classmethod
+    def validate_day_of_month(cls, v: Optional[int]) -> Optional[int]:
+        if v is not None and not 1 <= v <= 28:
+            raise ValueError("day_of_month must be between 1 and 28")
+        return v
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -286,13 +335,7 @@ async def create_schedule(
     """Create a new report schedule for a project."""
     await _assert_project_owner(pool, team_id, user)
 
-    if payload.frequency not in ("daily", "weekly", "monthly"):
-        raise HTTPException(400, "frequency must be daily, weekly, or monthly")
-    allowed_fmts = {"pdf", "excel"}
-    if not payload.file_formats or not set(payload.file_formats).issubset(allowed_fmts):
-        raise HTTPException(400, "file_formats must be subset of ['pdf','excel']")
-    if not payload.recipients:
-        raise HTTPException(400, "At least one recipient required")
+    # Validation is now handled by ScheduleCreate field validators; no manual checks needed.
 
     next_run = _next_run(
         payload.frequency, payload.day_of_week,

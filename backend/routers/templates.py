@@ -63,7 +63,24 @@ async def apply_project_template(
     template_id: str, team_id: str,
     pool=Depends(get_pool), user=Depends(require_user)
 ):
-    """Create columns and sample tasks from template into existing team."""
+    """Create columns and sample tasks from template into existing team.
+
+    Requires the caller to be an active member or owner of the target team,
+    preventing template application into arbitrary third-party projects.
+    """
+    # Verify the caller belongs to the target team
+    if user.get("role") != "admin":
+        access = await pool.fetchrow(
+            """
+            SELECT 1 FROM team_members        WHERE team_id=$1 AND user_id=$2 AND status='active'
+            UNION ALL
+            SELECT 1 FROM project_assignments WHERE team_id=$1 AND user_id=$2
+            LIMIT 1
+            """,
+            team_id, user["user_id"],
+        )
+        if not access:
+            raise HTTPException(403, "You are not a member of this project")
     tmpl = await pool.fetchrow("SELECT config FROM project_templates WHERE template_id=$1", template_id)
     if not tmpl:
         raise HTTPException(404, _TEMPLATE_NOT_FOUND)

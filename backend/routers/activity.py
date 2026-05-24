@@ -41,6 +41,19 @@ async def team_activity(
     user=Depends(require_user),
 ):
     """Return paginated activity events for a team, with optional actor and type filters."""
+    # Enforce team visibility: admin sees all; others must be a member or assignee
+    if user.get("role") != "admin":
+        access = await pool.fetchrow(
+            """
+            SELECT 1 FROM team_members      WHERE team_id=$1 AND user_id=$2 AND status='active'
+            UNION ALL
+            SELECT 1 FROM project_assignments WHERE team_id=$1 AND user_id=$2
+            LIMIT 1
+            """,
+            team_id, user["user_id"],
+        )
+        if not access:
+            raise HTTPException(403, "Access denied")
     filters, vals = ["team_id=$1"], [team_id]
     if actor_id:   filters.append(f"actor_id=${len(vals)+1}"); vals.append(actor_id)
     if event_type: filters.append(f"type=${len(vals)+1}");     vals.append(event_type)
@@ -73,6 +86,24 @@ async def task_activity(
     user=Depends(require_user),
 ):
     """Return all activity events for a specific task, newest first."""
+    # Enforce task visibility: caller must belong to the task's project
+    if user.get("role") != "admin":
+        task_team = await pool.fetchrow(
+            "SELECT team_id FROM tasks WHERE task_id=$1", task_id
+        )
+        if not task_team:
+            raise HTTPException(404, "Task not found")
+        access = await pool.fetchrow(
+            """
+            SELECT 1 FROM team_members        WHERE team_id=$1 AND user_id=$2 AND status='active'
+            UNION ALL
+            SELECT 1 FROM project_assignments WHERE team_id=$1 AND user_id=$2
+            LIMIT 1
+            """,
+            task_team["team_id"], user["user_id"],
+        )
+        if not access:
+            raise HTTPException(403, "Access denied")
     rows = await pool.fetch("""
         SELECT ae.*,
                COALESCE(u.full_name, u.name, u.email) AS actor_name
