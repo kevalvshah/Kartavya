@@ -385,7 +385,6 @@ export default function AutomationsPage({ teamId: propTeamId, embedded = false }
     return (
       <div style={{ paddingTop: 'var(--sp-4)' }}>
         {body}
-        <ConfirmDialog state={confirmState} onClose={() => setConfirmState(null)} />
       </div>
     );
   }

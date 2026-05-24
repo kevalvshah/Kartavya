@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+﻿import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { api } from '../lib/api';
 import { currentUser } from '../lib/auth';
 import ConfirmDialog from './ui/ConfirmDialog';
@@ -6,7 +6,7 @@ import FieldRenderer from './fields/FieldRenderer';
 import MentionTextarea from './MentionTextarea';
 import ActivityList from './ActivityList';
 import { Paperclip, ExternalLink, Trash2, Play, Square, Clock, Pencil, Check, X } from 'lucide-react';
-import { AVATAR_COLORS, userInitials, PRIORITY_COLOR as PRIORITY_COLORS } from '../lib/utils';
+import { AVATAR_COLORS, userInitials, PRIORITY_COLOR as PRIORITY_COLORS, logger } from '../lib/utils';
 import { useToast } from './ui/toast';
 const PRIORITY_LABELS  = { low: 'Low', medium: 'Medium', high: 'High', urgent: 'Urgent' };
 const STATUS_LABELS    = { todo: 'To do', in_progress: 'In progress', done: 'Done', requested: 'Requested' };
@@ -111,7 +111,7 @@ function SubtaskAssigneePicker({ subtaskId, assigneeUserId, assignedMember, aNam
         ) : (
           <>
             <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="8" cy="5" r="3"/><path d="M2 14c0-3.3 2.7-6 6-6s6 2.7 6 6"/></svg>
-            Assign…
+            Assignâ€¦
           </>
         )}
         <svg width="8" height="8" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M2 4l4 4 4-4"/></svg>
@@ -266,7 +266,7 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
           setFValues(vals);
         });
       }
-    }).catch(console.error);
+    }).catch(logger.error);
   }, [open, taskId]);
 
   useEffect(() => {
@@ -274,7 +274,7 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
     setActLoad(true);
     api.get(`/activity/task/${taskId}`)
        .then(r => setActivity(Array.isArray(r.data) ? r.data : []))
-       .catch(console.error)
+       .catch(logger.error)
        .finally(() => setActLoad(false));
   }, [tab, taskId]);
 
@@ -282,13 +282,13 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
     if (tab !== 'time' || !taskId) return;
     api.get(`/time/task/${taskId}`)
        .then(r => { setEntries(r.data.entries || []); setTimer(r.data.active_entry || null); })
-       .catch(console.error);
+       .catch(logger.error);
   }, [tab, taskId]);
 
   const saveFieldValue = useCallback(async (field_id, value) => {
     setFValues(prev => ({ ...prev, [field_id]: value }));
     try { await api.put(`/fields/task/${taskId}/values`, [{ field_id, value }]); }
-    catch (e) { console.error('Field save failed', e); }
+    catch (e) { logger.error('Field save failed', e); }
   }, [taskId]);
 
   const toggleAssignee = useCallback(async (uid) => {
@@ -296,14 +296,14 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
     const next = current.includes(uid) ? current.filter(x => x !== uid) : [...current, uid];
     setTask(t => ({ ...t, assignee_user_ids: next }));
     try { await api.put(`/tasks/${taskId}`, { assignee_user_ids: next }); }
-    catch (e) { console.error(e); }
+    catch (e) { logger.error(e); }
   }, [task, taskId]);
 
   const updateSubtaskAssignee = useCallback(async (subtaskId, uid) => {
     try {
       const res = await api.put(`/tasks/${taskId}/subtasks/${subtaskId}`, { assignee_user_id: uid || null });
       setTask(res.data);
-    } catch (e) { console.error(e); }
+    } catch (e) { logger.error(e); }
   }, [taskId]);
 
   const saveTask = useCallback(async (patch) => {
@@ -312,7 +312,7 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
       const res = await api.put(`/tasks/${taskId}`, patch);
       setTask(res.data);
       onSaved?.(res.data);
-    } catch (e) { console.error('Save failed', e); }
+    } catch (e) { logger.error('Save failed', e); }
     finally { setSaving(false); }
   }, [taskId, onSaved]);
 
@@ -344,7 +344,7 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
       const res = await api.post(`/tasks/${taskId}/subtasks`, { title: newSubtask });
       setTask(res.data);
       setNewSubtask('');
-    } catch (e) { console.error(e); }
+    } catch (e) { logger.error(e); }
     finally { setAddingSubtask(false); }
   };
 
@@ -369,7 +369,7 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
           onSaved?.(null);
           onClose();
         } catch (e) {
-          console.error(e);
+          logger.error(e);
           setDeletingTask(false);
         }
       },
@@ -403,7 +403,7 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
     }
     const toUpload = picked.slice(0, slots);
     if (toUpload.length < picked.length)
-      pushToast({ type: 'error', title: `Only ${slots} slot(s) remaining — uploading first ${slots}` });
+      pushToast({ type: 'error', title: `Only ${slots} slot(s) remaining â€” uploading first ${slots}` });
 
     // Size check
     const oversized = toUpload.filter(f => f.size > MAX_MB * 1024 * 1024);
@@ -452,7 +452,7 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
       const res = await api.post(`/tasks/${taskId}/request-approval`, { notes: requestNotes });
       setTask(t => ({ ...t, approval_status: res.data.approval_status }));
       setShowRequestPanel(false); setRequestNotes('');
-    } catch (e) { console.error(e); }
+    } catch (e) { logger.error(e); }
     finally { setApprovalLoading(false); }
   };
 
@@ -480,7 +480,7 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
       setTask(t => ({ ...t, approval_status: res.data.status }));
       setShowApprovePanel(false); setApprovalNotes(''); setSendToClient(false); setClientUserId('');
       if (res.data.status !== 'pending_client') onSaved?.({ ...task, approval_status: res.data.status });
-    } catch (e) { console.error(e); }
+    } catch (e) { logger.error(e); }
     finally { setApprovalLoading(false); }
   };
 
@@ -492,7 +492,7 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
       await api.post(`/approvals/${approvalId}/review`, { status: 'rejected', notes: rejectNote });
       setTask(t => ({ ...t, approval_status: 'rejected' }));
       setShowRejectInput(false); setRejectNote('');
-    } catch (e) { console.error(e); }
+    } catch (e) { logger.error(e); }
     finally { setApprovalLoading(false); }
   };
 
@@ -502,7 +502,7 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
       await api.post(`/tasks/${taskId}/client-approve`, { notes: '' });
       setTask(t => ({ ...t, approval_status: 'approved' }));
       onSaved?.({ ...task, approval_status: 'approved' });
-    } catch (e) { console.error(e); }
+    } catch (e) { logger.error(e); }
     finally { setApprovalLoading(false); }
   };
 
@@ -513,17 +513,17 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
       await api.post(`/tasks/${taskId}/client-reject`, { notes: rejectNote });
       setTask(t => ({ ...t, approval_status: 'rejected' }));
       setShowRejectInput(false); setRejectNote('');
-    } catch (e) { console.error(e); }
+    } catch (e) { logger.error(e); }
     finally { setApprovalLoading(false); }
   };
 
   if (!open) return null;
 
   const tabs = [
-    ['details',  'Details',  'विवरण'],
-    ['files',    'Files',    'फ़ाइलें'],
-    ['activity', 'Activity', 'क्रिया'],
-    ['time',     'Time',     'काल'],
+    ['details',  'Details',  'à¤µà¤¿à¤µà¤°à¤£'],
+    ['files',    'Files',    'à¤«à¤¼à¤¾à¤‡à¤²à¥‡à¤‚'],
+    ['activity', 'Activity', 'à¤•à¥à¤°à¤¿à¤¯à¤¾'],
+    ['time',     'Time',     'à¤•à¤¾à¤²'],
   ];
 
   return (
@@ -545,7 +545,7 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
             </span>
           </div>
           <div className="k-dr__head-actions">
-            {saving && <span style={{ fontSize: 11, color: 'var(--ink-3)', marginRight: 6, alignSelf: 'center' }}>Saving…</span>}
+            {saving && <span style={{ fontSize: 11, color: 'var(--ink-3)', marginRight: 6, alignSelf: 'center' }}>Savingâ€¦</span>}
             {canDeleteTask && task && (
               <button onClick={handleDeleteTask} disabled={deletingTask} className="k-iconbtn" aria-label="Delete task" title="Delete task" style={{ color: 'var(--k-danger)' }}>
                 <Trash2 size={14} />
@@ -576,7 +576,7 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
         {task && (
           <div className="k-dr__props">
             <div className="k-prop">
-              <span className="k-prop__lbl">Priority <span className="k-prop__sans">प्राथमिकता</span></span>
+              <span className="k-prop__lbl">Priority <span className="k-prop__sans">à¤ªà¥à¤°à¤¾à¤¥à¤®à¤¿à¤•à¤¤à¤¾</span></span>
               <select
                 value={draft.priority || 'medium'}
                 onChange={e => { setDraft(d => ({ ...d, priority: e.target.value })); saveTask({ priority: e.target.value }); }}
@@ -588,7 +588,7 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
             </div>
             {columns.length > 0 && (
               <div className="k-prop">
-                <span className="k-prop__lbl">Column <span className="k-prop__sans">स्तंभ</span></span>
+                <span className="k-prop__lbl">Column <span className="k-prop__sans">à¤¸à¥à¤¤à¤‚à¤­</span></span>
                 <select
                   value={task?.column_id || ''}
                   onChange={async e => {
@@ -611,7 +611,7 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
               </div>
             )}
             <div className="k-prop">
-              <span className="k-prop__lbl">Due date <span className="k-prop__sans">समय-सीमा</span></span>
+              <span className="k-prop__lbl">Due date <span className="k-prop__sans">à¤¸à¤®à¤¯-à¤¸à¥€à¤®à¤¾</span></span>
               <input
                 type="date" className="k-input"
                 value={draft.due_at ? draft.due_at.slice(0, 10) : ''}
@@ -619,13 +619,13 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
               />
             </div>
             <div className="k-prop">
-              <span className="k-prop__lbl">Category <span className="k-prop__sans">श्रेणी</span></span>
+              <span className="k-prop__lbl">Category <span className="k-prop__sans">à¤¶à¥à¤°à¥‡à¤£à¥€</span></span>
               <select
                 value={draft.category_id || ''}
                 onChange={e => { const v = e.target.value || null; setDraft(d => ({ ...d, category_id: v })); saveTask({ category_id: v }); }}
                 className="k-input"
               >
-                <option value="">— None —</option>
+                <option value="">â€” None â€”</option>
                 {categories.map(c => (
                   <option key={c.category_id} value={c.category_id}>{c.name}</option>
                 ))}
@@ -634,7 +634,7 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
 
             {/* Assignees */}
             <div className="k-prop" ref={assigneeRef} style={{ position: 'relative' }}>
-              <span className="k-prop__lbl">Assignees <span className="k-prop__sans">नियुक्त</span></span>
+              <span className="k-prop__lbl">Assignees <span className="k-prop__sans">à¤¨à¤¿à¤¯à¥à¤•à¥à¤¤</span></span>
               {(() => {
                 const selIds = task?.assignee_user_ids || [];
                 const selMembers = members.filter(m => selIds.includes(m.user_id || m.member_id));
@@ -652,7 +652,7 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
                       }}
                     >
                       {selMembers.length === 0 ? (
-                        <span style={{ flex: 1, textAlign: 'left' }}>Pick members…</span>
+                        <span style={{ flex: 1, textAlign: 'left' }}>Pick membersâ€¦</span>
                       ) : (
                         <div style={{ display: 'flex', alignItems: 'center', gap: 3, flex: 1, flexWrap: 'wrap' }}>
                           {selMembers.slice(0, 3).map((m, i) => {
@@ -719,11 +719,11 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
         {/* Body */}
         <div className="k-dr__body">
 
-          {/* ── Details ── */}
+          {/* â”€â”€ Details â”€â”€ */}
           {tab === 'details' && task && (
             <>
               <div style={{ marginBottom: 20 }}>
-                <span style={lbl}>Description <span style={{ fontFamily: 'var(--font-hindi)', fontSize: 12, textTransform: 'none', letterSpacing: 0, color: 'var(--ink-faint)', fontWeight: 400 }}>विवरण</span></span>
+                <span style={lbl}>Description <span style={{ fontFamily: 'var(--font-hindi)', fontSize: 12, textTransform: 'none', letterSpacing: 0, color: 'var(--ink-faint)', fontWeight: 400 }}>à¤µà¤¿à¤µà¤°à¤£</span></span>
                 <textarea
                   className="k-input"
                   value={draft.description || ''}
@@ -731,15 +731,15 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
                   onBlur={() => draft.description !== task.description && saveTask({ description: draft.description })}
                   rows={5}
                   style={{ width: '100%', resize: 'vertical', lineHeight: 1.65, fontSize: 13 }}
-                  placeholder="Add a description…"
+                  placeholder="Add a descriptionâ€¦"
                 />
               </div>
 
-              {/* ── Subtasks ── */}
+              {/* â”€â”€ Subtasks â”€â”€ */}
               <div style={{ marginBottom: 20 }}>
                 <span style={{ ...lbl, marginBottom: 10 }}>
                   Subtasks{task.subtasks?.length > 0 && ` (${task.subtasks.filter(s => s.is_done).length}/${task.subtasks.length})`}
-                  {' '}<span style={{ fontFamily: 'var(--font-hindi)', fontSize: 12, textTransform: 'none', letterSpacing: 0, color: 'var(--ink-faint)', fontWeight: 400 }}>उप-कार्य</span>
+                  {' '}<span style={{ fontFamily: 'var(--font-hindi)', fontSize: 12, textTransform: 'none', letterSpacing: 0, color: 'var(--ink-faint)', fontWeight: 400 }}>à¤‰à¤ª-à¤•à¤¾à¤°à¥à¤¯</span>
                 </span>
                 {task.subtasks?.length > 0 && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 10 }}>
@@ -788,7 +788,7 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
                     value={newSubtask}
                     onChange={e => setNewSubtask(e.target.value)}
                     onKeyDown={e => e.key === 'Enter' && addSubtask()}
-                    placeholder="Add a subtask…"
+                    placeholder="Add a subtaskâ€¦"
                     className="k-input"
                     style={{ flex: 1, fontSize: 12 }}
                   />
@@ -812,12 +812,12 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
                 </div>
               )}
 
-              {/* ── Approval section ── */}
+              {/* â”€â”€ Approval section â”€â”€ */}
               {task.team_id && (
                 <div style={{ marginBottom: 20, padding: '14px 16px', background: 'var(--bg-soft)', border: '1px solid var(--rule)', borderRadius: 'var(--r-md)' }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: task.approval_status ? 10 : 0 }}>
                     <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--ink-3)' }}>
-                      Approval <span style={{ fontFamily: 'var(--font-hindi)', textTransform: 'none', letterSpacing: 0, fontWeight: 400, fontSize: 12 }}>अनुमोदन</span>
+                      Approval <span style={{ fontFamily: 'var(--font-hindi)', textTransform: 'none', letterSpacing: 0, fontWeight: 400, fontSize: 12 }}>à¤…à¤¨à¥à¤®à¥‹à¤¦à¤¨</span>
                     </span>
                     {task.approval_status && (
                       <span style={{
@@ -835,18 +835,18 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
                   {!task.approval_status && !showRequestPanel && (
                     <button className="k-btn k-btn--ghost k-btn--sm" onClick={() => setShowRequestPanel(true)}
                       style={{ marginTop: 4, fontSize: 12 }}>
-                      ↑ Send for Approval
+                      â†‘ Send for Approval
                     </button>
                   )}
                   {showRequestPanel && (
                     <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
                       <textarea value={requestNotes} onChange={e => setRequestNotes(e.target.value)}
-                        placeholder="Notes for the approver (optional)…" rows={2} className="k-input"
+                        placeholder="Notes for the approver (optional)â€¦" rows={2} className="k-input"
                         style={{ width: '100%', resize: 'none', boxSizing: 'border-box', fontSize: 12 }} />
                       <div style={{ display: 'flex', gap: 6 }}>
                         <button className="k-btn k-btn--ghost k-btn--sm" onClick={() => setShowRequestPanel(false)}>Cancel</button>
                         <button className="k-btn k-btn--primary k-btn--sm" onClick={requestApproval} disabled={approvalLoading}>
-                          {approvalLoading ? '…' : '↑ Send for Approval'}
+                          {approvalLoading ? 'â€¦' : 'â†‘ Send for Approval'}
                         </button>
                       </div>
                     </div>
@@ -856,16 +856,16 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
                   {task.approval_status === 'rejected' && !showRequestPanel && (
                     <button className="k-btn k-btn--ghost k-btn--sm" onClick={() => setShowRequestPanel(true)}
                       style={{ marginTop: 6, fontSize: 12 }}>
-                      ↑ Re-send for Approval
+                      â†‘ Re-send for Approval
                     </button>
                   )}
 
                   {/* Admin: approve/reject when pending */}
                   {isOwnerAdmin && task.approval_status === 'pending' && !showApprovePanel && !showRejectInput && (
                     <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
-                      <button className="k-btn k-btn--primary k-btn--sm" onClick={openApprovePanel}>✓ Approve</button>
+                      <button className="k-btn k-btn--primary k-btn--sm" onClick={openApprovePanel}>âœ“ Approve</button>
                       <button className="k-btn k-btn--ghost k-btn--sm" onClick={() => setShowRejectInput(true)}
-                        style={{ color: 'var(--k-danger)' }}>✕ Reject</button>
+                        style={{ color: 'var(--k-danger)' }}>âœ• Reject</button>
                     </div>
                   )}
 
@@ -873,7 +873,7 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
                   {showApprovePanel && (
                     <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
                       <textarea value={approvalNotes} onChange={e => setApprovalNotes(e.target.value)}
-                        placeholder="Notes (optional)…" rows={2} className="k-input"
+                        placeholder="Notes (optional)â€¦" rows={2} className="k-input"
                         style={{ width: '100%', resize: 'none', boxSizing: 'border-box', fontSize: 12 }} />
                       <div>
                         <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--ink-3)', marginBottom: 5 }}>Send to client for approval?</div>
@@ -882,7 +882,7 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
                         ) : (
                           <select value={clientUserId} onChange={e => setClientUserId(e.target.value)}
                             className="k-input" style={{ width: '100%', fontSize: 12, boxSizing: 'border-box' }}>
-                            <option value="">— Skip, mark as Done —</option>
+                            <option value="">â€” Skip, mark as Done â€”</option>
                             {clientList.map(c => (
                               <option key={c.user_id} value={c.user_id}>
                                 {c.display_name}{c.email ? ` (${c.email})` : ''}
@@ -894,7 +894,7 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
                       <div style={{ display: 'flex', gap: 6 }}>
                         <button className="k-btn k-btn--ghost k-btn--sm" onClick={() => setShowApprovePanel(false)}>Cancel</button>
                         <button className="k-btn k-btn--primary k-btn--sm" onClick={approveTask} disabled={approvalLoading}>
-                          {approvalLoading ? '…' : clientUserId ? '✓ Approve & Send to Client' : '✓ Approve & Done'}
+                          {approvalLoading ? 'â€¦' : clientUserId ? 'âœ“ Approve & Send to Client' : 'âœ“ Approve & Done'}
                         </button>
                       </div>
                     </div>
@@ -904,14 +904,14 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
                   {showRejectInput && (
                     <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
                       <textarea value={rejectNote} onChange={e => setRejectNote(e.target.value)}
-                        placeholder="Reason for rejection (required)…" rows={2} className="k-input"
+                        placeholder="Reason for rejection (required)â€¦" rows={2} className="k-input"
                         style={{ width: '100%', resize: 'none', boxSizing: 'border-box', fontSize: 12 }} />
                       <div style={{ display: 'flex', gap: 6 }}>
                         <button className="k-btn k-btn--ghost k-btn--sm" onClick={() => setShowRejectInput(false)}>Cancel</button>
                         <button className="k-btn k-btn--ghost k-btn--sm" onClick={rejectTask}
                           disabled={approvalLoading || !rejectNote.trim()}
                           style={{ color: 'var(--k-danger)', borderColor: 'var(--k-danger)' }}>
-                          {approvalLoading ? '…' : '✕ Reject'}
+                          {approvalLoading ? 'â€¦' : 'âœ• Reject'}
                         </button>
                       </div>
                     </div>
@@ -921,25 +921,25 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
                   {isClient && task.approval_status === 'pending_client' && !showRejectInput && (
                     <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
                       <button className="k-btn k-btn--primary k-btn--sm" onClick={clientApproveTask} disabled={approvalLoading}>
-                        {approvalLoading ? '…' : '✓ Approve'}
+                        {approvalLoading ? 'â€¦' : 'âœ“ Approve'}
                       </button>
                       <button className="k-btn k-btn--ghost k-btn--sm" onClick={() => setShowRejectInput(true)}
                         style={{ color: 'var(--k-danger)' }}>
-                        ✕ Reject
+                        âœ• Reject
                       </button>
                     </div>
                   )}
                   {isClient && task.approval_status === 'pending_client' && showRejectInput && (
                     <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
                       <textarea value={rejectNote} onChange={e => setRejectNote(e.target.value)}
-                        placeholder="Reason for rejection (required)…" rows={2} className="k-input"
+                        placeholder="Reason for rejection (required)â€¦" rows={2} className="k-input"
                         style={{ width: '100%', resize: 'none', boxSizing: 'border-box', fontSize: 12 }} />
                       <div style={{ display: 'flex', gap: 6 }}>
                         <button className="k-btn k-btn--ghost k-btn--sm" onClick={() => setShowRejectInput(false)}>Cancel</button>
                         <button className="k-btn k-btn--ghost k-btn--sm" onClick={clientRejectTask}
                           disabled={approvalLoading || !rejectNote.trim()}
                           style={{ color: 'var(--k-danger)', borderColor: 'var(--k-danger)' }}>
-                          {approvalLoading ? '…' : '✕ Reject'}
+                          {approvalLoading ? 'â€¦' : 'âœ• Reject'}
                         </button>
                       </div>
                     </div>
@@ -954,7 +954,7 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
               )}
 
               <div>
-                <span style={{ ...lbl, marginBottom: 10 }}>Comments <span style={{ fontFamily: 'var(--font-hindi)', fontSize: 12, textTransform: 'none', letterSpacing: 0, color: 'var(--ink-faint)', fontWeight: 400 }}>टिप्पणियाँ</span></span>
+                <span style={{ ...lbl, marginBottom: 10 }}>Comments <span style={{ fontFamily: 'var(--font-hindi)', fontSize: 12, textTransform: 'none', letterSpacing: 0, color: 'var(--ink-faint)', fontWeight: 400 }}>à¤Ÿà¤¿à¤ªà¥à¤ªà¤£à¤¿à¤¯à¤¾à¤</span></span>
                 {comments.length === 0 && <p style={{ color: 'var(--ink-3)', fontSize: 13, marginBottom: 12 }}>No comments yet.</p>}
                 {comments.map(c => (
                   <div key={c.comment_id} style={{ display: 'flex', gap: 10, marginBottom: 14 }}>
@@ -970,7 +970,7 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
                             <button onClick={() => startEditComment(c)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-3)', padding: 2, display: 'flex' }} title="Edit">
                               <Pencil size={11} />
                             </button>
-                            <button onClick={() => deleteComment(c.comment_id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-3)', padding: 2, display: 'flex' }} title="Delete">
+                            <button onClick={() => deleteComment(c.comment_id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-3)', padding: 2, display: 'flex' }} title="Delete" aria-label="Delete comment">
                               <Trash2 size={11} />
                             </button>
                           </div>
@@ -1004,7 +1004,7 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
                 ))}
                 <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
                   <MentionTextarea value={comment} onChange={setComment} onSubmit={postComment}
-                    members={mentionMembers} placeholder="Add a comment… type @ to mention" rows={2} />
+                    members={mentionMembers} placeholder="Add a commentâ€¦ type @ to mention" rows={2} />
                   <button onClick={postComment} className="k-btn k-btn--primary k-btn--sm">Send</button>
                 </div>
               </div>
@@ -1019,7 +1019,7 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
             </div>
           )}
 
-          {/* ── Files ── */}
+          {/* â”€â”€ Files â”€â”€ */}
           {tab === 'files' && (
             <div>
               <input
@@ -1038,9 +1038,9 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
                   style={{ display: 'flex', alignItems: 'center', gap: 6 }}
                 >
                   <Paperclip size={13} />
-                  {uploading ? 'Uploading…' : 'Attach files'}
+                  {uploading ? 'Uploadingâ€¦' : 'Attach files'}
                 </button>
-                <span style={{ fontSize: 11, color: 'var(--ink-3)' }}>{attachments.length}/{MAX_FILES} · max 5 MB each</span>
+                <span style={{ fontSize: 11, color: 'var(--ink-3)' }}>{attachments.length}/{MAX_FILES} Â· max 5 MB each</span>
               </div>
 
               {attachments.length === 0 && !uploading && (
@@ -1059,10 +1059,10 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
             </div>
           )}
 
-          {/* ── Activity ── */}
+          {/* â”€â”€ Activity â”€â”€ */}
           {tab === 'activity' && <ActivityList events={activity} loading={actLoad} />}
 
-          {/* ── Time ── */}
+          {/* â”€â”€ Time â”€â”€ */}
           {tab === 'time' && (
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20, padding: '12px 16px', background: 'var(--bg-soft)', borderRadius: 'var(--r-md)', border: '1px solid var(--rule)' }}>
@@ -1098,7 +1098,7 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
                       <span style={{ color: 'var(--ink-2)' }}>{e.description || <span style={{ color: 'var(--ink-3)' }}>No description</span>}</span>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                         <strong style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }}>{fmtMinutes(e.minutes)}</strong>
-                        <button onClick={() => deleteEntry(e.entry_id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-3)', display: 'flex' }}>
+                        <button onClick={() => deleteEntry(e.entry_id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-3)', display: 'flex' }} aria-label="Delete time entry">
                           <Trash2 size={12} />
                         </button>
                       </div>

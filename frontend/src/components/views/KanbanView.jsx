@@ -1,8 +1,9 @@
-import React, { useState, useRef, useCallback, useMemo } from 'react';
+﻿import React, { useState, useRef, useCallback, useMemo } from 'react';
 import { api } from '../../lib/api';
 import KanbanCard from './KanbanCard';
 import TaskDrawer from '../TaskDrawer';
 import { useToast } from '../ui/toast';
+import { logger } from '../../lib/utils';
 import ConfirmDialog from '../ui/ConfirmDialog';
 
 // Synthetic column injected at position 0 for admins/owners
@@ -19,7 +20,7 @@ const CLIENT_APPROVAL_COL = {
   name: 'Awaiting Client Approval',
   color: '#7c3aed',
   _synthetic: true,
-  _hindi: 'क्लाइंट अनुमोदन',
+  _hindi: 'à¤•à¥à¤²à¤¾à¤‡à¤‚à¤Ÿ à¤…à¤¨à¥à¤®à¥‹à¤¦à¤¨',
 };
 
 export default function KanbanView({
@@ -42,12 +43,12 @@ export default function KanbanView({
   const [drawerTaskId, setDrawerTaskId] = useState(null);
   const dragIdx = useRef(null);
 
-  // ── Column rename state ───────────────────────────────────────────────────
+  // â”€â”€ Column rename state â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const [renamingColId, setRenamingColId] = useState(null);
   const [renameVal,     setRenameVal]     = useState('');
   const renameRef = useRef(null);
 
-  // ── Add column state ──────────────────────────────────────────────────────
+  // â”€â”€ Add column state â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const [addingCol,   setAddingCol]   = useState(false);
   const [newColName,  setNewColName]  = useState('');
   const [newColColor, setNewColColor] = useState('#6366f1');
@@ -110,7 +111,7 @@ export default function KanbanView({
 
   const isClient = currentUserRole === 'client';
 
-  // Columns to render — prepend synthetic cols when enabled
+  // Columns to render â€” prepend synthetic cols when enabled
   const visibleColumns = useMemo(() => {
     let cols = columns || [];
     if (showClientApproval) cols = [...cols, CLIENT_APPROVAL_COL];
@@ -118,7 +119,7 @@ export default function KanbanView({
     return cols;
   }, [columns, showRequested, showClientApproval]);
 
-  // Status → column fallback for tasks with missing/invalid column_id
+  // Status â†’ column fallback for tasks with missing/invalid column_id
   const statusFallbackCol = useMemo(() => {
     const cols = visibleColumns.filter(c => !c._synthetic);
     const find = (names) => cols.find(c => names.includes(c.name?.toLowerCase()))?.column_id;
@@ -165,7 +166,7 @@ export default function KanbanView({
   // Can a task be dropped into this column by current user?
   const canDrop = (col) => {
     if (readOnly) return false;
-    // Nobody can drag INTO the synthetic Requested column — only backend sets that
+    // Nobody can drag INTO the synthetic Requested column â€” only backend sets that
     if (col._synthetic) return false;
     return true;
   };
@@ -183,7 +184,7 @@ export default function KanbanView({
     try {
       const res = await api.patch(`/tasks/${taskId}/move`, { column_id: targetColId, order });
       onTasksChange?.(prev => prev.map(t => t.task_id === taskId ? res.data : t));
-    } catch (e) { console.error('Move failed', e); }
+    } catch (e) { logger.error('Move failed', e); }
   }, [dragging, byCol, onTasksChange]);
 
   return (
@@ -228,7 +229,7 @@ export default function KanbanView({
                       <span style={{ fontFamily: 'var(--font-hindi)', fontSize: 11, color: 'var(--ink-3)', marginLeft: 6 }}>{col._hindi}</span>
                     )}
                     {isSynth && !col._hindi && col.column_id === '__requested__' && (
-                      <span style={{ fontFamily: 'var(--font-hindi)', fontSize: 11, color: 'var(--ink-3)', marginLeft: 6 }}>अनुरोध</span>
+                      <span style={{ fontFamily: 'var(--font-hindi)', fontSize: 11, color: 'var(--ink-3)', marginLeft: 6 }}>à¤…à¤¨à¥à¤°à¥‹à¤§</span>
                     )}
                   </span>
                 )}
@@ -240,7 +241,7 @@ export default function KanbanView({
                     style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-faint)', padding: '2px 4px', fontSize: 15, lineHeight: 1, borderRadius: 4, opacity: 0.5, marginLeft: 2 }}
                     onMouseEnter={e => e.currentTarget.style.opacity = '1'}
                     onMouseLeave={e => e.currentTarget.style.opacity = '0.5'}
-                  >×</button>
+                  >Ã—</button>
                 )}
               </div>
               <div className="k-bcol__body">
@@ -286,7 +287,7 @@ export default function KanbanView({
                   className="k-input"
                   value={newColName}
                   onChange={e => setNewColName(e.target.value)}
-                  placeholder="Column name…"
+                  placeholder="Column nameâ€¦"
                   onKeyDown={e => { if (e.key === 'Enter') commitAddCol(); if (e.key === 'Escape') { setAddingCol(false); setNewColName(''); } }}
                   autoFocus
                   style={{ fontSize: 13 }}

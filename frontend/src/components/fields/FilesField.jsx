@@ -1,5 +1,6 @@
 ﻿import React, { useRef } from "react";
 import { api } from "../../lib/api";
+import { logger } from '../../lib/utils';
 
 export default function FilesField({ field, value, onChange, readOnly }) {
   const files = Array.isArray(value) ? value : [];
@@ -14,7 +15,7 @@ export default function FilesField({ field, value, onChange, readOnly }) {
       const res = await api.post("/upload", form);
       onChange([...files, { name: res.data.name, url: res.data.url }]);
     } catch (err) {
-      console.error("Upload failed", err);
+      logger.error("Upload failed", err);
     }
     e.target.value = "";
   };

@@ -79,7 +79,7 @@ function DeleteUserModal({ user, otherUsers, onConfirm, onClose }) {
       style={{ position: 'fixed', inset: 0, zIndex: 500, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}
       onClick={e => e.target === e.currentTarget && onClose()}
     >
-      <div style={{ background: 'var(--surface)', borderRadius: 'var(--r-lg)', width: '100%', maxWidth: 460, boxShadow: '0 24px 64px rgba(0,0,0,0.35)', overflow: 'hidden' }}>
+      <div role="dialog" aria-modal="true" aria-label="Remove user" style={{ background: 'var(--surface)', borderRadius: 'var(--r-lg)', width: '100%', maxWidth: 460, boxShadow: '0 24px 64px rgba(0,0,0,0.35)', overflow: 'hidden' }}>
 
         {/* Red header */}
         <div style={{ background: 'linear-gradient(135deg, #b91c1c 0%, #dc2626 100%)', padding: '22px 24px 20px' }}>
@@ -181,7 +181,7 @@ function EditSlideOver({ user, onClose, onSaved, pushToast }) {
 
   return (
     <div onClick={handleBackdrop} style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(5,14,26,.45)', display: 'flex', justifyContent: 'flex-end' }}>
-      <div ref={panelRef} style={{ width: 420, maxWidth: '90vw', height: '100%', background: 'var(--surface)', display: 'flex', flexDirection: 'column', boxShadow: '-8px 0 40px rgba(0,0,0,.18)' }}>
+      <div ref={panelRef} role="dialog" aria-modal="true" aria-label="Edit user" style={{ width: 420, maxWidth: '90vw', height: '100%', background: 'var(--surface)', display: 'flex', flexDirection: 'column', boxShadow: '-8px 0 40px rgba(0,0,0,.18)' }}>
         {/* Header */}
         <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--rule-soft)', display: 'flex', alignItems: 'center', gap: 12 }}>
           <UserAvatar user={user} index={0} size={36} />

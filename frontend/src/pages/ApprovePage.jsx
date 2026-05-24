@@ -4,6 +4,7 @@
  * Validates token, renders the editorial approval card, two big buttons.
  */
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { api } from '../lib/api';
 import { PRIORITY_COLOR } from '../lib/utils';
 
@@ -34,8 +35,9 @@ export default function ApprovePage() {
   const [rejectNote, setRejectNote] = useState('');
   const [showReject, setShowReject] = useState(false);
 
-  const token  = new URLSearchParams(window.location.search).get('token');
-  const action = new URLSearchParams(window.location.search).get('action'); // ?action=reject from email
+  const [searchParams] = useSearchParams();
+  const token  = searchParams.get('token');
+  const action = searchParams.get('action'); // ?action=reject from email
 
   useEffect(() => {
     if (!token) { setState('error'); setErrorMsg('No approval token in URL.'); return; }

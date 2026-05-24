@@ -82,7 +82,7 @@ export default function ConfirmDialog({ state, onClose }) {
           <button
             className="k-btn"
             style={{ ...confirmBtnStyle, minWidth: 80 }}
-            onClick={() => { onConfirm(); onClose(); }}
+            onClick={async () => { await onConfirm(); onClose(); }}
           >
             {confirmLabel}
           </button>

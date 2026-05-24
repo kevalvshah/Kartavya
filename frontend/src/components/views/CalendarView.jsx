@@ -4,8 +4,7 @@ import TaskDrawer from "../TaskDrawer";
 
 const DAYS   = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
 const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
-import { priorityColor as _pColor } from '../../lib/utils';
-const PCOLOR = { urgent:"#dc2626", high:"#ef4444", medium:"#f59e0b", low:"#22c55e" }; // kept for legend rendering
+import { PRIORITY_COLOR as PCOLOR, logger } from '../../lib/utils';
 
 export default function CalendarView({ tasks, teamMembers, onDayClick, onTasksChange }) {
   const now  = new Date();
@@ -55,7 +54,7 @@ export default function CalendarView({ tasks, teamMembers, onDayClick, onTasksCh
       const res = await api.put(`/tasks/${taskId}`, { due_at: newDue.toISOString() });
       onTasksChange?.(prev => prev.map(t => t.task_id === taskId ? res.data : t));
     } catch (err) {
-      console.error("Reschedule failed", err);
+      logger.error("Reschedule failed", err);
     }
   };
 

@@ -1,3 +1,4 @@
+﻿import { logger } from '../lib/utils';
 import { useState, useEffect, useCallback } from 'react';
 import { api } from '../lib/api';
 
@@ -7,7 +8,7 @@ export function useViews(teamId) {
   useEffect(()=>{
     if(!teamId)return;
     setLoading(true);
-    api.get(`/views/team/${teamId}`).then(r=>setViews(r.data)).catch(console.error).finally(()=>setLoading(false));
+    api.get(`/views/team/${teamId}`).then(r=>setViews(r.data)).catch(logger.error).finally(()=>setLoading(false));
   },[teamId]);
   const saveView=useCallback(async(name,type,config={},isDefault=false)=>{
     const res=await api.post('/views/',{team_id:teamId,name,type,config,is_default:isDefault});

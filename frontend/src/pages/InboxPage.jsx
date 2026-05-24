@@ -33,7 +33,7 @@ export default function InboxPage() {
     setLoading(true);
     api.get('/notifications')
       .then(r => setNotifications(Array.isArray(r.data) ? r.data : []))
-      .catch(() => {})
+      .catch(() => setNotifications([]))
       .finally(() => setLoading(false));
   }, []);
 
