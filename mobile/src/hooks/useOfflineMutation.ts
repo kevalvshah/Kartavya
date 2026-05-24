@@ -84,6 +84,11 @@ export interface OfflineMutationResult<TVariables> {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
+/**
+ * React hook that wraps a TanStack mutation with offline-queue fallback.
+ * When the device is online the mutation fires normally; when offline the
+ * payload is enqueued in MMKV and an optimistic cache update is applied.
+ */
 export function useOfflineMutation<TVariables, TData = unknown, TSnapshot = unknown>(
   opts: OfflineMutationOptions<TVariables, TData, TSnapshot>
 ): OfflineMutationResult<TVariables> {
@@ -117,6 +122,7 @@ export function useOfflineMutation<TVariables, TData = unknown, TSnapshot = unkn
     ...opts.onlineOptions,
   });
 
+  /** Fire the mutation; enqueues offline when there is no internet connection. */
   const mutateAsync = async (vars: TVariables): Promise<void> => {
     const state = await NetInfo.fetch();
     const online = !!(state.isConnected && state.isInternetReachable !== false);
@@ -143,6 +149,7 @@ export function useOfflineMutation<TVariables, TData = unknown, TSnapshot = unkn
     await mutation.mutateAsync(vars);
   };
 
+  /** Fire-and-forget wrapper around mutateAsync (errors surface via mutation.error). */
   const mutate = (vars: TVariables): void => {
     mutateAsync(vars).catch(() => {/* errors surfaced via mutation.error */});
   };

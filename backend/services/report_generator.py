@@ -47,17 +47,20 @@ _MEMBER_COLORS = ["#0082c6","#f59e0b","#05b7aa","#8b5cf6","#10b981","#ec4899","#
 
 
 def _initials(name: str) -> str:
+    """Return up to two uppercase initials from a display name."""
     parts = (name or "?").split()
     return "".join(p[0].upper() for p in parts[:2]) or "?"
 
 
 def _fmt_mins(m: int) -> str:
+    """Format an integer number of minutes as a human-readable hours/minutes string."""
     if not m: return "0h"
     h = m // 60; mn = m % 60
     return f"{h}h {mn}m" if mn else f"{h}h"
 
 
 def _fmt_date(iso) -> str:
+    """Format an ISO date string as a short human-readable day-month label."""
     if not iso: return "—"
     try:
         return datetime.fromisoformat(str(iso)).strftime("%-d %b")
@@ -66,6 +69,7 @@ def _fmt_date(iso) -> str:
 
 
 def _pri_color(pri: str) -> str:
+    """Return the hex colour for a task priority level."""
     return {"urgent": "#dc2626", "high": "#ef4444", "medium": "#f59e0b", "low": "#10b981"}.get(
         (pri or "").lower(), "#6E7B91"
     )
@@ -84,6 +88,7 @@ def _status_style(status: str):
 
 
 def _page_shell(body_html: str, brand: str, meta_right: str, foot_left: str, page_n: int, page_of: int) -> str:
+    """Wrap page body HTML in the standard PDF page shell with header and footer."""
     return f"""
 <div class="pdf">
   <div class="pdf__head">
@@ -108,6 +113,7 @@ def _page_shell(body_html: str, brand: str, meta_right: str, foot_left: str, pag
 
 
 def _build_html(data: dict, team_name: str, period_from: str, period_to: str) -> str:
+    """Build the full 5-page HTML report document from raw report data."""
     team_name   = html.escape(team_name)
     period_from = html.escape(period_from)
     period_to   = html.escape(period_to)
@@ -819,6 +825,7 @@ body{{ background:{_BG}; font-family:{_FONT_UI}; color:{_INK}; -webkit-print-col
 
 
 def generate_pdf(data: dict, team_name: str, period_from: str, period_to: str) -> bytes:
+    """Render report data to a PDF byte string via WeasyPrint."""
     try:
         from weasyprint import HTML
     except ImportError as e:
@@ -828,6 +835,7 @@ def generate_pdf(data: dict, team_name: str, period_from: str, period_to: str) -
 
 
 def generate_excel(data: dict, team_name: str, period_from: str, period_to: str) -> bytes:
+    """Render report data to an Excel (xlsx) byte string with Summary, Tasks, Time, and By-Member sheets."""
     import openpyxl
     from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
     from openpyxl.utils import get_column_letter

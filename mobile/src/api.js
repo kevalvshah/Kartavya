@@ -12,6 +12,12 @@ api.interceptors.request.use(async (config) => {
   return config;
 });
 
+/**
+ * Log in with email/password, persist token and user to SecureStore.
+ * @param {string} email
+ * @param {string} password
+ * @returns {Promise<{token: string, user: object}>}
+ */
 export async function apiLogin(email, password) {
   const res = await api.post('/auth/login', { email, password });
   await SecureStore.setItemAsync('auth_token', res.data.token);
@@ -19,12 +25,20 @@ export async function apiLogin(email, password) {
   return res.data;
 }
 
+/**
+ * Log out: fire server logout (best-effort) then clear local SecureStore credentials.
+ * @returns {Promise<void>}
+ */
 export async function apiLogout() {
   try { await api.post('/auth/logout'); } catch (_) { /* fire-and-forget: logout always proceeds */ }
   await SecureStore.deleteItemAsync('auth_token');
   await SecureStore.deleteItemAsync('auth_user');
 }
 
+/**
+ * Read the cached user object from SecureStore without a network call.
+ * @returns {Promise<object|null>} Parsed user or null if not signed in.
+ */
 export async function getUser() {
   try {
     const s = await SecureStore.getItemAsync('auth_user');

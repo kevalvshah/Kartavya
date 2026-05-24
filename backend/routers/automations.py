@@ -42,6 +42,7 @@ class AutomationUpdate(BaseModel):
 
 @router.get("/team/{team_id}")
 async def list_automations(team_id: str, pool=Depends(get_pool), user=Depends(require_user)):
+    """Return all automations for the given team."""
     rows = await pool.fetch(
         "SELECT * FROM automations WHERE team_id=$1 ORDER BY created_at DESC",
         team_id
@@ -51,6 +52,7 @@ async def list_automations(team_id: str, pool=Depends(get_pool), user=Depends(re
 
 @router.post("/")
 async def create_automation(body: AutomationCreate, pool=Depends(get_pool), user=Depends(require_user)):
+    """Create a new automation rule for the given team."""
     # Verify the caller is an active member of the target team
     member = await pool.fetchrow(
         "SELECT 1 FROM team_members WHERE team_id=$1 AND user_id=$2 AND status='active'",
@@ -87,6 +89,7 @@ async def _check_automation_access(pool, automation_id: str, user_id: str):
 
 @router.put("/{automation_id}")
 async def update_automation(automation_id: str, body: AutomationUpdate, pool=Depends(get_pool), user=Depends(require_user)):
+    """Update the name, trigger, actions, or enabled flag of an existing automation."""
     await _check_automation_access(pool, automation_id, user["user_id"])
     updates, vals = [], []
     if body.name is not None:    updates.append(f"name=${len(vals)+2}");    vals.append(body.name)
@@ -100,6 +103,7 @@ async def update_automation(automation_id: str, body: AutomationUpdate, pool=Dep
 
 @router.delete("/{automation_id}")
 async def delete_automation(automation_id: str, pool=Depends(get_pool), user=Depends(require_user)):
+    """Delete an automation rule by ID."""
     await _check_automation_access(pool, automation_id, user["user_id"])
     await pool.execute("DELETE FROM automations WHERE automation_id=$1", automation_id)
     return {"ok": True}

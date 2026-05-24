@@ -52,6 +52,7 @@ class ScheduleCreate(BaseModel):
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
 async def _assert_project_owner(pool, team_id: str, user: dict):
+    """Raise 403 unless the user is a system admin or project owner/admin."""
     if user.get("role") == "admin":
         return
     mem = await pool.fetchrow(
@@ -63,6 +64,7 @@ async def _assert_project_owner(pool, team_id: str, user: dict):
 
 
 def _next_run(frequency: str, day_of_week: int, day_of_month: int, send_hour_utc: int) -> datetime:
+    """Calculate the next UTC run time for a report schedule given its frequency settings."""
     now = datetime.now(timezone.utc)
     base = now.replace(minute=0, second=0, microsecond=0)
 
@@ -201,6 +203,7 @@ async def get_report_data(
     pool=Depends(get_pool),
     user=Depends(require_user),
 ):
+    """Return raw report data (tasks, time entries, throughput) for the given project and date range."""
     if not _DATE_RE.match(from_date) or not _DATE_RE.match(to_date):
         raise HTTPException(400, "Invalid date format — use YYYY-MM-DD")
     await _assert_project_owner(pool, team_id, user)
@@ -220,6 +223,7 @@ async def download_report(
     pool=Depends(get_pool),
     user=Depends(require_user),
 ):
+    """Generate and stream a PDF or Excel report file for a project and date range."""
     if not _DATE_RE.match(from_date) or not _DATE_RE.match(to_date):
         raise HTTPException(400, "Invalid date format — use YYYY-MM-DD")
 
@@ -263,6 +267,7 @@ async def list_schedules(
     pool=Depends(get_pool),
     user=Depends(require_user),
 ):
+    """Return all report schedules for the given project."""
     await _assert_project_owner(pool, team_id, user)
     rows = await pool.fetch(
         "SELECT * FROM report_schedules WHERE team_id=$1 ORDER BY created_at DESC",
@@ -278,6 +283,7 @@ async def create_schedule(
     pool=Depends(get_pool),
     user=Depends(require_user),
 ):
+    """Create a new report schedule for a project."""
     await _assert_project_owner(pool, team_id, user)
 
     if payload.frequency not in ("daily", "weekly", "monthly"):
@@ -313,6 +319,7 @@ async def delete_schedule(
     pool=Depends(get_pool),
     user=Depends(require_user),
 ):
+    """Delete a report schedule by ID."""
     row = await pool.fetchrow(
         "SELECT team_id FROM report_schedules WHERE schedule_id=$1", schedule_id
     )

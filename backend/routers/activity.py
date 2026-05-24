@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 def _normalize(rows):
+    """Deserialize the 'data' JSONB field in each activity row from string to dict."""
     result = []
     for r in rows:
         row = dict(r)
@@ -39,6 +40,7 @@ async def team_activity(
     pool=Depends(get_pool),
     user=Depends(require_user),
 ):
+    """Return paginated activity events for a team, with optional actor and type filters."""
     filters, vals = ["team_id=$1"], [team_id]
     if actor_id:   filters.append(f"actor_id=${len(vals)+1}"); vals.append(actor_id)
     if event_type: filters.append(f"type=${len(vals)+1}");     vals.append(event_type)
@@ -70,6 +72,7 @@ async def task_activity(
     pool=Depends(get_pool),
     user=Depends(require_user),
 ):
+    """Return all activity events for a specific task, newest first."""
     rows = await pool.fetch("""
         SELECT ae.*,
                COALESCE(u.full_name, u.name, u.email) AS actor_name

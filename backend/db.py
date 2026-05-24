@@ -13,14 +13,17 @@ _pool_lock = asyncio.Lock()
 
 
 def _json_encoder(value):
+    """Serialize a Python value to a JSON string for asyncpg."""
     return json.dumps(value)
 
 
 def _json_decoder(value):
+    """Deserialize a JSON string from asyncpg to a Python value."""
     return json.loads(value)
 
 
 async def _init_conn(conn):
+    """Register JSON/JSONB codecs on each new asyncpg connection."""
     await conn.set_type_codec(
         "jsonb", encoder=_json_encoder, decoder=_json_decoder, schema="pg_catalog", format="text"
     )
@@ -30,6 +33,7 @@ async def _init_conn(conn):
 
 
 async def get_pool() -> asyncpg.Pool:
+    """Return the shared asyncpg pool, creating it lazily on first call."""
     global _pool
     if _pool is not None:
         return _pool
@@ -51,6 +55,7 @@ async def get_pool() -> asyncpg.Pool:
 
 
 async def close_pool():
+    """Close and discard the asyncpg connection pool."""
     global _pool
     if _pool:
         await _pool.close()

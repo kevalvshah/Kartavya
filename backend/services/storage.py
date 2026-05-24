@@ -21,6 +21,7 @@ log = logging.getLogger(__name__)
 _s3 = None
 
 def _client():
+    """Return a lazily-initialised boto3 S3 client pointed at the R2 endpoint, or None if unconfigured."""
     global _s3
     if _s3 is not None:
         return _s3

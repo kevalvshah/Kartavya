@@ -93,6 +93,7 @@ app.add_middleware(
 
 @app.middleware("http")
 async def clear_request_cache(request, call_next):
+    """Evict per-request team_id cache entries after each HTTP request completes."""
     import asyncio
     task_id = id(asyncio.current_task())
     try:
@@ -107,9 +108,12 @@ async def clear_request_cache(request, call_next):
 
 # ── Helpers ───────────────────────────────────────────────────
 
-def now_utc(): return datetime.now(timezone.utc)
+def now_utc():
+    """Return the current UTC datetime as a timezone-aware object."""
+    return datetime.now(timezone.utc)
 
 def parse_dt(value):
+    """Parse an ISO-8601 string to a timezone-aware datetime, or return None."""
     if not value: return None
     try:
         dt = datetime.fromisoformat(value)
@@ -117,7 +121,9 @@ def parse_dt(value):
         raise HTTPException(status_code=400, detail=f"Invalid datetime: {value}") from e
     return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
 
-async def get_db(): return await get_pool()
+async def get_db():
+    """FastAPI dependency — return the shared asyncpg connection pool."""
+    return await get_pool()
 
 async def get_visible_team_ids(pool, user_id, role=None, _user_dict=None):
     """Return team IDs visible to user_id.
@@ -164,6 +170,7 @@ async def is_project_member(pool, team_id: str, user: dict) -> dict | None:
     )
 
 async def normalize_orders(pool, scope_col, scope_val, column_id):
+    """Re-sequence sort_order for all tasks in the given column, closing any gaps."""
     if scope_col not in _VALID_SCOPE_COLS:
         raise ValueError(f"Invalid scope_col: {scope_col!r}")
     rows = await pool.fetch(
@@ -185,12 +192,14 @@ async def normalize_orders(pool, scope_col, scope_val, column_id):
     )
 
 async def create_notification(pool, user_id, notif_type, title, message, task_id=None, team_id=None, url=None):
+    """Insert a notification row for the given user."""
     await pool.execute(
         "INSERT INTO notifications (notification_id,user_id,team_id,type,title,message,task_id,url) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)",
         f"notif_{uuid.uuid4().hex[:12]}", user_id, team_id, notif_type, title, message, task_id, url,
     )
 
 async def ensure_default_columns(pool, team_id):
+    """Create the five default kanban columns for a new project if none exist yet."""
     existing = await pool.fetchval("SELECT COUNT(*) FROM project_columns WHERE team_id=$1", team_id)
     if existing == 0:
         defaults = [
@@ -289,6 +298,7 @@ class MarkReadIn(BaseModel):
 
 
 def row_to_task(r) -> TaskOut:
+    """Convert an asyncpg Record from the tasks table to a TaskOut Pydantic model."""
     def pj(v,d):
         if isinstance(v,str): return json.loads(v)
         return v if v is not None else d
@@ -322,10 +332,13 @@ def row_to_task(r) -> TaskOut:
 # ── Routes ─────────────────────────────────────────────
 
 @api_router.get("/")
-async def root(): return {"message":"Kartavya API v2","by":"Aekam Inc","status":"ok"}
+async def root():
+    """Return a simple health-check payload confirming the API is running."""
+    return {"message":"Kartavya API v2","by":"Aekam Inc","status":"ok"}
 
 @api_router.get("/auth/me")
 async def me(user=Depends(require_user)):
+    """Return the authenticated user's profile."""
     return {"user_id":user["user_id"],"email":user["email"],"name":user.get("full_name") or user["name"],
             "full_name":user.get("full_name") or user["name"],"role":user.get("role","member"),
             "position":user.get("position"),"company_name":user.get("company_name"),
@@ -333,13 +346,16 @@ async def me(user=Depends(require_user)):
             "receives_approval_emails":user.get("receives_approval_emails",True)}
 
 @api_router.post("/auth/logout")
-async def logout(): return {"ok":True}
+async def logout():
+    """Invalidate the current session (client-side token deletion only)."""
+    return {"ok":True}
 
 
 # ── Mobile: push tokens ───────────────────────────────────────────────────────
 
 @api_router.post("/me/push_tokens")
 async def register_push_token(body:dict,pool=Depends(get_db),user=Depends(require_user)):
+    """Register or refresh a mobile push token for the authenticated user."""
     platform  = body.get("platform","unknown")
     token     = body.get("token","")
     device_id = body.get("device_id","")
@@ -354,6 +370,7 @@ async def register_push_token(body:dict,pool=Depends(get_db),user=Depends(requir
 
 @api_router.delete("/me/push_tokens/{device_id}")
 async def unregister_push_token(device_id:str,pool=Depends(get_db),user=Depends(require_user)):
+    """Remove a mobile push token by device ID for the authenticated user."""
     await pool.execute("DELETE FROM push_tokens WHERE device_id=$1 AND user_id=$2", device_id, user["user_id"])
     return {"ok":True}
 
@@ -374,6 +391,7 @@ DEFAULT_PREFS = {
 
 @api_router.get("/me/notification_prefs")
 async def get_notification_prefs(pool=Depends(get_db),user=Depends(require_user)):
+    """Return the authenticated user's notification preferences merged with defaults."""
     row = await pool.fetchrow("SELECT prefs, quiet_start, quiet_end FROM notification_prefs WHERE user_id=$1", user["user_id"])
     if not row:
         return {"prefs": DEFAULT_PREFS, "quiet_start": "22:00", "quiet_end": "07:00"}
@@ -384,6 +402,7 @@ async def get_notification_prefs(pool=Depends(get_db),user=Depends(require_user)
 
 @api_router.put("/me/notification_prefs")
 async def set_notification_prefs(body:dict,pool=Depends(get_db),user=Depends(require_user)):
+    """Save notification preferences and quiet-hours window for the authenticated user."""
     import json as _json
     prefs       = body.get("prefs", {})
     quiet_start = body.get("quiet_start", "22:00")
@@ -399,6 +418,7 @@ async def set_notification_prefs(body:dict,pool=Depends(get_db),user=Depends(req
 
 @api_router.get("/projects/{team_id}/columns",response_model=List[ProjectColumnOut])
 async def list_columns(team_id:str,pool=Depends(get_db),user=Depends(require_user)):
+    """Return all kanban columns for the given project, creating defaults if none exist."""
     mem=await is_project_member(pool,team_id,user)
     if not mem: raise HTTPException(403,"Not a project member")
     await ensure_default_columns(pool,team_id)
@@ -407,6 +427,7 @@ async def list_columns(team_id:str,pool=Depends(get_db),user=Depends(require_use
 
 @api_router.post("/projects/{team_id}/columns",response_model=ProjectColumnOut)
 async def create_column(team_id:str,payload:ProjectColumnCreate,pool=Depends(get_db),user=Depends(require_user)):
+    """Create a new kanban column in the given project."""
     mem=await is_project_member(pool,team_id,user)
     if not mem or mem["role"] not in ("owner","admin"): raise HTTPException(403,"Owner or admin required")
     max_order=await pool.fetchval("SELECT COALESCE(MAX(sort_order),-1) FROM project_columns WHERE team_id=$1",team_id)
@@ -417,6 +438,7 @@ async def create_column(team_id:str,payload:ProjectColumnCreate,pool=Depends(get
 
 @api_router.put("/projects/{team_id}/columns/{column_id}",response_model=ProjectColumnOut)
 async def update_column(team_id:str,column_id:str,payload:ProjectColumnUpdate,pool=Depends(get_db),user=Depends(require_user)):
+    """Update name, colour, done-flag, or sort order of a project column."""
     mem=await is_project_member(pool,team_id,user)
     if not mem or mem["role"] not in ("owner","admin"): raise HTTPException(403)
     updates,vals=[],[]
@@ -432,6 +454,7 @@ async def update_column(team_id:str,column_id:str,payload:ProjectColumnUpdate,po
 
 @api_router.delete("/projects/{team_id}/columns/{column_id}")
 async def delete_column(team_id:str,column_id:str,pool=Depends(get_db),user=Depends(require_user)):
+    """Delete a project column, moving its tasks to the next available column."""
     mem=await is_project_member(pool,team_id,user)
     if not mem or mem["role"] not in ("owner","admin"): raise HTTPException(403)
     remaining=await pool.fetchval("SELECT COUNT(*) FROM project_columns WHERE team_id=$1",team_id)
@@ -443,6 +466,7 @@ async def delete_column(team_id:str,column_id:str,pool=Depends(get_db),user=Depe
 
 @api_router.post("/projects/{team_id}/columns/reorder")
 async def reorder_columns(team_id:str,body:dict,pool=Depends(get_db),user=Depends(require_user)):
+    """Reorder project columns according to the provided ordered_ids list."""
     mem=await is_project_member(pool,team_id,user)
     if not mem or mem["role"] not in ("owner","admin"): raise HTTPException(403)
     ordered_ids = body.get("ordered_ids", [])
@@ -463,6 +487,7 @@ async def reorder_columns(team_id:str,body:dict,pool=Depends(get_db),user=Depend
 
 @api_router.get("/client/tasks",response_model=List[TaskOut])
 async def client_tasks(pool=Depends(get_db),user=Depends(require_user)):
+    """Return all tasks visible to the authenticated client user."""
     rows=await pool.fetch("""
         SELECT t.* FROM tasks t
         WHERE t.created_by_user_id=$1
@@ -475,11 +500,13 @@ async def client_tasks(pool=Depends(get_db),user=Depends(require_user)):
 
 @api_router.get("/client/projects")
 async def client_projects(pool=Depends(get_db),user=Depends(require_user)):
+    """Return all projects the authenticated client user is assigned to."""
     rows=await pool.fetch("SELECT t.* FROM teams t JOIN project_assignments pa ON pa.team_id=t.team_id WHERE pa.user_id=$1 ORDER BY t.created_at DESC",user["user_id"])
     return [dict(r) for r in rows]
 
 @api_router.get("/client/approvals")
 async def client_approvals(pool=Depends(get_db), user=Depends(require_user)):
+    """Return all pending approvals and client task approvals visible to the user."""
     uid = user["user_id"]
     approval_rows, task_rows = await asyncio.gather(
       pool.fetch("""
@@ -523,16 +550,19 @@ async def client_approvals(pool=Depends(get_db), user=Depends(require_user)):
 
 @api_router.post("/tasks/{task_id}/clients/{target_user_id}")
 async def add_client_to_task(task_id:str,target_user_id:str,pool=Depends(get_db),user=Depends(require_admin)):
+    """Grant a client user access to a specific task."""
     await pool.execute("INSERT INTO task_clients (id,task_id,user_id,invited_by) VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING",f"tc_{uuid.uuid4().hex[:12]}",task_id,target_user_id,user["user_id"])
     return {"ok":True}
 
 @api_router.delete("/tasks/{task_id}/clients/{target_user_id}")
 async def remove_client_from_task(task_id:str,target_user_id:str,pool=Depends(get_db),user=Depends(require_admin)):
+    """Revoke a client user's access to a specific task."""
     await pool.execute("DELETE FROM task_clients WHERE task_id=$1 AND user_id=$2",task_id,target_user_id)
     return {"ok":True}
 
 @api_router.post("/client/tasks/request", response_model=TaskOut)
 async def client_request_task(payload:TaskCreate,pool=Depends(get_db),user=Depends(require_user)):
+    """Create a task request from a client user, pending team approval."""
     if not payload.team_id: raise HTTPException(400,"team_id required")
     assignment=await pool.fetchrow("SELECT role FROM project_assignments WHERE team_id=$1 AND user_id=$2",payload.team_id,user["user_id"])
     if not assignment: raise HTTPException(403,"Not a project member")
@@ -562,6 +592,7 @@ async def client_request_task(payload:TaskCreate,pool=Depends(get_db),user=Depen
 
 @api_router.get("/approvals/pending")
 async def list_pending_approvals(pool=Depends(get_db),user=Depends(require_user)):
+    """Return all pending approvals and task-level approvals the user can action."""
     uid = user["user_id"]
     # Standard approvals table records (task creation requests)
     rows = await pool.fetch("""
@@ -599,6 +630,7 @@ async def list_pending_approvals(pool=Depends(get_db),user=Depends(require_user)
 
 @api_router.get("/approvals/history")
 async def approval_history(pool=Depends(get_db), user=Depends(require_user)):
+    """Return approved and rejected task approvals visible to the user."""
     uid = user["user_id"]
     task_rows = await pool.fetch("""
         SELECT
@@ -624,6 +656,7 @@ async def approval_history(pool=Depends(get_db), user=Depends(require_user)):
 
 @api_router.post("/approvals/{approval_id}/review")
 async def review_approval(approval_id:str,body:dict,pool=Depends(get_db),user=Depends(require_user)):
+    """Approve or reject a task creation request or task-level approval."""
     status=body.get("status"); notes=body.get("notes","")
     send_to_client = body.get("send_to_client", False)
     client_email   = body.get("client_email", "")
@@ -745,6 +778,7 @@ async def review_approval(approval_id:str,body:dict,pool=Depends(get_db),user=De
 
 @api_router.get("/tasks/{task_id}/comments",response_model=List[CommentOut])
 async def list_comments(task_id:str,pool=Depends(get_db),user=Depends(require_user)):
+    """Return all comments on a task in chronological order."""
     if user.get("role")=="client":
         if not await client_can_access_task(pool, task_id, user["user_id"]):
             raise HTTPException(403, "Not authorised to view comments on this task")
@@ -753,6 +787,7 @@ async def list_comments(task_id:str,pool=Depends(get_db),user=Depends(require_us
 
 @api_router.post("/tasks/{task_id}/comments",response_model=CommentOut)
 async def add_comment(task_id:str,body:CommentCreate,pool=Depends(get_db),user=Depends(require_user)):
+    """Add a comment to a task and fan-out notifications to relevant users."""
     if user.get("role")=="client":
         if not await client_can_access_task(pool, task_id, user["user_id"]):
             raise HTTPException(403, "Not authorised to comment on this task")
@@ -798,6 +833,7 @@ async def add_comment(task_id:str,body:CommentCreate,pool=Depends(get_db),user=D
 
 @api_router.put("/tasks/{task_id}/comments/{comment_id}",response_model=CommentOut)
 async def edit_comment(task_id:str,comment_id:str,body:CommentCreate,pool=Depends(get_db),user=Depends(require_user)):
+    """Edit the body of an existing comment; only the author or an admin may do so."""
     row=await pool.fetchrow("SELECT * FROM task_comments WHERE comment_id=$1 AND task_id=$2",comment_id,task_id)
     if not row: raise HTTPException(404)
     if row["user_id"]!=user["user_id"] and user.get("role")!="admin":
@@ -812,6 +848,7 @@ async def edit_comment(task_id:str,comment_id:str,body:CommentCreate,pool=Depend
 
 @api_router.delete("/tasks/{task_id}/comments/{comment_id}")
 async def delete_comment(task_id:str,comment_id:str,pool=Depends(get_db),user=Depends(require_user)):
+    """Delete a task comment; only the author or an admin may do so."""
     row=await pool.fetchrow("SELECT user_id FROM task_comments WHERE comment_id=$1 AND task_id=$2",comment_id,task_id)
     if not row: raise HTTPException(404)
     if row["user_id"]!=user["user_id"] and user.get("role")!="admin":
@@ -825,6 +862,7 @@ async def delete_comment(task_id:str,comment_id:str,pool=Depends(get_db),user=De
 
 @api_router.post("/tasks/{task_id}/subtasks",response_model=TaskOut)
 async def add_subtask(task_id:str,body:Subtask,pool=Depends(get_db),user=Depends(require_user)):
+    """Append a new subtask to a task's subtask list."""
     task=await pool.fetchrow(_SQL_GET_SUBTASKS,task_id)
     if not task: raise HTTPException(404)
     subtasks=json.loads(task["subtasks"] or "[]")
@@ -840,6 +878,7 @@ async def add_subtask(task_id:str,body:Subtask,pool=Depends(get_db),user=Depends
 
 @api_router.patch("/tasks/{task_id}/subtasks/{subtask_id}",response_model=TaskOut)
 async def toggle_subtask(task_id:str,subtask_id:str,pool=Depends(get_db),user=Depends(require_user)):
+    """Toggle the is_done flag on a subtask."""
     task=await pool.fetchrow(_SQL_GET_SUBTASKS,task_id)
     if not task: raise HTTPException(404)
     subtasks=json.loads(task["subtasks"] or "[]")
@@ -851,6 +890,7 @@ async def toggle_subtask(task_id:str,subtask_id:str,pool=Depends(get_db),user=De
 
 @api_router.delete("/tasks/{task_id}/subtasks/{subtask_id}",response_model=TaskOut)
 async def delete_subtask(task_id:str,subtask_id:str,pool=Depends(get_db),user=Depends(require_user)):
+    """Remove a subtask from a task's subtask list by its ID."""
     task=await pool.fetchrow(_SQL_GET_SUBTASKS,task_id)
     if not task: raise HTTPException(404)
     subtasks=json.loads(task["subtasks"] or "[]")
@@ -871,6 +911,7 @@ class SubtaskPatch(BaseModel):
 
 @api_router.put("/tasks/{task_id}/subtasks/{subtask_id}",response_model=TaskOut)
 async def update_subtask(task_id:str,subtask_id:str,body:SubtaskPatch,pool=Depends(get_db),user=Depends(require_user)):
+    """Update the title or assignee of an existing subtask."""
     task=await pool.fetchrow(_SQL_GET_SUBTASKS,task_id)
     if not task: raise HTTPException(404)
     subtasks=json.loads(task["subtasks"] or "[]")
@@ -886,6 +927,7 @@ async def update_subtask(task_id:str,subtask_id:str,body:SubtaskPatch,pool=Depen
 
 @api_router.get("/teams",response_model=List[TeamOut])
 async def list_teams(pool=Depends(get_db),user=Depends(require_user)):
+    """Return all projects visible to the authenticated user with task counts."""
     team_ids=await get_visible_team_ids(pool,user["user_id"])
     if not team_ids: return []
     rows=await pool.fetch("""
@@ -917,6 +959,7 @@ async def list_deleted_teams(pool=Depends(get_db),user=Depends(require_admin)):
 
 @api_router.post("/teams",response_model=TeamOut)
 async def create_team(payload:TeamCreate,pool=Depends(get_db),user=Depends(require_user)):
+    """Create a new project and set the caller as owner with default kanban columns."""
     team_id=f"team_{uuid.uuid4().hex[:12]}"
     row=await pool.fetchrow("INSERT INTO teams (team_id,name,created_by) VALUES ($1,$2,$3) RETURNING *",team_id,payload.name,user["user_id"])
     await pool.execute("INSERT INTO team_members (member_id,team_id,email,user_id,role,status) VALUES ($1,$2,$3,$4,'owner','active')",f"mem_{uuid.uuid4().hex[:12]}",team_id,user["email"],user["user_id"])
@@ -936,6 +979,7 @@ async def list_users(pool=Depends(get_db),user=Depends(require_user)):
 
 @api_router.get("/teams/{team_id}")
 async def get_team(team_id:str,pool=Depends(get_db),user=Depends(require_user)):
+    """Return a project with its member list and the caller's role."""
     # Check project_assignments first, fall back to team_members
     mem=await pool.fetchrow("SELECT role FROM project_assignments WHERE team_id=$1 AND user_id=$2",team_id,user["user_id"])
     if not mem:
@@ -981,6 +1025,7 @@ async def list_team_members(team_id:str,pool=Depends(get_db),user=Depends(requir
 
 @api_router.post("/teams/{team_id}/members",response_model=TeamMemberOut)
 async def add_team_member(team_id:str,payload:TeamMemberAdd,pool=Depends(get_db),user=Depends(require_user)):
+    """Add or re-invite a member to a project by email."""
     mem=await pool.fetchrow("SELECT role FROM project_assignments WHERE team_id=$1 AND user_id=$2",team_id,user["user_id"])
     if not mem or mem["role"] not in ("owner","admin"): raise HTTPException(403)
     email=payload.email.strip().lower()
@@ -996,6 +1041,7 @@ async def add_team_member(team_id:str,payload:TeamMemberAdd,pool=Depends(get_db)
 
 @api_router.put("/teams/{team_id}/members/{member_id}",response_model=TeamMemberOut)
 async def update_team_member(team_id:str,member_id:str,payload:TeamMemberUpdate,pool=Depends(get_db),user=Depends(require_user)):
+    """Update a team member's role or status within a project."""
     mem=await pool.fetchrow("SELECT role FROM project_assignments WHERE team_id=$1 AND user_id=$2",team_id,user["user_id"])
     if not mem or mem["role"] not in ("owner","admin"): raise HTTPException(403)
     updates,vals=[],[]
@@ -1060,6 +1106,7 @@ async def set_team_color(team_id:str,body:dict,pool=Depends(get_db),user=Depends
 
 @api_router.delete("/teams/{team_id}/members/{member_id}")
 async def remove_team_member(team_id:str,member_id:str,pool=Depends(get_db),user=Depends(require_user)):
+    """Remove a member from a project and revoke their project assignment."""
     mem=await pool.fetchrow("SELECT role FROM project_assignments WHERE team_id=$1 AND user_id=$2",team_id,user["user_id"])
     if not mem or mem["role"] not in ("owner","admin"): raise HTTPException(403)
     member=await pool.fetchrow("SELECT user_id FROM team_members WHERE team_id=$1 AND member_id=$2",team_id,member_id)
@@ -1071,15 +1118,18 @@ async def remove_team_member(team_id:str,member_id:str,pool=Depends(get_db),user
 
 @api_router.get("/categories",response_model=List[CategoryOut])
 async def list_categories(pool=Depends(get_db),user=Depends(require_user)):
+    """Return all task categories belonging to the authenticated user."""
     return [CategoryOut(**dict(r)) for r in await pool.fetch("SELECT * FROM categories WHERE user_id=$1 ORDER BY updated_at DESC",user["user_id"])]
 
 @api_router.post("/categories",response_model=CategoryOut)
 async def create_category(payload:CategoryCreate,pool=Depends(get_db),user=Depends(require_user)):
+    """Create a new task category for the authenticated user."""
     row=await pool.fetchrow("INSERT INTO categories (category_id,user_id,name,color) VALUES ($1,$2,$3,$4) RETURNING *",f"cat_{uuid.uuid4().hex[:12]}",user["user_id"],payload.name,payload.color)
     return CategoryOut(**dict(row))
 
 @api_router.delete("/categories/{category_id}")
 async def delete_category(category_id:str,pool=Depends(get_db),user=Depends(require_user)):
+    """Delete a category and unlink it from all tasks."""
     await pool.execute("UPDATE tasks SET category_id=NULL,updated_at=NOW() WHERE user_id=$1 AND category_id=$2",user["user_id"],category_id)
     await pool.execute("DELETE FROM categories WHERE user_id=$1 AND category_id=$2",user["user_id"],category_id)
     return {"ok":True}
@@ -1090,6 +1140,7 @@ async def delete_category(category_id:str,pool=Depends(get_db),user=Depends(requ
 async def list_tasks(status:Optional[str]=None,category_id:Optional[str]=None,q:Optional[str]=None,
                      team_id:Optional[str]=None,assigned_to_me:Optional[bool]=None,
                      pool=Depends(get_db),user=Depends(require_user)):
+    """Return all tasks visible to the user, with optional filters for status, category, team, and search."""
     team_ids=await get_visible_team_ids(pool,user["user_id"],_user_dict=user)
     conditions=["(t.user_id=$1 OR t.team_id=ANY($2::text[])"
                 " OR t.created_by_user_id=$1"
@@ -1106,6 +1157,7 @@ async def list_tasks(status:Optional[str]=None,category_id:Optional[str]=None,q:
 
 @api_router.post("/tasks",response_model=TaskOut)
 async def create_task(payload:TaskCreate,pool=Depends(get_db),user=Depends(require_user)):
+    """Create a task, send assignment notifications, and fire automation rules."""
     if payload.team_id:
         mem=await is_project_member(pool,payload.team_id,user)
         if not mem: raise HTTPException(403)
@@ -1164,6 +1216,7 @@ async def create_task(payload:TaskCreate,pool=Depends(get_db),user=Depends(requi
 
 @api_router.get("/tasks/{task_id}",response_model=TaskOut)
 async def get_task(task_id:str,pool=Depends(get_db),user=Depends(require_user)):
+    """Return a single task by ID, enforcing visibility and access rules."""
     row=await pool.fetchrow("SELECT t.*,COALESCE(u.full_name,u.name,u.email) AS created_by_name FROM tasks t LEFT JOIN users u ON u.user_id=t.created_by_user_id WHERE t.task_id=$1",task_id)
     if not row: raise HTTPException(404)
     if user.get("role")=="admin": return row_to_task(row)
@@ -1179,6 +1232,7 @@ async def get_task(task_id:str,pool=Depends(get_db),user=Depends(require_user)):
 
 @api_router.put("/tasks/{task_id}",response_model=TaskOut)
 async def update_task(task_id:str,payload:TaskUpdate,pool=Depends(get_db),user=Depends(require_user)):
+    """Update allowed task fields and emit activity events for status and assignee changes."""
     team_ids=await get_visible_team_ids(pool,user["user_id"],_user_dict=user)
     existing=await pool.fetchrow(
         "SELECT * FROM tasks WHERE task_id=$1 AND (user_id=$2 OR team_id=ANY($3::text[]) OR created_by_user_id=$2)",
@@ -1262,6 +1316,7 @@ async def patch_task(task_id:str,payload:TaskUpdate,pool=Depends(get_db),user=De
 
 @api_router.delete("/tasks/{task_id}")
 async def delete_task(task_id:str,pool=Depends(get_db),user=Depends(require_user)):
+    """Permanently delete a task; only project admins/owners or the personal task owner may delete."""
     doc=await pool.fetchrow("SELECT team_id FROM tasks WHERE task_id=$1",task_id)
     if not doc: raise HTTPException(404)
     # System admin can always delete
@@ -1280,6 +1335,7 @@ async def delete_task(task_id:str,pool=Depends(get_db),user=Depends(require_user
 
 @api_router.patch("/tasks/{task_id}/toggle",response_model=TaskOut)
 async def toggle_task(task_id:str,pool=Depends(get_db),user=Depends(require_user)):
+    """Toggle a task between done and todo status."""
     team_ids=await get_visible_team_ids(pool,user["user_id"],_user_dict=user)
     doc=await pool.fetchrow("SELECT * FROM tasks WHERE task_id=$1 AND (user_id=$2 OR team_id=ANY($3::text[]))",task_id,user["user_id"],team_ids)
     if not doc: raise HTTPException(404)
@@ -1290,6 +1346,7 @@ async def toggle_task(task_id:str,pool=Depends(get_db),user=Depends(require_user
 
 @api_router.patch("/tasks/{task_id}/move",response_model=TaskOut)
 async def move_task(task_id:str,payload:TaskMoveIn,pool=Depends(get_db),user=Depends(require_user)):
+    """Move a task to a different column and update its status accordingly."""
     team_ids=await get_visible_team_ids(pool,user["user_id"],_user_dict=user)
     doc=await pool.fetchrow("SELECT * FROM tasks WHERE task_id=$1 AND (user_id=$2 OR team_id=ANY($3::text[]))",task_id,user["user_id"],team_ids)
     if not doc: raise HTTPException(404)
@@ -1319,17 +1376,20 @@ async def move_task(task_id:str,payload:TaskMoveIn,pool=Depends(get_db),user=Dep
 
 @api_router.get("/notifications",response_model=List[NotificationOut])
 async def list_notifications(unread_only:bool=False,pool=Depends(get_db),user=Depends(require_user)):
+    """Return up to 200 notifications for the authenticated user, optionally filtering to unread only."""
     sql="SELECT * FROM notifications WHERE user_id=$1"+(" AND read_at IS NULL" if unread_only else "")+" ORDER BY created_at DESC LIMIT 200"
     return [NotificationOut(**dict(r)) for r in await pool.fetch(sql,user["user_id"])]
 
 @api_router.post("/notifications/mark-read")
 async def mark_read(payload:MarkReadIn,pool=Depends(get_db),user=Depends(require_user)):
+    """Mark one, many, or all notifications as read for the authenticated user."""
     if payload.mark_all: await pool.execute("UPDATE notifications SET read_at=NOW() WHERE user_id=$1 AND read_at IS NULL",user["user_id"])
     elif payload.notification_ids: await pool.execute("UPDATE notifications SET read_at=NOW() WHERE user_id=$1 AND notification_id=ANY($2::text[])",user["user_id"],payload.notification_ids)
     return {"ok":True}
 
 @api_router.post("/notifications/process")
 async def process_notifications(pool=Depends(get_db),user=Depends(require_user)):
+    """Process due task reminders and create notification rows for each."""
     team_ids=await get_visible_team_ids(pool,user["user_id"])
     rows=await pool.fetch("SELECT * FROM tasks WHERE (user_id=$1 OR team_id=ANY($2::text[])) AND status!='done' AND reminder_at IS NOT NULL AND reminder_at<=$3 AND reminder_sent_at IS NULL",user["user_id"],team_ids,now_utc())
     for t in rows:
@@ -1342,6 +1402,7 @@ async def process_notifications(pool=Depends(get_db),user=Depends(require_user))
 
 @api_router.get("/dashboard/summary",response_model=DashboardSummaryOut)
 async def dashboard_summary(pool=Depends(get_db),user=Depends(require_user)):
+    """Return task count summary (todo, in-progress, done, overdue, due-24h) for the dashboard."""
     team_ids=await get_visible_team_ids(pool,user["user_id"],_user_dict=user); now=now_utc()
     row=await pool.fetchrow("""
         SELECT
@@ -1416,6 +1477,7 @@ async def verse_of_the_day():
 
 @app.on_event("startup")
 async def startup():
+    """Run startup migrations and log configuration on application boot."""
     dsn=os.environ.get("DATABASE_URL","NOT SET")
     if "@" in dsn:
         parts=dsn.split("@"); user_part=parts[0].split("://")[-1].split(":")[0]; host_part=parts[1]
@@ -1506,6 +1568,10 @@ async def startup():
         logger.warning("Startup migration warning (non-fatal): %s", e)
 
 @app.on_event("shutdown")
-async def shutdown(): await close_pool()
+async def shutdown():
+    """Close the database connection pool on application shutdown."""
+    await close_pool()
 
-def App(): return app
+def App():
+    """Return the FastAPI application instance (used by some ASGI runners)."""
+    return app

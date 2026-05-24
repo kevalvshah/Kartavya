@@ -60,11 +60,13 @@ _FONT_HINDI = "'Tiro Devanagari Hindi', 'Noto Serif Devanagari', 'Newsreader', G
 
 
 def _preheader(text: str) -> str:
+    """Return an invisible preheader div shown in email client preview text."""
     return (f'<div style="display:none;font-size:1px;color:{_BG};line-height:1px;'
             f'max-height:0;max-width:0;opacity:0;overflow:hidden;mso-hide:all;">{_h(text)}</div>')
 
 
 def _dark_mode_css() -> str:
+    """Return a <style> block with dark-mode and mobile media query overrides."""
     return """
 <style type="text/css">
 @media (prefers-color-scheme:dark){
@@ -82,6 +84,7 @@ def _dark_mode_css() -> str:
 
 def _base(preheader: str, kicker: str, headline: str, sanskrit: str,
           lede: str, body_rows: str, show_gita: bool = False) -> str:
+    """Assemble the full HTML email document from layout components and body rows."""
     gita = ""
     if show_gita:
         gita = (f'<tr><td style="padding:20px 0 0;font-family:{_FONT_HINDI};'
@@ -170,6 +173,7 @@ def _base(preheader: str, kicker: str, headline: str, sanskrit: str,
 
 def _task_card(task_title: str, project: str = None, priority: str = None,
                due_date: str = None, note: str = None) -> str:
+    """Render a styled task-detail card row for embedding in an email body."""
     rows = f"""<tr><td style="padding:14px 18px;font-family:{_FONT_DISP};
                   font-size:17px;font-weight:500;color:{_INK};line-height:1.3;">{_h(task_title)}</td></tr>"""
     if project or priority or due_date:
@@ -194,6 +198,7 @@ _RULE_STRONG  = "#C8C0AA"
 
 def _cta_row(primary_url: str, primary_label: str, primary_style: str = "primary",
              ghost_url: str = None, ghost_label: str = None) -> str:
+    """Render a CTA button row with an optional secondary ghost button."""
     if primary_style == "approve":
         btn_bg     = _GRAD_APPROVE
         btn_shadow = "0 4px 14px -4px rgba(10,122,110,.5)"
@@ -235,6 +240,7 @@ def _cta_row(primary_url: str, primary_label: str, primary_style: str = "primary
 
 
 def _body_text(text: str) -> str:
+    """Wrap a paragraph of HTML text in a standard body-text table row."""
     return (f'<tr><td style="padding:0 36px 20px;font-family:{_FONT_UI};font-size:15px;'
             f'line-height:1.65;color:{_INK2};" class="em__body-text">{text}</td></tr>')
 
@@ -242,6 +248,7 @@ def _body_text(text: str) -> str:
 # ── Core send (threaded) ───────────────────────────────────────────────────────
 def send_email(to_email: str, subject: str, html_content: str,
                reply_to: str = None) -> bool:
+    """Send an HTML email via AWS SES in a background thread, logging in dev mode."""
     def _send():
         if not ses_client:
             logger.info(f"[EMAIL-DEV] To:{to_email} | Subject:{subject}")
@@ -315,6 +322,7 @@ def send_invite_email(to_email: str, inviter_name: str, role: str,
                       expires_label: str = "7 days", recipient_name: str = "",
                       workspace_hindi: str = "मुख्य कार्यस्थल",
                       inviter_role: str = "Admin"):
+    """Send a workspace invite email with an accept-invite magic link."""
     invite_url    = f"{FRONTEND_URL}/accept-invite?token={invite_token}"
     workspace_url = f"{FRONTEND_URL}/dashboard"
     role_label    = role.capitalize()
@@ -356,6 +364,7 @@ def send_invite_email(to_email: str, inviter_name: str, role: str,
 
 # ── 2. Welcome email ───────────────────────────────────────────────────────────
 def send_welcome_email(user_email: str, user_name: str):
+    """Send a welcome email with onboarding steps to a newly registered user."""
     first_name = _h(user_name.split()[0] if user_name else "there")
     preheader  = f"Your Kartavya account is live. Here's the shortest path to doing what must be done."
 
@@ -421,6 +430,7 @@ def send_approval_request_email(user_email: str, user_name: str,
                                 notes: str = None,
                                 project: str = None, priority: str = None,
                                 due_date: str = None, approve_token: str = None):
+    """Send an approval-request email to a reviewer with approve/decline action buttons."""
     approve_url = (f"{FRONTEND_URL}/approve?token={approve_token}"
                    if approve_token else f"{FRONTEND_URL}/approvals")
     reject_url  = (f"{FRONTEND_URL}/approve?token={approve_token}&action=reject"
@@ -462,6 +472,7 @@ def send_request_approved_email(user_email: str, user_name: str,
                                 reviewer_name: str, task_title: str,
                                 assignees: str = None,
                                 due_date: str = None):
+    """Notify the requester that their task request was approved and queued."""
     task_url   = f"{FRONTEND_URL}/client/projects"
     first_name = _h(user_name.split()[0] if user_name else "there")
     preheader  = f"Your request was approved by {reviewer_name}. The team is on it."
@@ -495,6 +506,7 @@ def send_task_done_email(user_email: str, user_name: str,
                          completer_note: str = None,
                          attachments: list = None,
                          approve_token: str = None):
+    """Notify a client that a task is complete and ready for their review/approval."""
     approve_url  = (f"{FRONTEND_URL}/approve?token={approve_token}"
                     if approve_token else f"{FRONTEND_URL}/client/projects")
     reject_url   = (f"{FRONTEND_URL}/approve?token={approve_token}&action=reject"
@@ -545,6 +557,7 @@ def send_task_done_email(user_email: str, user_name: str,
 # ── Legacy / additional send functions ────────────────────────────────────────
 def send_task_assignment_email(user_email: str, user_name: str,
                                task_title: str, task_id: str, team_name: str = None):
+    """Notify a user by email that a task has been assigned to them."""
     task_url   = f"{FRONTEND_URL}/tasks/{task_id}"
     first_name = _h(user_name.split()[0] if user_name else "there")
     preheader  = f"New task assigned to you: {task_title}"
@@ -564,6 +577,7 @@ def send_task_assignment_email(user_email: str, user_name: str,
 
 def send_comment_email(user_email: str, user_name: str, actor_name: str,
                        task_title: str, task_id: str, comment_preview: str):
+    """Notify a user by email that a new comment was posted on a task they follow."""
     task_url   = f"{FRONTEND_URL}/tasks/{task_id}"
     first_name = _h(user_name.split()[0] if user_name else "there")
     preheader  = f"{actor_name} commented on {task_title}"
@@ -587,6 +601,7 @@ def send_comment_email(user_email: str, user_name: str, actor_name: str,
 
 def send_mention_email(user_email: str, user_name: str, actor_name: str,
                        task_title: str, task_id: str, comment_body: str):
+    """Notify a user by email that they were @mentioned in a task comment."""
     task_url   = f"{FRONTEND_URL}/tasks/{task_id}"
     first_name = _h(user_name.split()[0] if user_name else "there")
     preheader  = f"{actor_name} mentioned you in {task_title}"
@@ -610,6 +625,7 @@ def send_mention_email(user_email: str, user_name: str, actor_name: str,
 
 def send_task_reminder_email(user_email: str, user_name: str,
                              task_title: str, task_id: str, due_date: str):
+    """Send a reminder email to a user whose task is approaching its due date."""
     task_url   = f"{FRONTEND_URL}/tasks/{task_id}"
     first_name = _h(user_name.split()[0] if user_name else "there")
     preheader  = f"Reminder: {task_title} is due {due_date}"
@@ -628,6 +644,7 @@ def send_task_reminder_email(user_email: str, user_name: str,
 
 def send_team_sync_email(user_email: str, user_name: str, client_name: str,
                          task_title: str, task_id: str):
+    """Notify a team member that a client has approved and closed a task."""
     task_url   = f"{FRONTEND_URL}/tasks/{task_id}"
     first_name = _h(user_name.split()[0] if user_name else "there")
     preheader  = f"{client_name} approved the task: {task_title}"
@@ -650,6 +667,7 @@ def send_team_sync_email(user_email: str, user_name: str, client_name: str,
 def send_approval_decision_email(user_email: str, user_name: str, reviewer_name: str,
                                  task_title: str, task_id: str,
                                  decision: str, notes: str = None):
+    """Notify the task creator of an approved or rejected approval decision."""
     task_url   = f"{FRONTEND_URL}/tasks/{task_id}"
     approved   = decision == "approved"
     verb       = "approved" if approved else "rejected"
@@ -684,6 +702,7 @@ def send_report_email(
     by_member_tasks: list = None,
     daily_throughput: list = None,
 ):
+    """Send a periodic report email with optional PDF and Excel attachments via SES raw MIME."""
     from email.mime.multipart import MIMEMultipart
     from email.mime.text      import MIMEText
     from email.mime.base      import MIMEBase
@@ -1031,6 +1050,7 @@ def send_report_email(
 def send_approval_notification_email(user_email: str, user_name: str, task_title: str,
                                      notification_type: str, notes: str = None,
                                      task_id: str = None):
+    """Legacy alias — dispatch to send_approval_request_email or send_approval_decision_email."""
     if notification_type == "request":
         return send_approval_request_email(
             user_email, user_name, "A team member", task_title, notes=notes)
@@ -1040,5 +1060,6 @@ def send_approval_notification_email(user_email: str, user_name: str, task_title
 
 
 def send_team_invite_email(to_email: str, team_name: str, inviter_name: str, invite_token: str):
+    """Legacy alias — send a member invite email for a specific team."""
     return send_invite_email(to_email, inviter_name, "member", invite_token,
                              workspace_name=team_name)
