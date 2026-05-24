@@ -31,6 +31,11 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/reports", tags=["reports"])
 
 DISPATCH_SECRET = os.environ.get("REPORT_DISPATCH_SECRET", "")
+if not DISPATCH_SECRET:
+    logger.warning(
+        "REPORT_DISPATCH_SECRET is not set — dispatch endpoint is protected by admin auth only. "
+        "Set this env var in production to add a second layer of protection."
+    )
 
 
 # ── Models ─────────────────────────────────────────────────────────────────────
@@ -243,10 +248,12 @@ async def download_report(
         logger.error("Report generation failed for %s fmt=%s: %s", _log_safe(team_id), _log_safe(fmt), _log_safe(exc), exc_info=True)
         raise HTTPException(500, "Report generation failed") from exc
 
+    from urllib.parse import quote
+    encoded_filename = quote(filename, safe="")
     return StreamingResponse(
         io.BytesIO(content),
         media_type=media_type,
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}"},
     )
 
 

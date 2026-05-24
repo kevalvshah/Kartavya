@@ -84,7 +84,7 @@ ALLOWED_ORIGINS = list(dict.fromkeys(DEFAULT_ORIGINS + _extra))
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
-    allow_origin_regex=r"https://kartavya.*\.vercel\.app",
+    allow_origin_regex=r"https://kartavya-[a-z0-9-]+\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -717,7 +717,7 @@ async def review_approval(approval_id:str,body:dict,pool=Depends(get_db),user=De
     user_data=await pool.fetchrow(_SQL_USER_ROLE,user["user_id"])
     is_owner_admin = mem and mem["role"] in ("owner","admin")
     is_system_admin = user_data and user_data["role"] == "admin"
-    is_client_member = bool(mem)
+    is_client_member = bool(mem and mem["role"] in ("owner", "admin"))
     if not (is_owner_admin or is_system_admin or is_client_member):
         raise HTTPException(403, "Not authorised to review this approval")
     await pool.execute("UPDATE approvals SET status=$1,reviewed_by=$2,reviewed_at=NOW(),review_notes=$3 WHERE approval_id=$4",status,user["user_id"],notes,approval_id)
@@ -927,7 +927,7 @@ async def create_team(payload:TeamCreate,pool=Depends(get_db),user=Depends(requi
 @api_router.get("/users")
 async def list_users(pool=Depends(get_db),user=Depends(require_user)):
     """Return all registered users — for admin member picker."""
-    if user.get("role") not in ("admin","owner"):
+    if user.get("role") != "admin":  # system-role "owner" does not exist; admin only
         raise HTTPException(403,"Admins only")
     rows=await pool.fetch(
         "SELECT user_id,COALESCE(full_name,name,email) AS display_name,email,role,company_name FROM users ORDER BY display_name ASC"

@@ -313,13 +313,7 @@ async def client_approve_task(task_id: str, payload: ApprovalRequest,
         "SELECT 1 FROM task_clients WHERE task_id=$1 AND user_id=$2", task_id, user["user_id"]
     )
     if not access and user.get("role") != "admin":
-        # also allow if they are a project member
-        member = await pool.fetchrow(
-            "SELECT 1 FROM project_assignments WHERE team_id=$1 AND user_id=$2",
-            task["team_id"], user["user_id"]
-        )
-        if not member:
-            raise HTTPException(403, "Only the assigned client can approve this task")
+        raise HTTPException(403, "Only the assigned client can approve this task")
 
     done_col = await pool.fetchrow(
         "SELECT column_id FROM project_columns WHERE team_id=$1 AND is_done=TRUE ORDER BY sort_order DESC LIMIT 1",
@@ -385,9 +379,14 @@ async def get_approval_by_token(token: str, pool=Depends(get_pool)):
     if not task:
         raise HTTPException(404, _TASK_NOT_FOUND)
     if task["approval_status"] not in ("pending_client",):
-        # Already decided
-        return {"task": dict(task), "already_decided": True,
-                "requester_name": task["requester_name"], "requested_at": task["requested_at"]}
+        # Already decided — return only the decision status, no task content
+        return {
+            "task": {"task_id": task["task_id"], "title": task["title"],
+                     "approval_status": task["approval_status"]},
+            "already_decided": True,
+            "requester_name": task["requester_name"],
+            "requested_at": task["requested_at"],
+        }
     return {"task": dict(task), "already_decided": False,
             "requester_name": task["requester_name"], "requested_at": task["requested_at"]}
 
@@ -457,12 +456,7 @@ async def client_reject_task(task_id: str, payload: ApprovalRequest,
         "SELECT 1 FROM task_clients WHERE task_id=$1 AND user_id=$2", task_id, user["user_id"]
     )
     if not access and user.get("role") != "admin":
-        member = await pool.fetchrow(
-            "SELECT 1 FROM project_assignments WHERE team_id=$1 AND user_id=$2",
-            task["team_id"], user["user_id"]
-        )
-        if not member:
-            raise HTTPException(403, "Only the assigned client can reject this task")
+        raise HTTPException(403, "Only the assigned client can reject this task")
 
     if not payload.notes:
         raise HTTPException(400, _REJECTION_REQUIRED)

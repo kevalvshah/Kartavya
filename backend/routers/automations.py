@@ -51,6 +51,13 @@ async def list_automations(team_id: str, pool=Depends(get_pool), user=Depends(re
 
 @router.post("/")
 async def create_automation(body: AutomationCreate, pool=Depends(get_pool), user=Depends(require_user)):
+    # Verify the caller is an active member of the target team
+    member = await pool.fetchrow(
+        "SELECT 1 FROM team_members WHERE team_id=$1 AND user_id=$2 AND status='active'",
+        body.team_id, user["user_id"],
+    )
+    if not member:
+        raise HTTPException(403, "You are not a member of this project")
     if body.trigger.get("event") not in VALID_TRIGGERS:
         raise HTTPException(400, f"trigger.event must be one of {VALID_TRIGGERS}")
     for action in body.actions:

@@ -216,7 +216,7 @@ def _cta_row(primary_url: str, primary_label: str, primary_style: str = "primary
                       f'color:{_INK};text-decoration:none;'
                       f'padding:13px 22px;display:inline-block;'
                       f'min-width:140px;text-align:center;letter-spacing:0.005em;">'
-                      f'{ghost_label}</a></td></tr></table></td>')
+                      f'{_h(ghost_label)}</a></td></tr></table></td>')
     return (f'<tr><td style="padding:4px 36px 20px;"><table cellpadding="0" cellspacing="0" border="0">'
             f'<tr>'
             f'<td class="em__cta-cell" align="center">'
@@ -228,7 +228,7 @@ def _cta_row(primary_url: str, primary_label: str, primary_style: str = "primary
             f'text-decoration:none;'
             f'padding:13px 22px;display:block;min-width:140px;text-align:center;'
             f'letter-spacing:0.005em;">'
-            f'{primary_label}</a></td></tr></table>'
+            f'{_h(primary_label)}</a></td></tr></table>'
             f'</td>'
             f'{ghost_cell}'
             f'</tr></table></td></tr>')
@@ -704,20 +704,20 @@ def send_report_email(
     in_prog    = data_summary.get("in_progress", 0)
     todo_count = data_summary.get("todo", 0)
     if frequency == "daily":
-        kicker   = f"DAILY REPORT · {period_from}"
+        kicker   = f"DAILY REPORT · {_h(period_from)}"
         headline = f"{_h(team_name)} — yesterday's pulse."
         sanskrit = "दैनिक प्रतिवेदन"
         lede     = (f'Here\'s the rollup for <strong>{_h(team_name)}</strong> over the last 24 hours. '
                     f'The Excel below has per-task detail.')
     elif frequency == "weekly":
-        kicker   = f"WEEKLY REPORT · {period_from} to {period_to}"
+        kicker   = f"WEEKLY REPORT · {_h(period_from)} to {_h(period_to)}"
         headline = f"{_h(team_name)} closed {done_count} tasks this week."
         sanskrit = "साप्ताहिक प्रतिवेदन"
         lede     = (f'Here\'s the weekly rollup for <strong>{_h(team_name)}</strong>. '
                     f'Full per-task detail is in the attached Excel.')
     else:
-        kicker   = f"MONTHLY REPORT · {period_from} to {period_to}"
-        headline = f"{done_count} tasks shipped in {period_from[:7]}."
+        kicker   = f"MONTHLY REPORT · {_h(period_from)} to {_h(period_to)}"
+        headline = f"{done_count} tasks shipped in {_h(period_from[:7])}."
         sanskrit = "मासिक प्रतिवेदन"
         lede     = (f'Monthly summary for <strong>{_h(team_name)}</strong>. '
                     f'Full per-task detail is in the attached Excel.')
@@ -943,7 +943,7 @@ def send_report_email(
             f'</td>'
             f'<td style="vertical-align:middle;padding-left:14px;">'
             f'<div style="font-family:monospace;font-size:13px;color:{_INK};'
-            f'font-weight:500;">{excel_fname}</div>'
+            f'font-weight:500;">{_h(excel_fname)}</div>'
             f'<div style="font-family:{_FONT_UI};font-size:11.5px;color:{_INK3};margin-top:3px;">'
             f'Attached to this email · also downloadable for 30 days'
             f'{"  ·  " + xl_size if xl_size else ""}'
