@@ -9,15 +9,13 @@ from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime, timezone
 import uuid
-import os
 import jwt as _jwt
 
-from auth_router import require_user, require_admin
+from auth_router import require_user, require_admin, JWT_SECRET as _JWT_SECRET
 from db import get_pool
 import asyncpg
 
-_JWT_SECRET = os.environ.get("JWT_SECRET", "")
-_JWT_ALG    = "HS256"
+_JWT_ALG = "HS256"
 
 
 def _make_client_token(task_id: str, client_user_id: str) -> str:

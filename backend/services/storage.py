@@ -72,7 +72,7 @@ async def upload_file(file_bytes: bytes, filename: str, content_type: str, user_
     ext = Path(filename).suffix
     key = f"uploads/{user_id}/{uuid.uuid4().hex}{ext}"
 
-    await asyncio.get_event_loop().run_in_executor(
+    await asyncio.get_running_loop().run_in_executor(
         None,
         lambda: client.put_object(
             Bucket=BUCKET,

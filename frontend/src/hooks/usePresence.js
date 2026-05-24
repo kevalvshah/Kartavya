@@ -65,7 +65,11 @@ export function usePresence(projectId, user) {
             online_at: p.online_at,
           }))
           // Sort so the current user always appears first
-          .sort((a) => (a.user_id === user.user_id ? -1 : 1));
+          .sort((a, b) => {
+            if (a.user_id === user.user_id) return -1;
+            if (b.user_id === user.user_id) return 1;
+            return 0;
+          });
 
         setOnlineUsers(users);
       })

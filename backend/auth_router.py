@@ -7,7 +7,7 @@ import hashlib
 import hmac
 import os
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 import jwt
@@ -20,7 +20,9 @@ from db import get_pool
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 security = HTTPBearer(auto_error=False)
 
-JWT_SECRET = os.environ["JWT_SECRET"]
+JWT_SECRET = os.environ.get("JWT_SECRET")
+if not JWT_SECRET:
+    raise RuntimeError("JWT_SECRET environment variable must be set")
 JWT_ALGORITHM = "HS256"
 JWT_TTL_DAYS = 30
 
@@ -35,7 +37,7 @@ def _verify_password(password: str, salt: str, stored: str) -> bool:
 
 def _create_token(user_id: str) -> str:
     return jwt.encode(
-        {"sub": user_id, "exp": datetime.utcnow() + timedelta(days=JWT_TTL_DAYS), "iat": datetime.utcnow()},
+        {"sub": user_id, "exp": datetime.now(timezone.utc) + timedelta(days=JWT_TTL_DAYS), "iat": datetime.now(timezone.utc)},
         JWT_SECRET, algorithm=JWT_ALGORITHM,
     )
 

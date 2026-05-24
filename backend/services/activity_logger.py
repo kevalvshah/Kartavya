@@ -31,6 +31,9 @@ async def log_event(
             if row:
                 resolved_team_id = row["team_id"]
 
+        if not resolved_team_id:
+            return  # skip logging for personal tasks — team_id NOT NULL constraint
+
         event_id = f"evt_{uuid.uuid4().hex[:14]}"
         await pool.execute(
             """

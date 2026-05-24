@@ -3,7 +3,7 @@
  * Invite form: Full Name, Email, Account Type, Role title, Client Approval toggle.
  * User list: inline role select + Edit slide-over + Remove.
  */
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { api } from '../lib/api';
 import { useToast } from '../components/ui/toast';
 import { PageHeader, StatTile } from '../components/editorial';
@@ -266,7 +266,9 @@ export default function AdminPage() {
   const [editUser,    setEditUser]    = useState(null);   // user being edited
   const [deleteTarget, setDeleteTarget] = useState(null); // user pending deletion
 
-  const me = JSON.parse(localStorage.getItem('kartavya_user') || 'null');
+  const me = useMemo(() => {
+    try { return JSON.parse(localStorage.getItem('kartavya_user') || 'null'); } catch { return null; }
+  }, []);
 
   const load = () => Promise.all([
     api.get('/admin/users').then(r => setUsers(Array.isArray(r.data) ? r.data : [])).catch(() => {}),
