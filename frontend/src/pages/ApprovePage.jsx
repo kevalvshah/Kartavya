@@ -6,7 +6,7 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { api } from '../lib/api';
-import { PRIORITY_COLOR } from '../lib/utils';
+import { priorityColor } from '../lib/utils';
 
 function Logo() {
   return (
@@ -129,9 +129,9 @@ export default function ApprovePage() {
               <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
                 {task.priority && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
-                    <span style={{ width: 7, height: 7, borderRadius: '50%', background: PRIORITY_COLOR[task.priority] || '#94a3b8', display: 'inline-block' }} />
+                    <span style={{ width: 7, height: 7, borderRadius: '50%', background: priorityColor(task.priority), display: 'inline-block' }} />
                     <span style={{ color: 'var(--ink-3)' }}>Priority:</span>
-                    <span style={{ color: PRIORITY_COLOR[task.priority], fontWeight: 600, textTransform: 'capitalize' }}>{task.priority}</span>
+                    <span style={{ color: priorityColor(task.priority), fontWeight: 600, textTransform: 'capitalize' }}>{task.priority}</span>
                   </div>
                 )}
                 {task.due_at && (

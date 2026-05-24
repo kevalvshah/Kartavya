@@ -13,7 +13,10 @@ export async function ensureServiceWorkerRegistered() {
   if (!("serviceWorker" in navigator)) {
     throw new Error("Service worker not supported");
   }
-  // sw.js is served from /public
-  const reg = await navigator.serviceWorker.register("/sw.js");
-  return reg;
+  try {
+    const reg = await navigator.serviceWorker.register('/sw.js');
+    return reg;
+  } catch (err) {
+    throw new Error(`Service Worker registration failed: ${err.message}`);
+  }
 }

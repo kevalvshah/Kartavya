@@ -15,7 +15,7 @@
  */
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
-import { AVATAR_COLORS } from '../lib/utils';
+import { AVATAR_COLORS, logger } from '../lib/utils';
 
 function colorForUser(userId = '') {
   let hash = 0;
@@ -69,10 +69,10 @@ export function usePresence(projectId, user) {
         setOnlineUsers(users);
       })
       .on('presence', { event: 'join' }, ({ newPresences }) => {
-        console.debug('[Presence] joined', newPresences.map(p => p.name));
+        logger.debug('[Presence] joined', newPresences.map(p => p.name));
       })
       .on('presence', { event: 'leave' }, ({ leftPresences }) => {
-        console.debug('[Presence] left', leftPresences.map(p => p.name));
+        logger.debug('[Presence] left', leftPresences.map(p => p.name));
       })
       .subscribe(async (status) => {
         if (status === 'SUBSCRIBED') {
