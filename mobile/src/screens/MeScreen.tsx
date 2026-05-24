@@ -30,17 +30,15 @@ export default function MeScreen() {
     staleTime: 60_000,
   });
 
-  const done    = myTasks.filter(t => t.status === 'done' && (
-    t.created_by_user_id === user?.user_id || (t.assignee_user_ids ?? []).includes(user?.user_id ?? '')
-  )).length;
-  const open    = myTasks.filter(task => task.status !== 'done' && (
-    task.created_by_user_id === user?.user_id || (task.assignee_user_ids ?? []).includes(user?.user_id ?? '')
-  )).length;
-  const overdue = myTasks.filter(task => {
-    if (task.status === 'done' || !task.due_at) return false;
-    if (!(task.created_by_user_id === user?.user_id || (task.assignee_user_ids ?? []).includes(user?.user_id ?? ''))) return false;
-    return new Date(task.due_at) < new Date();
-  }).length;
+  const myId = user?.user_id ?? '';
+  const isMine = (task: typeof myTasks[number]) =>
+    task.created_by_user_id === myId || (task.assignee_user_ids ?? []).includes(myId);
+
+  const done    = myTasks.filter(task => task.status === 'done'  && isMine(task)).length;
+  const open    = myTasks.filter(task => task.status !== 'done'  && isMine(task)).length;
+  const overdue = myTasks.filter(task =>
+    task.status !== 'done' && !!task.due_at && isMine(task) && new Date(task.due_at) < new Date()
+  ).length;
 
   const initials = user ? userInitials(user.name ?? user.full_name ?? '?') : '?';
   const bgColor  = user ? avatarColor(user.user_id) : '#0082c6';
@@ -50,7 +48,7 @@ export default function MeScreen() {
       {/* Header */}
       <View style={[s.header, { backgroundColor: t.surface, borderBottomColor: t.outline }]}>
         <Text style={[s.title, { color: t.ink }]}>Me</Text>
-        <TouchableOpacity onPress={() => (nav as any).navigate('Settings')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+        <TouchableOpacity onPress={() => nav.navigate('Settings')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
           <Ionicons name="settings-outline" size={22} color={t.ink3} />
         </TouchableOpacity>
       </View>

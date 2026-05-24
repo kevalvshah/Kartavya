@@ -4,6 +4,7 @@ import {
   Switch, ActivityIndicator, Platform, Alert, Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import Constants from 'expo-constants';
 import * as Notifications from 'expo-notifications';
 import * as Crypto from 'expo-crypto';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -26,7 +27,11 @@ async function registerPushToken(): Promise<string | null> {
     finalStatus = status;
   }
   if (finalStatus !== 'granted') return null;
-  const token = (await Notifications.getExpoPushTokenAsync()).data;
+  // projectId is required for production standalone builds
+  const projectId =
+    (Constants as any).expoConfig?.extra?.eas?.projectId ??
+    (Constants as any).easConfig?.projectId;
+  const token = (await Notifications.getExpoPushTokenAsync(projectId ? { projectId } : undefined)).data;
   return token;
 }
 
@@ -137,7 +142,8 @@ export default function SettingsScreen() {
     setSyncing(true);
     try {
       await flushQueue();
-      qc.invalidateQueries();
+      qc.invalidateQueries({ queryKey: ['tasks'] });
+      qc.invalidateQueries({ queryKey: ['notifications'] });
       Alert.alert('Synced', `${count} change${count === 1 ? '' : 's'} synced.`);
     } catch {
       Alert.alert('Sync failed', 'Check your connection and try again.');

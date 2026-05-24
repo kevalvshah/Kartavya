@@ -125,7 +125,9 @@ function InnerApp() {
       }
     } else {
       setBanner(null);
-      queryClient.invalidateQueries();
+      // Scope to affected query keys; a global invalidation thrashes all caches
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      queryClient.invalidateQueries({ queryKey: ['notifications'] });
     }
   }, []);
 

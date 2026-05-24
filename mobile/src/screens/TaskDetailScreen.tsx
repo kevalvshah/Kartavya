@@ -774,7 +774,13 @@ export default function TaskDetailScreen() {
                   <TouchableOpacity
                     key={a.key ?? i}
                     style={[s.attachChip, { backgroundColor: t.surfaceLow, borderColor: t.outline }]}
-                    onPress={() => Linking.openURL(a.url)}
+                    onPress={() => {
+                      if (!/^https?:\/\//i.test(a.url)) {
+                        Alert.alert('Invalid link', 'This attachment URL is not a valid https link.');
+                        return;
+                      }
+                      Linking.openURL(a.url);
+                    }}
                     onLongPress={() => canEdit && a.key && Alert.alert('Remove attachment', `"${a.name}"?`, [
                       { text: 'Remove', style: 'destructive', onPress: async () => {
                         await tasksApi.deleteAttachment(taskId, a.key!);

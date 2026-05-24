@@ -43,7 +43,7 @@ function bucketTasks(tasks: Task[], userId: string): Section[] {
   const noDate:    Task[] = [];
 
   mine.forEach(t => {
-    if (t.status === 'done' || t.status === 'complete') return;
+    if (t.status === 'done') return;
     if (!t.due_at) { noDate.push(t); return; }
     const d = new Date(t.due_at);
     if (isPast(d) && !isToday(d))      overdue.push(t);
