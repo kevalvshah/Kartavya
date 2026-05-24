@@ -5,8 +5,9 @@
 import React from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity,
-  StyleSheet, Platform,
+  StyleSheet,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
@@ -23,6 +24,7 @@ export default function MeScreen() {
   const { t }        = useTheme();
   const { user }     = useAuth();
   const nav          = useNavigation<Nav>();
+  const insets       = useSafeAreaInsets();
 
   const { data: myTasks = [] } = useQuery({
     queryKey: ['tasks', 'mine'],
@@ -46,7 +48,7 @@ export default function MeScreen() {
   return (
     <ScrollView style={[s.root, { backgroundColor: t.bg }]} contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
       {/* Header */}
-      <View style={[s.header, { backgroundColor: t.surface, borderBottomColor: t.outline }]}>
+      <View style={[s.header, { backgroundColor: t.surface, borderBottomColor: t.outline, paddingTop: insets.top + 16 }]}>
         <Text style={[s.title, { color: t.ink }]}>Me</Text>
         <TouchableOpacity onPress={() => nav.navigate('Settings')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
           <Ionicons name="settings-outline" size={22} color={t.ink3} />
@@ -104,7 +106,7 @@ function StatCard({ label, value, color, t }: { label: string; value: number; co
 
 const s = StyleSheet.create({
   root:         { flex: 1 },
-  header:       { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: Platform.OS === 'ios' ? 56 : 36, paddingHorizontal: 20, paddingBottom: 16, borderBottomWidth: 1 },
+  header:       { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingBottom: 16, borderBottomWidth: 1 },
   title:        { fontSize: 26, fontWeight: '900' },
   profileCard:  { flexDirection: 'row', alignItems: 'center', gap: 14, margin: 16, borderRadius: 16, padding: 16, borderWidth: 1 },
   avatar:       { width: 50, height: 50, borderRadius: 25, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },

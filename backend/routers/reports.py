@@ -36,6 +36,12 @@ if not DISPATCH_SECRET:
         "REPORT_DISPATCH_SECRET is not set — dispatch endpoint is protected by admin auth only. "
         "Set this env var in production to add a second layer of protection."
     )
+elif len(DISPATCH_SECRET) < 32:
+    logger.warning(
+        "REPORT_DISPATCH_SECRET is too short (%d chars) — use a random secret of at least 32 "
+        "characters in production (e.g. openssl rand -hex 32).",
+        len(DISPATCH_SECRET),
+    )
 
 
 # ── Models ─────────────────────────────────────────────────────────────────────

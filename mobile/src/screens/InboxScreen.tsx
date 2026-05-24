@@ -1,8 +1,9 @@
 import React, { useCallback } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity, StyleSheet,
-  ActivityIndicator, RefreshControl, Platform,
+  ActivityIndicator, RefreshControl,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -78,9 +79,10 @@ function NotifRow({ n, onPress }: { n: Notification; onPress: () => void }) {
 
 // ── Screen ────────────────────────────────────────────────────────────────────
 export default function InboxScreen() {
-  const { t } = useTheme();
-  const nav   = useNavigation<Nav>();
-  const qc    = useQueryClient();
+  const { t }    = useTheme();
+  const nav      = useNavigation<Nav>();
+  const qc       = useQueryClient();
+  const insets   = useSafeAreaInsets();
 
   const { data: notifs = [], isLoading, refetch, isFetching } = useQuery<Notification[]>({
     queryKey: ['notifications'],
@@ -114,7 +116,7 @@ export default function InboxScreen() {
   return (
     <View style={[s.root, { backgroundColor: t.bg }]}>
       {/* Header */}
-      <View style={[s.header, { backgroundColor: t.surface, borderBottomColor: t.outline }]}>
+      <View style={[s.header, { backgroundColor: t.surface, borderBottomColor: t.outline, paddingTop: insets.top + 14 }]}>
         <View>
           <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8 }}>
             <Text style={[s.title, { color: t.ink }]}>Inbox</Text>
@@ -169,7 +171,7 @@ export default function InboxScreen() {
 
 const s = StyleSheet.create({
   root:      { flex: 1 },
-  header:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: Platform.OS === 'ios' ? 56 : 36, paddingHorizontal: 20, paddingBottom: 14, borderBottomWidth: 1 },
+  header:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingBottom: 14, borderBottomWidth: 1 },
   title:     { fontSize: 26, fontWeight: '900' },
   titleHindi:{ fontSize: 14, fontWeight: '400' },
   subtitle:  { fontSize: 12, fontWeight: '600', marginTop: 1 },

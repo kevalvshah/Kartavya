@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { apiLogin, apiLogout, apiMe, getCachedUser } from '../api/auth';
 import { queryClient } from '../offline/queryClient';
+import { notificationsApi } from '../api/notifications';
+import { getDeviceId } from './usePushNotifications';
 import type { User } from '../api/types';
 
 interface AuthContextValue {
@@ -39,6 +41,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const logout = useCallback(async () => {
+    // Deregister push token before credentials are cleared
+    try {
+      await notificationsApi.unregisterToken(getDeviceId());
+    } catch {
+      // Non-fatal — proceed with logout regardless
+    }
     await apiLogout();
     setUser(null);
     queryClient.clear();

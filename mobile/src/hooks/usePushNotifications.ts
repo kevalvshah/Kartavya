@@ -22,9 +22,9 @@ const DEVICE_ID_KEY = 'push_device_id';
 
 /**
  * Return a stable cryptographically-random device ID, generating and persisting
- * one in MMKV on the first call.
+ * one in MMKV on the first call. Exported so useAuth can deregister on logout.
  */
-function getDeviceId(): string {
+export function getDeviceId(): string {
   let id = storage.getString(DEVICE_ID_KEY);
   if (!id) {
     id = `device_${Crypto.randomUUID()}`;
