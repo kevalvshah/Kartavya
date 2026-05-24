@@ -5,6 +5,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Notifications from 'expo-notifications';
+import * as Crypto from 'expo-crypto';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTheme } from '../theme/ThemeProvider';
@@ -114,7 +115,7 @@ export default function SettingsScreen() {
       }
       let deviceId = await AsyncStorage.getItem('push_device_id');
       if (!deviceId) {
-        deviceId = `expo_${Platform.OS}_${Math.random().toString(36).slice(2)}`;
+        deviceId = `expo_${Platform.OS}_${Crypto.randomUUID()}`;
         await AsyncStorage.setItem('push_device_id', deviceId);
       }
       await notificationsApi.registerToken(Platform.OS, token, deviceId);

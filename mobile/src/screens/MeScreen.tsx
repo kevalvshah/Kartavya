@@ -33,13 +33,13 @@ export default function MeScreen() {
   const done    = myTasks.filter(t => t.status === 'done' && (
     t.created_by_user_id === user?.user_id || (t.assignee_user_ids ?? []).includes(user?.user_id ?? '')
   )).length;
-  const open    = myTasks.filter(t => t.status !== 'done' && (
-    t.user_id === user?.user_id || (t.assignee_user_ids ?? []).includes(user?.user_id ?? '')
+  const open    = myTasks.filter(task => task.status !== 'done' && (
+    task.created_by_user_id === user?.user_id || (task.assignee_user_ids ?? []).includes(user?.user_id ?? '')
   )).length;
-  const overdue = myTasks.filter(t => {
-    if (t.status === 'done' || !t.due_at) return false;
-    if (!(t.user_id === user?.user_id || (t.assignee_user_ids ?? []).includes(user?.user_id ?? ''))) return false;
-    return new Date(t.due_at) < new Date();
+  const overdue = myTasks.filter(task => {
+    if (task.status === 'done' || !task.due_at) return false;
+    if (!(task.created_by_user_id === user?.user_id || (task.assignee_user_ids ?? []).includes(user?.user_id ?? ''))) return false;
+    return new Date(task.due_at) < new Date();
   }).length;
 
   const initials = user ? userInitials(user.name ?? user.full_name ?? '?') : '?';

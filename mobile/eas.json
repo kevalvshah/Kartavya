@@ -16,7 +16,8 @@
         "gradleCommand": ":app:assembleDebug"
       },
       "env": {
-        "APP_ENV": "development"
+        "APP_ENV": "development",
+        "EXPO_PUBLIC_API_URL": "https://kartavya-production.up.railway.app"
       }
     },
     "preview": {
@@ -28,7 +29,8 @@
         "buildType": "apk"
       },
       "env": {
-        "APP_ENV": "preview"
+        "APP_ENV": "preview",
+        "EXPO_PUBLIC_API_URL": "https://kartavya-production.up.railway.app"
       }
     },
     "simulator": {
@@ -37,7 +39,8 @@
         "simulator": true
       },
       "env": {
-        "APP_ENV": "preview"
+        "APP_ENV": "preview",
+        "EXPO_PUBLIC_API_URL": "https://kartavya-production.up.railway.app"
       }
     },
     "production": {
@@ -50,16 +53,19 @@
         "buildType": "app-bundle"
       },
       "env": {
-        "APP_ENV": "production"
+        "APP_ENV": "production",
+        "EXPO_PUBLIC_API_URL": "https://kartavya-production.up.railway.app"
+        // Future: switch to "https://api.kartavya.aekaminc.com" here only
       }
     }
   },
   "submit": {
     "production": {
       "ios": {
-        "appleId": "keval@aekaminc.com",
-        "ascAppId": "com.aekaminc.kartavya",
-        "appleTeamId": "AEKAMINC"
+        // appleId, ascAppId, appleTeamId moved to EAS secrets
+        // Run: eas secret:create --scope project --name EXPO_APPLE_ID --value "keval@aekaminc.com"
+        //      eas secret:create --scope project --name EXPO_ASC_APP_ID --value "com.aekaminc.kartavya"
+        //      eas secret:create --scope project --name EXPO_APPLE_TEAM_ID --value "AEKAMINC"
       },
       "android": {
         "serviceAccountKeyPath": "./google-service-account.json",

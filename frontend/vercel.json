@@ -18,7 +18,7 @@
       "headers": [
                 {
           "key": "Content-Security-Policy",
-          "value": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://rsms.me; style-src-elem 'self' 'unsafe-inline' https://fonts.googleapis.com https://rsms.me; img-src 'self' data: https:; font-src 'self' data: https://fonts.gstatic.com https://rsms.me; connect-src 'self' https://kartavya-production.up.railway.app https://fonts.googleapis.com https://fonts.gstatic.com https://vitals.vercel-insights.com; frame-ancestors 'none';"
+          "value": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://rsms.me; style-src-elem 'self' 'unsafe-inline' https://fonts.googleapis.com https://rsms.me; img-src 'self' data: https:; font-src 'self' data: https://fonts.gstatic.com https://rsms.me; connect-src 'self' https://kartavya-production.up.railway.app https://api.kartavya.aekaminc.com https://fonts.googleapis.com https://fonts.gstatic.com https://vitals.vercel-insights.com; frame-ancestors 'none';"
         },
         {
           "key": "X-Frame-Options",

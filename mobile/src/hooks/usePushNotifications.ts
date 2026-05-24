@@ -8,6 +8,7 @@
  */
 import { useEffect, useRef } from 'react';
 import * as Notifications from 'expo-notifications';
+import * as Crypto from 'expo-crypto';
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 import { MMKV } from 'react-native-mmkv';
@@ -19,11 +20,11 @@ import { apiClient } from '../api/client';
 const storage = new MMKV({ id: 'push_tokens' });
 const DEVICE_ID_KEY = 'push_device_id';
 
-// Generate a stable device id once per install
+// Generate a stable cryptographically-random device id once per install
 function getDeviceId(): string {
   let id = storage.getString(DEVICE_ID_KEY);
   if (!id) {
-    id = `device_${Math.random().toString(36).slice(2)}_${Date.now()}`;
+    id = `device_${Crypto.randomUUID()}`;
     storage.set(DEVICE_ID_KEY, id);
   }
   return id;

@@ -6,12 +6,12 @@ const API = `${BACKEND_URL}/api`;
 
 export const api = axios.create({
   baseURL: API,
-  withCredentials: true,
+  withCredentials: false, // bearer-token auth only; cookies not used
 });
 
 // Attach JWT token to every request automatically
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem("auth_token");
+  const token = sessionStorage.getItem("auth_token");
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }

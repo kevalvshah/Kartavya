@@ -691,7 +691,7 @@ async def review_approval(approval_id:str,body:dict,pool=Depends(get_db),user=De
                     notes=notes, approve_token=token
                 )
             except Exception as exc:
-                import logging; logging.getLogger(__name__).warning(f"client approval email failed: {exc}")
+                import logging; logging.getLogger(__name__).warning("client approval email failed: %s", exc)
             return {"ok": True, "status": "pending_client"}
         else:
             # Move to done column
@@ -831,6 +831,7 @@ async def add_subtask(task_id:str,body:Subtask,pool=Depends(get_db),user=Depends
     new_sub={"subtask_id":f"sub_{uuid.uuid4().hex[:12]}","title":body.title,"is_done":False,"order":len(subtasks)}
     subtasks.append(new_sub)
     row=await pool.fetchrow(_SQL_SET_SUBTASKS,json.dumps(subtasks),task_id)
+    if not row: raise HTTPException(404, "Task not found")
     try:
         from services.activity_logger import log_event
         await log_event(pool,task_id=task_id,actor_id=user["user_id"],event_type="subtask_added",data={"title":body.title})
@@ -845,6 +846,7 @@ async def toggle_subtask(task_id:str,subtask_id:str,pool=Depends(get_db),user=De
     for s in subtasks:
         if s["subtask_id"]==subtask_id: s["is_done"]=not s.get("is_done",False)
     row=await pool.fetchrow(_SQL_SET_SUBTASKS,json.dumps(subtasks),task_id)
+    if not row: raise HTTPException(404, "Task not found")
     return row_to_task(row)
 
 @api_router.delete("/tasks/{task_id}/subtasks/{subtask_id}",response_model=TaskOut)
@@ -855,6 +857,7 @@ async def delete_subtask(task_id:str,subtask_id:str,pool=Depends(get_db),user=De
     removed=[s for s in subtasks if s["subtask_id"]==subtask_id]
     subtasks=[s for s in subtasks if s["subtask_id"]!=subtask_id]
     row=await pool.fetchrow(_SQL_SET_SUBTASKS,json.dumps(subtasks),task_id)
+    if not row: raise HTTPException(404, "Task not found")
     try:
         from services.activity_logger import log_event
         title=removed[0]["title"] if removed else ""
@@ -876,6 +879,7 @@ async def update_subtask(task_id:str,subtask_id:str,body:SubtaskPatch,pool=Depen
             if body.assignee_user_id is not None: s["assignee_user_id"]=body.assignee_user_id
             if body.title is not None: s["title"]=body.title
     row=await pool.fetchrow(_SQL_SET_SUBTASKS,json.dumps(subtasks),task_id)
+    if not row: raise HTTPException(404, "Task not found")
     return row_to_task(row)
 
 # ── Teams ────────────────────────────────────────────────────────
