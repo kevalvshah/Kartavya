@@ -19,7 +19,7 @@ _JWT_ALG = "HS256"
 
 _TASK_NOT_FOUND      = "Task not found"
 _REJECTION_REQUIRED  = "Rejection reason is required"
-_SQL_USER_ROLE       = _SQL_USER_ROLE
+_SQL_USER_ROLE       = "SELECT role FROM users WHERE user_id=$1"
 
 
 def _make_client_token(task_id: str, client_user_id: str) -> str:
@@ -94,7 +94,7 @@ async def _notify(pool, task_id: str, task_title: str, recipient_id: str,
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
         """, f"notif_{uuid.uuid4().hex[:12]}", recipient_id, team_id, notif_type, title, message, task_id, "/tasks")
     except Exception as exc:
-        import logging; logging.getLogger(__name__).warning(f"_notify failed: {exc}")
+        import logging; logging.getLogger(__name__).warning("_notify failed: %s", exc)
 
 
 async def send_approval_notification(pool, task_id: str, task_title: str,
@@ -113,7 +113,7 @@ async def send_approval_notification(pool, task_id: str, task_title: str,
                 task_id=task_id,  # ← deep-link fix
             )
         except Exception as exc:
-            import logging; logging.getLogger(__name__).warning(f"approval email failed: {exc}")
+            import logging; logging.getLogger(__name__).warning("approval email failed: %s", exc)
 
         try:
             from services.push_service import send_push
@@ -138,7 +138,7 @@ async def send_approval_notification(pool, task_id: str, task_title: str,
                 is_mine=True,
             ))
         except Exception as exc:
-            import logging; logging.getLogger(__name__).warning(f"approval push failed: {exc}")
+            import logging; logging.getLogger(__name__).warning("approval push failed: %s", exc)
 
 
 # ── Endpoints ──────────────────────────────────────────────────────────────────
@@ -300,7 +300,7 @@ async def request_client_approval(task_id: str, payload: ClientApprovalRequest,
             notes=payload.notes, approve_token=token
         )
     except Exception as exc:
-        import logging; logging.getLogger(__name__).warning(f"client approval email failed: {exc}")
+        import logging; logging.getLogger(__name__).warning("client approval email failed: %s", exc)
 
     return {"message": "Client approval requested", "approval_status": "pending_client"}
 
@@ -363,7 +363,7 @@ async def client_approve_task(task_id: str, payload: ApprovalRequest,
                     client_name, task["title"], task_id
                 )
     except Exception as exc:
-        import logging; logging.getLogger(__name__).warning(f"team-sync email failed: {exc}")
+        import logging; logging.getLogger(__name__).warning("team-sync email failed: %s", exc)
 
     return {"message": "Task approved by client", "approval_status": "approved",
             "new_column_id": new_col_id}

@@ -9,7 +9,7 @@ PDF matches the 5-page editorial design from report-pdf.jsx / report-pdf.css:
 """
 import html
 import io
-from datetime import datetime
+from datetime import datetime, timezone
 
 # ── Design tokens ──────────────────────────────────────────────────────────────
 _BG       = "#F6F3EC"
@@ -133,7 +133,7 @@ def _build_html(data: dict, team_name: str, period_from: str, period_to: str) ->
         by_member_time[nm] = by_member_time.get(nm, 0) + (e.get("minutes") or 0)
     time_sorted = sorted(by_member_time.items(), key=lambda x: -x[1])
 
-    generated = datetime.utcnow().strftime("%-d %b %Y · %H:%M UTC")
+    generated = datetime.now(tz=timezone.utc).strftime("%-d %b %Y · %H:%M UTC")
     period_label = f"{period_from} – {period_to}"
 
     # ── PAGE 1 — COVER ─────────────────────────────────────────────────────────
@@ -871,7 +871,7 @@ def generate_excel(data: dict, team_name: str, period_from: str, period_to: str)
     ws1["A1"].font = Font(name="Georgia", bold=True, size=16, color=C_INK)
     ws1["A2"] = f"Period: {period_from} – {period_to}"
     ws1["A2"].font = Font(name="Calibri", size=10, color=C_INK3)
-    ws1["A3"] = f"Generated: {datetime.utcnow().strftime('%d %b %Y %H:%M UTC')}"
+    ws1["A3"] = f"Generated: {datetime.now(tz=timezone.utc).strftime('%d %b %Y %H:%M UTC')}"
     ws1["A3"].font = Font(name="Calibri", size=10, italic=True, color=C_INK3)
     hdr_row(ws1, 5, "Metric", "Value")
     summary_data = [

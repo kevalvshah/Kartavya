@@ -786,13 +786,13 @@ async def add_comment(task_id:str,body:CommentCreate,pool=Depends(get_db),user=D
                         is_mine_for=task_owner_ids,
                     ))
                 except Exception as _pe:
-                    logger.warning(f"comment push failed: {_pe}")
+                    logger.warning("comment push failed: %s", _pe)
             from services.mentions import process_mentions
             await process_mentions(pool,comment_id,body.body,task_id,user["user_id"])
             from services.activity_logger import log_event
             await log_event(pool,task_id=task_id,actor_id=user["user_id"],event_type="commented",data={"preview":preview[:80]})
     except Exception as e:
-        logger.warning(f"comment fan-out failed: {e}")
+        logger.warning("comment fan-out failed: %s", e)
     actor_name=user.get("full_name") or user.get("name") or user.get("email","")
     return CommentOut(comment_id=row["comment_id"],task_id=row["task_id"],user_id=row["user_id"],user_name=actor_name,body=row["body"],created_at=row["created_at"])
 
@@ -1150,7 +1150,7 @@ async def create_task(payload:TaskCreate,pool=Depends(get_db),user=Depends(requi
             assignee=await pool.fetchrow("SELECT email,COALESCE(full_name,name) AS name FROM users WHERE user_id=$1",uid)
             if assignee: send_task_assignment_email(assignee["email"],assignee["name"] or assignee["email"],payload.title,task_id,team_name)
         except Exception as e:
-            logger.warning(f"assignment email failed: {e}")
+            logger.warning("assignment email failed: %s", e)
     from services.activity_logger import log_event
     await log_event(pool,task_id=task_id,team_id=payload.team_id,actor_id=user["user_id"],event_type="created",data={"title":payload.title})
     from services.automation_engine import fire_automations
@@ -1246,7 +1246,7 @@ async def update_task(task_id:str,payload:TaskUpdate,pool=Depends(get_db),user=D
                     is_mine_for=set(added),
                 ))
             except Exception as _pe:
-                logger.warning(f"assignee push failed: {_pe}")
+                logger.warning("assignee push failed: %s", _pe)
     return row_to_task(row)
 
 
@@ -1415,12 +1415,12 @@ async def startup():
     dsn=os.environ.get("DATABASE_URL","NOT SET")
     if "@" in dsn:
         parts=dsn.split("@"); user_part=parts[0].split("://")[-1].split(":")[0]; host_part=parts[1]
-        logger.info(f"DATABASE_URL: postgresql://{user_part}:***@{host_part}")
+        logger.info("DATABASE_URL: postgresql://%s:***@%s", user_part, host_part)
     else:
-        logger.info(f"DATABASE_URL: {dsn}")
+        logger.info("DATABASE_URL: %s", dsn)
     r2_bucket = os.environ.get("R2_BUCKET_NAME", "NOT SET")
-    logger.info(f"R2_BUCKET: {r2_bucket} | R2_PUBLIC_URL: {os.environ.get('R2_PUBLIC_URL','<presigned>')}")
-    logger.info(f"CORS origins: {ALLOWED_ORIGINS}")
+    logger.info("R2_BUCKET: %s | R2_PUBLIC_URL: %s", r2_bucket, os.environ.get('R2_PUBLIC_URL', '<presigned>'))
+    logger.info("CORS origins: %s", ALLOWED_ORIGINS)
     logger.info("Kartavya API v2 ready — custom fields, automations, activity, time tracking, R2 uploads")
     # Ensure tables that may be missing in production exist
     try:
@@ -1499,7 +1499,7 @@ async def startup():
         # (subtasks are JSONB — no separate table migration needed)
         logger.info("Startup migrations OK")
     except Exception as e:
-        logger.warning(f"Startup migration warning (non-fatal): {e}")
+        logger.warning("Startup migration warning (non-fatal): %s", e)
 
 @app.on_event("shutdown")
 async def shutdown(): await close_pool()

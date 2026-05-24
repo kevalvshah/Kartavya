@@ -136,7 +136,7 @@ export async function flushQueue(): Promise<FlushResult> {
   for (const item of q) {
     try {
       await dispatch(item);
-      result.succeeded++;
+      result.succeeded += 1;
       // Do NOT push to remaining — success removes from queue
     } catch (err: any) {
       const status     = err?.response?.status;

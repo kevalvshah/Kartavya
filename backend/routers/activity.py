@@ -59,7 +59,7 @@ async def team_activity(
         """, *vals, limit, offset)
         return _normalize(rows)
     except Exception as exc:
-        logger.error(f"Activity fetch failed for {team_id}: {exc}", exc_info=True)
+        logger.error("Activity fetch failed for %s: %s", team_id, exc, exc_info=True)
         raise HTTPException(500, f"Activity error: {exc}") from exc
 
 

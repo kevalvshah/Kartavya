@@ -87,7 +87,7 @@ export default function TimelineView({ tasks = [], columns = [], teamMembers = [
             if (key !== cur) {
               if (cur !== null) groups.push({ key: cur, count, month: dayLabels[i - count].month, year: dayLabels[i - count].date.getFullYear() });
               cur = key; count = 1;
-            } else { count++; }
+            } else { count += 1; }
           });
           if (cur) groups.push({ key: cur, count, month: dayLabels[dayLabels.length - count].month, year: dayLabels[dayLabels.length - count].date.getFullYear() });
           return groups.map(g => (
