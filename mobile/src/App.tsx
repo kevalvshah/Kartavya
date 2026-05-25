@@ -24,7 +24,6 @@ interface BannerProps {
   onClear?:   () => void;
 }
 function OfflineBanner({ message, kind, onRetry, onClear }: BannerProps) {
-  const { t } = useTheme();
   if (!message) return null;
 
   // Colours matched to iOS pill / Android strip spec
@@ -126,7 +125,9 @@ function InnerApp() {
       }
     } else {
       setBanner(null);
-      queryClient.invalidateQueries();
+      // Scope to affected query keys; a global invalidation thrashes all caches
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      queryClient.invalidateQueries({ queryKey: ['notifications'] });
     }
   }, []);
 
@@ -194,7 +195,8 @@ function InnerApp() {
 // ── Root ──────────────────────────────────────────────────────────────────────
 export default function App() {
   const [fontsLoaded] = useFonts();
-  // Fonts gate rendering to avoid FOUT; fall through on failure (fonts not critical)
+  // Show splash until custom fonts load to prevent FOUT (flash of unstyled text)
+  if (!fontsLoaded) return <Splash />;
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>

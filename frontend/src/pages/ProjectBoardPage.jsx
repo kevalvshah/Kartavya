@@ -1,8 +1,8 @@
-/**
- * ProjectBoardPage.jsx — v3 with Supabase Realtime + Presence.
+﻿/**
+ * ProjectBoardPage.jsx â€” v3 with Supabase Realtime + Presence.
  *
  * Changes from v2:
- *   - useRealtimeTasks() replaces local useState for tasks — any INSERT/UPDATE/DELETE
+ *   - useRealtimeTasks() replaces local useState for tasks â€” any INSERT/UPDATE/DELETE
  *     on the tasks table (filtered to this project) patches state instantly for ALL
  *     users on the board without a page refresh.
  *   - usePresence() tracks who else is viewing this board right now and renders
@@ -32,7 +32,7 @@ import WorkloadView  from '../components/views/WorkloadView';
 import PriorityView  from '../components/views/PriorityView';
 import MyTasksView   from '../components/views/MyTasksView';
 import TaskEditor    from '../components/TaskEditor';
-import { AVATAR_COLORS } from '../lib/utils';
+import { AVATAR_COLORS, logger } from '../lib/utils';
 import { useFields }          from '../hooks/useFields';
 import { useViews }           from '../hooks/useViews';
 import { useRealtimeTasks }   from '../hooks/useRealtimeTasks';
@@ -80,14 +80,14 @@ export default function ProjectBoardPage() {
   const { pushToast } = useToast();
   const { savedViews, saveView }                = useViews(projectId);
 
-  // ── Realtime: tasks state is now owned by this hook ──────────────────────
+  // â”€â”€ Realtime: tasks state is now owned by this hook â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   // rawTasks (from API load) seed the hook; from then on Supabase pushes patches.
   const { tasks, setTasks } = useRealtimeTasks(projectId, rawTasks);
 
-  // ── Presence: who else is on this board right now ────────────────────────
+  // â”€â”€ Presence: who else is on this board right now â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const onlineUsers = usePresence(projectId, me);
 
-  // ── Initial data load ────────────────────────────────────────────────────
+  // â”€â”€ Initial data load â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const load = useCallback(async () => {
     if (!projectId) return;
     setLoading(true);
@@ -102,7 +102,7 @@ export default function ProjectBoardPage() {
       setRawTasks(Array.isArray(taskR.data) ? taskR.data : []);     // seeds useRealtimeTasks
       setTeamMembers(projR.data.members || []);
     } catch (e) {
-      console.error('Board load failed', e);
+      logger.error('Board load failed', e);
     } finally {
       setLoading(false);
     }
@@ -110,7 +110,7 @@ export default function ProjectBoardPage() {
 
   useEffect(() => { load(); }, [projectId]); // eslint-disable-line
 
-  // ── Field-value fetch (stable dep — only when task IDs change) ───────────
+  // â”€â”€ Field-value fetch (stable dep â€” only when task IDs change) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const taskIds = useMemo(() => tasks.map(t => t.task_id).join(','), [tasks]);
 
   useEffect(() => {
@@ -141,19 +141,19 @@ export default function ProjectBoardPage() {
     }
   };
 
-  // ── Styles ───────────────────────────────────────────────────────────────
+  // â”€â”€ Styles â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const labelSt = { fontSize: 10.5, fontWeight: 600, color: 'var(--ink-3)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4, display: 'block' };
   const inputSt = { border: '1px solid var(--rule)', borderRadius: 'var(--r-sm)', padding: '6px 10px', fontFamily: 'inherit', fontSize: 13, background: 'var(--surface)', color: 'var(--ink)' };
 
   if (loading) return (
     <div className="k-screen">
       <div style={{ padding: '40px 0', textAlign: 'center', color: 'var(--ink-3)', fontFamily: 'var(--font-display)', fontStyle: 'italic' }}>
-        Loading board…
+        Loading boardâ€¦
       </div>
     </div>
   );
 
-  const projectName = project?.team?.name || project?.name || '…';
+  const projectName = project?.team?.name || project?.name || 'â€¦';
   const presenceUsers = onlineUsers.map((u, i) => ({ name: u.name || u.email || '?', color: AVATAR_COLORS[i % AVATAR_COLORS.length] }));
 
   return (
@@ -169,14 +169,14 @@ export default function ProjectBoardPage() {
               <AvatarStack users={presenceUsers} size={24} max={4} />
             )}
             <button className="k-btn k-btn--ghost k-btn--sm" onClick={() => { setShowFieldMgr(v => !v); setShowAutomations(false); }}>
-              ⚙ Fields
+              âš™ Fields
             </button>
             <button
               className={'k-btn k-btn--ghost k-btn--sm' + (showAutomations ? ' is-active' : '')}
               onClick={() => { setShowAutomations(v => !v); setShowFieldMgr(false); }}
               style={showAutomations ? { background: 'var(--bg-soft)', color: 'var(--ink)' } : {}}
             >
-              ⚡ Automations
+              âš¡ Automations
             </button>
             <button
               className="k-btn k-btn--ghost k-btn--sm"
@@ -185,7 +185,7 @@ export default function ProjectBoardPage() {
               + Save view
             </button>
             <button className="k-link" onClick={() => navigate('/projects')}>
-              ← Projects
+              â† Projects
             </button>
           </div>
         }
@@ -246,7 +246,7 @@ export default function ProjectBoardPage() {
                   <div key={f.field_id} style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--bg-soft)', borderRadius: 'var(--r-sm)', padding: '4px 10px', fontSize: 13 }}>
                     <span style={{ fontWeight: 500 }}>{f.name}</span>
                     <span style={{ color: 'var(--ink-3)', fontSize: 11 }}>{f.type}</span>
-                    <button onClick={() => deleteField(f.field_id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-3)', fontSize: 14, lineHeight: 1 }}>×</button>
+                    <button onClick={() => deleteField(f.field_id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-3)', fontSize: 14, lineHeight: 1 }}>Ã—</button>
                   </div>
                 ))}
               </div>
@@ -261,13 +261,14 @@ export default function ProjectBoardPage() {
           <header className="k-card__head">
             <div className="k-card__titles">
               <h3 className="k-card__title">Automations</h3>
-              <span className="k-card__sans">स्वचालन</span>
+              <span className="k-card__sans">à¤¸à¥à¤µà¤šà¤¾à¤²à¤¨</span>
             </div>
             <button
               className="k-iconbtn"
               style={{ marginLeft: 'auto', opacity: 0.5 }}
               onClick={() => setShowAutomations(false)}
               title="Close"
+              aria-label="Close automations panel"
             >
               <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 3l10 10M13 3L3 13"/></svg>
             </button>
@@ -278,7 +279,7 @@ export default function ProjectBoardPage() {
         </section>
       )}
 
-      {/* New task bar — non-kanban views (kanban has per-column buttons) */}
+      {/* New task bar â€” non-kanban views (kanban has per-column buttons) */}
       {view !== 'kanban' && (
         <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
           <button
@@ -292,7 +293,7 @@ export default function ProjectBoardPage() {
         </div>
       )}
 
-      {/* ── Board views ──────────────────────────────────────────────── */}
+      {/* â”€â”€ Board views â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       {view === 'kanban' && (
         <KanbanView
           columns={columns}
@@ -336,7 +337,7 @@ export default function ProjectBoardPage() {
         <MyTasksView tasks={tasks} teamMembers={teamMembers} onTasksChange={setTasks} />
       )}
 
-      {/* ── Task editor (new task from column button) ─────────────── */}
+      {/* â”€â”€ Task editor (new task from column button) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <TaskEditor
         open={newTaskEditor.open}
         onOpenChange={(v) => { if (!v) setNewTaskEditor({ open: false, columnId: null }); }}

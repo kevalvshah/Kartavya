@@ -290,7 +290,7 @@ export function CustomizePanel() {
 // ── FAB ───────────────────────────────────────────────────────────────────────
 
 export function CustomizeFAB() {
-  const { open, setOpen } = useCustomize();
+  const { setOpen } = useCustomize();
   return (
     <button onClick={() => setOpen(o => !o)} style={{
       position: 'fixed', bottom: 20, right: 24, zIndex: 9991,

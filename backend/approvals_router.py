@@ -5,20 +5,24 @@ Token-based magic-link endpoints for client approval via email.
 """
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 from typing import Optional, List
 from datetime import datetime, timezone
 import uuid
 import jwt as _jwt
 
-from auth_router import require_user, require_admin, JWT_SECRET as _JWT_SECRET
+from auth_router import require_user, JWT_SECRET as _JWT_SECRET
 from db import get_pool
-import asyncpg
+from utils import SQL_USER_ROLE as _SQL_USER_ROLE
 
 _JWT_ALG = "HS256"
 
+_TASK_NOT_FOUND     = "Task not found"
+_REJECTION_REQUIRED = "Rejection reason is required"
+
 
 def _make_client_token(task_id: str, client_user_id: str) -> str:
+    """Generate a 7-day JWT magic-link token for client approval of a task."""
     import time
     return _jwt.encode(
         {"task_id": task_id, "client_user_id": client_user_id,
@@ -28,6 +32,7 @@ def _make_client_token(task_id: str, client_user_id: str) -> str:
 
 
 def _decode_client_token(token: str) -> dict:
+    """Decode and validate a client-approval JWT, raising HTTP 400 on failure."""
     try:
         payload = _jwt.decode(token, _JWT_SECRET, algorithms=[_JWT_ALG])
         if payload.get("type") != "client_approval":
@@ -56,18 +61,19 @@ class ApprovalResponse(BaseModel):
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
 async def get_task_with_permission(pool, task_id: str, user_id: str):
-    task = await pool.fetchrow("""
-        SELECT t.*, tm.role AS user_team_role
-        FROM tasks t
-        LEFT JOIN team_members tm ON tm.team_id = t.team_id AND tm.user_id = $2
-        WHERE t.task_id = $1
-    """, task_id, user_id)
+    """Fetch a task by ID, raising 404 if not found.
+
+    Permission checks (owner/admin) are done by callers via is_project_owner().
+    The previous LEFT JOIN on team_members was unused — removed to avoid drift.
+    """
+    task = await pool.fetchrow("SELECT * FROM tasks WHERE task_id=$1", task_id)
     if not task:
-        raise HTTPException(status_code=404, detail="Task not found")
+        raise HTTPException(status_code=404, detail=_TASK_NOT_FOUND)
     return task
 
 
 async def is_project_owner(pool, team_id: str, user_id: str) -> bool:
+    """Return True if the user is an active owner or admin of the given team."""
     member = await pool.fetchrow("""
         SELECT role FROM team_members
         WHERE team_id=$1 AND user_id=$2 AND status='active'
@@ -88,14 +94,15 @@ async def _notify(pool, task_id: str, task_title: str, recipient_id: str,
         await pool.execute("""
             INSERT INTO notifications (notification_id, user_id, team_id, type, title, message, task_id, url)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-        """, f"notif_{uuid.uuid4().hex[:12]}", recipient_id, team_id, notif_type, title, message, task_id, f"/tasks")
+        """, f"notif_{uuid.uuid4().hex[:12]}", recipient_id, team_id, notif_type, title, message, task_id, "/tasks")
     except Exception as exc:
-        import logging; logging.getLogger(__name__).warning(f"_notify failed: {exc}")
+        import logging; logging.getLogger(__name__).warning("_notify failed: %s", exc)
 
 
 async def send_approval_notification(pool, task_id: str, task_title: str,
                                      recipient_id: str, notification_type: str,
                                      notes: Optional[str] = None, team_id: Optional[str] = None):
+    """Send a DB notification, email, and push notification for an approval event."""
     user = await pool.fetchrow(
         "SELECT email, COALESCE(full_name,name) AS name FROM users WHERE user_id=$1", recipient_id
     )
@@ -109,7 +116,7 @@ async def send_approval_notification(pool, task_id: str, task_title: str,
                 task_id=task_id,  # ← deep-link fix
             )
         except Exception as exc:
-            import logging; logging.getLogger(__name__).warning(f"approval email failed: {exc}")
+            import logging; logging.getLogger(__name__).warning("approval email failed: %s", exc)
 
         try:
             from services.push_service import send_push
@@ -134,7 +141,7 @@ async def send_approval_notification(pool, task_id: str, task_title: str,
                 is_mine=True,
             ))
         except Exception as exc:
-            import logging; logging.getLogger(__name__).warning(f"approval push failed: {exc}")
+            import logging; logging.getLogger(__name__).warning("approval push failed: %s", exc)
 
 
 # ── Endpoints ──────────────────────────────────────────────────────────────────
@@ -142,6 +149,7 @@ async def send_approval_notification(pool, task_id: str, task_title: str,
 @router.post("/tasks/{task_id}/request-approval")
 async def request_approval(task_id: str, payload: ApprovalRequest,
                             pool=Depends(get_pool), user=Depends(require_user)):
+    """Submit a task for approval by the project owner."""
     task = await get_task_with_permission(pool, task_id, user["user_id"])
     if not task["team_id"]:
         raise HTTPException(400, "Cannot request approval for personal tasks")
@@ -167,12 +175,13 @@ async def request_approval(task_id: str, payload: ApprovalRequest,
 @router.post("/tasks/{task_id}/approve")
 async def approve_task(task_id: str, payload: ApprovalRequest,
                         pool=Depends(get_pool), user=Depends(require_user)):
+    """Approve a pending task and advance it to the next kanban column."""
     task = await get_task_with_permission(pool, task_id, user["user_id"])
     if not task["team_id"]:
         raise HTTPException(400, "Cannot approve personal tasks")
 
     if not await is_project_owner(pool, task["team_id"], user["user_id"]):
-        user_data = await pool.fetchrow("SELECT role FROM users WHERE user_id=$1", user["user_id"])
+        user_data = await pool.fetchrow(_SQL_USER_ROLE, user["user_id"])
         if not user_data or user_data["role"] != "admin":
             raise HTTPException(403, "Only project owner or admin can approve")
 
@@ -205,17 +214,18 @@ async def approve_task(task_id: str, payload: ApprovalRequest,
 @router.post("/tasks/{task_id}/reject")
 async def reject_task(task_id: str, payload: ApprovalRequest,
                        pool=Depends(get_pool), user=Depends(require_user)):
+    """Reject a pending task approval with a mandatory reason note."""
     task = await get_task_with_permission(pool, task_id, user["user_id"])
     if not task["team_id"]:
         raise HTTPException(400, "Cannot reject personal tasks")
 
     if not await is_project_owner(pool, task["team_id"], user["user_id"]):
-        user_data = await pool.fetchrow("SELECT role FROM users WHERE user_id=$1", user["user_id"])
+        user_data = await pool.fetchrow(_SQL_USER_ROLE, user["user_id"])
         if not user_data or user_data["role"] != "admin":
             raise HTTPException(403, "Only project owner or admin can reject")
 
-    if not payload.notes:
-        raise HTTPException(400, "Rejection reason is required")
+    if not payload.notes or not payload.notes.strip():
+        raise HTTPException(400, _REJECTION_REQUIRED)
 
     await pool.execute("""
         UPDATE tasks
@@ -231,7 +241,8 @@ async def reject_task(task_id: str, payload: ApprovalRequest,
 
 @router.get("/tasks/pending-approval", response_model=List[dict])
 async def get_pending_approvals(pool=Depends(get_pool), user=Depends(require_user)):
-    user_data = await pool.fetchrow("SELECT role FROM users WHERE user_id=$1", user["user_id"])
+    """Return all tasks with approval_status='pending' that the user can action."""
+    user_data = await pool.fetchrow(_SQL_USER_ROLE, user["user_id"])
     if user_data and user_data["role"] == "admin":
         tasks = await pool.fetch("""
             SELECT t.*, u.name AS created_by_name, u.email AS created_by_email,
@@ -259,13 +270,14 @@ async def get_pending_approvals(pool=Depends(get_pool), user=Depends(require_use
 
 
 class ClientApprovalRequest(BaseModel):
-    client_email: str
+    client_email: EmailStr
     notes: Optional[str] = None
 
 
 @router.post("/tasks/{task_id}/request-client-approval")
 async def request_client_approval(task_id: str, payload: ClientApprovalRequest,
                                    pool=Depends(get_pool), user=Depends(require_user)):
+    """Send a task to a client user for approval via email magic-link."""
     task   = await get_task_with_permission(pool, task_id, user["user_id"])
     client = await pool.fetchrow(
         "SELECT user_id, name, full_name, email FROM users WHERE email=$1",
@@ -292,11 +304,11 @@ async def request_client_approval(task_id: str, payload: ClientApprovalRequest,
         from email_service import send_approval_request_email
         send_approval_request_email(
             payload.client_email, client["name"] or payload.client_email,
-            requester_name, task["title"], task_id,
+            requester_name, task["title"],
             notes=payload.notes, approve_token=token
         )
     except Exception as exc:
-        import logging; logging.getLogger(__name__).warning(f"client approval email failed: {exc}")
+        import logging; logging.getLogger(__name__).warning("client approval email failed: %s", exc)
 
     return {"message": "Client approval requested", "approval_status": "pending_client"}
 
@@ -304,18 +316,13 @@ async def request_client_approval(task_id: str, payload: ClientApprovalRequest,
 @router.post("/tasks/{task_id}/client-approve")
 async def client_approve_task(task_id: str, payload: ApprovalRequest,
                                pool=Depends(get_pool), user=Depends(require_user)):
+    """Allow an authenticated client user to approve a pending_client task."""
     task   = await get_task_with_permission(pool, task_id, user["user_id"])
     access = await pool.fetchrow(
         "SELECT 1 FROM task_clients WHERE task_id=$1 AND user_id=$2", task_id, user["user_id"]
     )
     if not access and user.get("role") != "admin":
-        # also allow if they are a project member
-        member = await pool.fetchrow(
-            "SELECT 1 FROM project_assignments WHERE team_id=$1 AND user_id=$2",
-            task["team_id"], user["user_id"]
-        )
-        if not member:
-            raise HTTPException(403, "Only the assigned client can approve this task")
+        raise HTTPException(403, "Only the assigned client can approve this task")
 
     done_col = await pool.fetchrow(
         "SELECT column_id FROM project_columns WHERE team_id=$1 AND is_done=TRUE ORDER BY sort_order DESC LIMIT 1",
@@ -359,7 +366,7 @@ async def client_approve_task(task_id: str, payload: ApprovalRequest,
                     client_name, task["title"], task_id
                 )
     except Exception as exc:
-        import logging; logging.getLogger(__name__).warning(f"team-sync email failed: {exc}")
+        import logging; logging.getLogger(__name__).warning("team-sync email failed: %s", exc)
 
     return {"message": "Task approved by client", "approval_status": "approved",
             "new_column_id": new_col_id}
@@ -379,11 +386,16 @@ async def get_approval_by_token(token: str, pool=Depends(get_pool)):
         WHERE t.task_id = $1
     """, task_id)
     if not task:
-        raise HTTPException(404, "Task not found")
+        raise HTTPException(404, _TASK_NOT_FOUND)
     if task["approval_status"] not in ("pending_client",):
-        # Already decided
-        return {"task": dict(task), "already_decided": True,
-                "requester_name": task["requester_name"], "requested_at": task["requested_at"]}
+        # Already decided — return only the decision status, no task content
+        return {
+            "task": {"task_id": task["task_id"], "title": task["title"],
+                     "approval_status": task["approval_status"]},
+            "already_decided": True,
+            "requester_name": task["requester_name"],
+            "requested_at": task["requested_at"],
+        }
     return {"task": dict(task), "already_decided": False,
             "requester_name": task["requester_name"], "requested_at": task["requested_at"]}
 
@@ -396,9 +408,15 @@ async def approve_by_token(token: str, payload_body: ApprovalRequest, pool=Depen
     client_user_id = payload["client_user_id"]
     task = await pool.fetchrow("SELECT * FROM tasks WHERE task_id=$1", task_id)
     if not task:
-        raise HTTPException(404, "Task not found")
+        raise HTTPException(404, _TASK_NOT_FOUND)
     if task["approval_status"] != "pending_client":
         raise HTTPException(400, "This approval link is no longer active")
+    # Verify the client is still authorized at decision time (token alone is not sufficient)
+    access = await pool.fetchrow(
+        "SELECT 1 FROM task_clients WHERE task_id=$1 AND user_id=$2", task_id, client_user_id
+    )
+    if not access:
+        raise HTTPException(403, "Client is not authorized to approve this task")
     done_col = await pool.fetchrow(
         "SELECT column_id FROM project_columns WHERE team_id=$1 AND is_done=TRUE ORDER BY sort_order DESC LIMIT 1",
         task["team_id"]
@@ -424,11 +442,17 @@ async def reject_by_token(token: str, payload_body: ApprovalRequest, pool=Depend
     client_user_id = payload["client_user_id"]
     task = await pool.fetchrow("SELECT * FROM tasks WHERE task_id=$1", task_id)
     if not task:
-        raise HTTPException(404, "Task not found")
+        raise HTTPException(404, _TASK_NOT_FOUND)
     if task["approval_status"] != "pending_client":
         raise HTTPException(400, "This approval link is no longer active")
-    if not payload_body.notes:
-        raise HTTPException(400, "Rejection reason is required")
+    # Verify the client is still authorized at decision time (token alone is not sufficient)
+    access = await pool.fetchrow(
+        "SELECT 1 FROM task_clients WHERE task_id=$1 AND user_id=$2", task_id, client_user_id
+    )
+    if not access:
+        raise HTTPException(403, "Client is not authorized to reject this task")
+    if not payload_body.notes or not payload_body.notes.strip():
+        raise HTTPException(400, _REJECTION_REQUIRED)
     revision_col = await pool.fetchrow(
         "SELECT column_id FROM project_columns WHERE team_id=$1 AND is_done=FALSE ORDER BY sort_order ASC LIMIT 1",
         task["team_id"]
@@ -448,20 +472,16 @@ async def reject_by_token(token: str, payload_body: ApprovalRequest, pool=Depend
 @router.post("/tasks/{task_id}/client-reject")
 async def client_reject_task(task_id: str, payload: ApprovalRequest,
                               pool=Depends(get_pool), user=Depends(require_user)):
+    """Allow an authenticated client user to reject a pending_client task with a reason."""
     task   = await get_task_with_permission(pool, task_id, user["user_id"])
     access = await pool.fetchrow(
         "SELECT 1 FROM task_clients WHERE task_id=$1 AND user_id=$2", task_id, user["user_id"]
     )
     if not access and user.get("role") != "admin":
-        member = await pool.fetchrow(
-            "SELECT 1 FROM project_assignments WHERE team_id=$1 AND user_id=$2",
-            task["team_id"], user["user_id"]
-        )
-        if not member:
-            raise HTTPException(403, "Only the assigned client can reject this task")
+        raise HTTPException(403, "Only the assigned client can reject this task")
 
-    if not payload.notes:
-        raise HTTPException(400, "Rejection reason is required")
+    if not payload.notes or not payload.notes.strip():
+        raise HTTPException(400, _REJECTION_REQUIRED)
 
     revision_col = await pool.fetchrow(
         "SELECT column_id FROM project_columns WHERE team_id=$1 AND is_done=FALSE ORDER BY sort_order ASC LIMIT 1",

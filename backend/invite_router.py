@@ -302,7 +302,7 @@ async def create_invite(body: InviteCreate, pool=Depends(get_pool), admin=Depend
                           inviter_role=inviter_role)
     except Exception as exc:
         import logging
-        logging.getLogger(__name__).warning(f"invite email failed: {exc}")
+        logging.getLogger(__name__).warning("invite email failed: %s", exc)
 
     inviter_name = admin.get("full_name") or admin.get("name") or admin.get("email")
 

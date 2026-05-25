@@ -8,6 +8,7 @@
  */
 import { useEffect, useRef } from 'react';
 import * as Notifications from 'expo-notifications';
+import * as Crypto from 'expo-crypto';
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 import { MMKV } from 'react-native-mmkv';
@@ -19,11 +20,14 @@ import { apiClient } from '../api/client';
 const storage = new MMKV({ id: 'push_tokens' });
 const DEVICE_ID_KEY = 'push_device_id';
 
-// Generate a stable device id once per install
-function getDeviceId(): string {
+/**
+ * Return a stable cryptographically-random device ID, generating and persisting
+ * one in MMKV on the first call. Exported so useAuth can deregister on logout.
+ */
+export function getDeviceId(): string {
   let id = storage.getString(DEVICE_ID_KEY);
   if (!id) {
-    id = `device_${Math.random().toString(36).slice(2)}_${Date.now()}`;
+    id = `device_${Crypto.randomUUID()}`;
     storage.set(DEVICE_ID_KEY, id);
   }
   return id;
@@ -38,6 +42,10 @@ Notifications.setNotificationHandler({
   }),
 });
 
+/**
+ * Request push-notification permissions and return the Expo push token.
+ * Returns null on simulators, physical devices without permission, or any error.
+ */
 async function registerForPushNotificationsAsync(): Promise<string | null> {
   // Expo Go / simulators may not support push
   if (!Constants.isDevice) return null;
@@ -75,6 +83,11 @@ async function registerForPushNotificationsAsync(): Promise<string | null> {
   }
 }
 
+/**
+ * React hook that registers the device for Expo push notifications and wires
+ * up a tap listener that navigates to TaskDetail when a notification is tapped.
+ * Call once inside InnerApp after AuthProvider.
+ */
 export function usePushNotifications() {
   const { user } = useAuth();
   const notifListener = useRef<Notifications.Subscription>();

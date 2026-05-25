@@ -8,12 +8,11 @@ import { currentUser } from '../lib/auth';
 import { useToast } from '../components/ui/toast';
 import TaskEditor from '../components/TaskEditor';
 import { PageHeader, DueChip, PriorityDot, StatusChip, ProjectTag, AvatarStack } from '../components/editorial';
-import { AVATAR_COLORS } from '../lib/utils';
+import { AVATAR_COLORS, priorityColor } from '../lib/utils';
 
 const PRIORITY_ORDER  = ['urgent','high','medium','low'];
 const PRIORITY_LABEL  = { urgent:'Urgent', high:'High', medium:'Medium', low:'Low' };
 const PRIORITY_HI     = { urgent:'अत्यावश्यक', high:'उच्च', medium:'मध्यम', low:'न्यून' };
-const PRIORITY_COLOR  = { urgent:'#C0392B', high:'#B06A00', medium:'#0082c6', low:'#6E7B91' };
 const STATUS_ORDER    = ['todo','in_progress','in_review','done','requested'];
 const STATUS_LABEL    = { todo:'To Do', in_progress:'In Progress', in_review:'In Review', done:'Done', requested:'Requested' };
 const STATUS_HI       = { todo:'कार्य', in_progress:'चालू', in_review:'समीक्षा', done:'सम्पन्न', requested:'अनुरोध' };
@@ -65,7 +64,7 @@ export default function TasksListPage() {
   if (group === 'priority') {
     PRIORITY_ORDER.forEach(p => {
       const items = filtered.filter(t => t.priority === p);
-      if (items.length) groups.push({ key: p, title: PRIORITY_LABEL[p], sans: PRIORITY_HI[p], color: PRIORITY_COLOR[p], items });
+      if (items.length) groups.push({ key: p, title: PRIORITY_LABEL[p], sans: PRIORITY_HI[p], color: priorityColor(p), items });
     });
     const rest = filtered.filter(t => !PRIORITY_ORDER.includes(t.priority));
     if (rest.length) groups.push({ key: 'other', title: 'Other', sans: 'अन्य', color: '#94a3b8', items: rest });

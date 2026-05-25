@@ -1,11 +1,11 @@
-/**
- * ActivityFeedPage.jsx — editorial Activity feed screen.
+﻿/**
+ * ActivityFeedPage.jsx â€” editorial Activity feed screen.
  * All data fetching + filters unchanged.
  */
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { api } from '../lib/api';
 import { PageHeader } from '../components/editorial';
-import { AVATAR_COLORS, relTime, userInitials } from '../lib/utils';
+import { AVATAR_COLORS, relTime, userInitials, logger } from '../lib/utils';
 
 const EVENT_TYPES = [
   { value: '',               label: 'All events' },
@@ -68,7 +68,7 @@ export default function ActivityFeedPage({ teamId }) {
       setHasMore(data.length === LIMIT);
       setOffset(off + data.length);
     } catch (e) {
-      if (e.name !== 'CanceledError' && e.name !== 'AbortError') console.error(e);
+      if (e.name !== 'CanceledError' && e.name !== 'AbortError') logger.error(e);
     } finally {
       reset ? setLoading(false) : setLoadingMore(false);
     }
@@ -78,9 +78,9 @@ export default function ActivityFeedPage({ teamId }) {
 
   if (!teamId) return (
     <div className="k-screen">
-      <PageHeader kicker="OPERATIONS" title="Activity" sanskrit="गतिविधि" lede="Team events and changes." />
+      <PageHeader kicker="OPERATIONS" title="Activity" sanskrit="à¤—à¤¤à¤¿à¤µà¤¿à¤§à¤¿" lede="Team events and changes." />
       <div style={{ padding: '40px 0', textAlign: 'center', color: 'var(--ink-3)', fontStyle: 'italic', fontFamily: 'var(--font-display)' }}>
-        Waiting for team context…
+        Waiting for team contextâ€¦
       </div>
     </div>
   );
@@ -90,7 +90,7 @@ export default function ActivityFeedPage({ teamId }) {
       <PageHeader
         kicker="OPERATIONS"
         title="Activity"
-        sanskrit="गतिविधि"
+        sanskrit="à¤—à¤¤à¤¿à¤µà¤¿à¤§à¤¿"
         lede="Every status change, comment, assignment, and approval."
       />
 
@@ -133,7 +133,7 @@ export default function ActivityFeedPage({ teamId }) {
       {/* Activity feed */}
       {loading ? (
         <div style={{ padding: '40px 0', textAlign: 'center', color: 'var(--ink-3)', fontFamily: 'var(--font-display)', fontStyle: 'italic' }}>
-          Loading activity…
+          Loading activityâ€¦
         </div>
       ) : (
         <div className="k-activity k-activity--full">
@@ -176,7 +176,7 @@ export default function ActivityFeedPage({ teamId }) {
                 onClick={() => load(false)}
                 disabled={loadingMore}
               >
-                {loadingMore ? 'Loading…' : 'Load more'}
+                {loadingMore ? 'Loadingâ€¦' : 'Load more'}
               </button>
             </div>
           )}

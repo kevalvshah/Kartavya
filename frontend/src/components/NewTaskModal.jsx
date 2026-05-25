@@ -1,16 +1,16 @@
-/**
- * NewTaskModal.jsx — global "New task" modal. k-* design system.
+﻿/**
+ * NewTaskModal.jsx â€” global "New task" modal. k-* design system.
  * Opened from the top-bar "+ New task" button (AppShell).
  */
 import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../lib/api';
-import { AVATAR_COLORS, userInitials } from '../lib/utils';
+import { AVATAR_COLORS, userInitials, logger } from '../lib/utils';
 
 const PRIORITY_DOTS = {
-  low:    { color: '#10b981', label: 'Low',    hi: 'लघु' },
-  medium: { color: '#3b82f6', label: 'Medium', hi: 'मध्यम' },
-  high:   { color: '#f59e0b', label: 'High',   hi: 'उच्च' },
-  urgent: { color: '#dc2626', label: 'Urgent', hi: 'अत्यावश्यक' },
+  low:    { color: '#10b981', label: 'Low',    hi: 'à¤²à¤˜à¥' },
+  medium: { color: '#3b82f6', label: 'Medium', hi: 'à¤®à¤§à¥à¤¯à¤®' },
+  high:   { color: '#f59e0b', label: 'High',   hi: 'à¤‰à¤šà¥à¤š' },
+  urgent: { color: '#dc2626', label: 'Urgent', hi: 'à¤…à¤¤à¥à¤¯à¤¾à¤µà¤¶à¥à¤¯à¤•' },
 };
 
 export default function NewTaskModal({ open, onClose, onCreated }) {
@@ -98,7 +98,7 @@ export default function NewTaskModal({ open, onClose, onCreated }) {
       onCreated?.();
       onClose();
     } catch (err) {
-      console.error('Task creation failed', err);
+      logger.error('Task creation failed', err);
     }
     finally { setSaving(false); }
   };
@@ -126,13 +126,13 @@ export default function NewTaskModal({ open, onClose, onCreated }) {
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 4 }}>
             <div>
               <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--k-primary)', marginBottom: 2 }}>
-                NEW TASK · <span style={{ fontFamily: 'var(--font-hindi)', textTransform: 'none', letterSpacing: 0 }}>नया कार्य</span>
+                NEW TASK Â· <span style={{ fontFamily: 'var(--font-hindi)', textTransform: 'none', letterSpacing: 0 }}>à¤¨à¤¯à¤¾ à¤•à¤¾à¤°à¥à¤¯</span>
               </div>
               <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 400, color: 'var(--ink)' }}>
                 What needs doing?
               </div>
             </div>
-            <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 22, color: 'var(--ink-3)', lineHeight: 1, padding: 4, marginTop: -2 }}>×</button>
+            <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 22, color: 'var(--ink-3)', lineHeight: 1, padding: 4, marginTop: -2 }}>Ã—</button>
           </div>
           <div style={{ height: 1, background: 'var(--rule-soft)', margin: '16px 0 0' }} />
         </div>
@@ -146,7 +146,7 @@ export default function NewTaskModal({ open, onClose, onCreated }) {
               ref={titleRef}
               value={title}
               onChange={e => { setTitle(e.target.value); if (e.target.value.trim()) setTitleError(false); }}
-              placeholder="Write a clear, action-first title…"
+              placeholder="Write a clear, action-first titleâ€¦"
               style={{ width: '100%', border: 'none', borderBottom: `2px solid ${titleError ? '#dc2626' : 'var(--rule)'}`, outline: 'none', fontSize: 20, fontFamily: 'var(--font-display)', color: 'var(--ink)', background: 'transparent', paddingBottom: 10, fontWeight: 400 }}
             />
             {titleError && <div style={{ fontSize: 11, color: '#dc2626', marginTop: 5 }}>Title is required.</div>}
@@ -155,14 +155,14 @@ export default function NewTaskModal({ open, onClose, onCreated }) {
           {/* PROJECT + STATUS */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
             <div>
-              <FieldLabel>PROJECT · परियोजना</FieldLabel>
+              <FieldLabel>PROJECT Â· à¤ªà¤°à¤¿à¤¯à¥‹à¤œà¤¨à¤¾</FieldLabel>
               <select className="k-select" style={{ width: '100%' }} value={projectId} onChange={e => setProjectId(e.target.value)}>
                 <option value="">No project</option>
                 {projects.map(p => <option key={p.team_id} value={p.team_id}>{p.name}</option>)}
               </select>
             </div>
             <div>
-              <FieldLabel>STATUS · स्थिति</FieldLabel>
+              <FieldLabel>STATUS Â· à¤¸à¥à¤¥à¤¿à¤¤à¤¿</FieldLabel>
               <select className="k-select" style={{ width: '100%' }} value={status} onChange={e => setStatus(e.target.value)}>
                 <option value="todo">To do</option>
                 <option value="in_progress">In progress</option>
@@ -174,7 +174,7 @@ export default function NewTaskModal({ open, onClose, onCreated }) {
 
           {/* PRIORITY */}
           <div style={{ marginBottom: 16 }}>
-            <FieldLabel>PRIORITY · प्राथमिकता</FieldLabel>
+            <FieldLabel>PRIORITY Â· à¤ªà¥à¤°à¤¾à¤¥à¤®à¤¿à¤•à¤¤à¤¾</FieldLabel>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               {Object.entries(PRIORITY_DOTS).map(([key, { color, label }]) => (
                 <button key={key} onClick={() => setPriority(key)}
@@ -189,13 +189,13 @@ export default function NewTaskModal({ open, onClose, onCreated }) {
           {/* DUE + ASSIGNEES */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
             <div>
-              <FieldLabel>DUE · नियत तिथि</FieldLabel>
+              <FieldLabel>DUE Â· à¤¨à¤¿à¤¯à¤¤ à¤¤à¤¿à¤¥à¤¿</FieldLabel>
               <input type="date" className="k-input" style={{ width: '100%' }} value={dueAt} onChange={e => setDueAt(e.target.value)} />
             </div>
 
             {/* Assignee dropdown */}
             <div ref={assigneeRef} style={{ position: 'relative' }}>
-              <FieldLabel>ASSIGNEES · नियुक्त</FieldLabel>
+              <FieldLabel>ASSIGNEES Â· à¤¨à¤¿à¤¯à¥à¤•à¥à¤¤</FieldLabel>
               <button
                 type="button"
                 onClick={() => setAssigneeOpen(v => !v)}
@@ -209,7 +209,7 @@ export default function NewTaskModal({ open, onClose, onCreated }) {
                 }}
               >
                 {selectedMembers.length === 0 ? (
-                  <span style={{ flex: 1, textAlign: 'left' }}>Pick team members…</span>
+                  <span style={{ flex: 1, textAlign: 'left' }}>Pick team membersâ€¦</span>
                 ) : (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 4, flex: 1, flexWrap: 'wrap' }}>
                     {selectedMembers.slice(0, 3).map((m, i) => {
@@ -258,7 +258,7 @@ export default function NewTaskModal({ open, onClose, onCreated }) {
                             <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink)', fontFamily: 'var(--font-ui)' }}>{name}</div>
                             <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '2px 6px', marginTop: 2 }}>
                               {jobTitle && <span style={{ fontSize: 11, color: 'var(--ink-3)' }}>{jobTitle}</span>}
-                              {jobTitle && m.company_name && <span style={{ fontSize: 11, color: 'var(--ink-faint)' }}>·</span>}
+                              {jobTitle && m.company_name && <span style={{ fontSize: 11, color: 'var(--ink-faint)' }}>Â·</span>}
                               {m.company_name && <span style={{ fontSize: 11, color: 'var(--ink-3)' }}>{m.company_name}</span>}
                               {m.receives_approval_emails && (
                                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 10, fontWeight: 700, color: '#05b7aa', background: '#05b7aa18', borderRadius: 4, padding: '1px 5px', marginTop: 1 }}>
@@ -284,20 +284,20 @@ export default function NewTaskModal({ open, onClose, onCreated }) {
 
           {/* DESCRIPTION */}
           <div style={{ marginBottom: 16 }}>
-            <FieldLabel>DESCRIPTION · विवरण</FieldLabel>
+            <FieldLabel>DESCRIPTION Â· à¤µà¤¿à¤µà¤°à¤£</FieldLabel>
             <textarea
               className="k-input"
               rows={3}
               style={{ resize: 'vertical', width: '100%', lineHeight: 1.6 }}
               value={description}
               onChange={e => setDescription(e.target.value)}
-              placeholder="Acceptance criteria, context, links…"
+              placeholder="Acceptance criteria, context, linksâ€¦"
             />
           </div>
 
           {/* ATTACHMENTS */}
           <div>
-            <FieldLabel>ATTACHMENTS · संलग्नक</FieldLabel>
+            <FieldLabel>ATTACHMENTS Â· à¤¸à¤‚à¤²à¤—à¥à¤¨à¤•</FieldLabel>
             <input ref={fileRef} type="file" multiple style={{ display: 'none' }} onChange={handleFileChange} />
             {files.length > 0 && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 10 }}>
@@ -305,7 +305,7 @@ export default function NewTaskModal({ open, onClose, onCreated }) {
                   <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', borderRadius: 8, background: 'var(--bg)', border: '1px solid var(--rule)', fontSize: 13 }}>
                     <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="var(--ink-3)" strokeWidth="1.5"><path d="M9 1H4a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V5L9 1z"/><path d="M9 1v4h4"/></svg>
                     <a href={f.url} target="_blank" rel="noreferrer" style={{ flex: 1, color: 'var(--k-primary)', textDecoration: 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.name}</a>
-                    <button onClick={() => setFiles(p => p.filter((_, j) => j !== i))} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-faint)', fontSize: 16, lineHeight: 1, padding: 0 }}>×</button>
+                    <button onClick={() => setFiles(p => p.filter((_, j) => j !== i))} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-faint)', fontSize: 16, lineHeight: 1, padding: 0 }}>Ã—</button>
                   </div>
                 ))}
               </div>
@@ -317,17 +317,17 @@ export default function NewTaskModal({ open, onClose, onCreated }) {
               style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '7px 14px', borderRadius: 8, border: '1.5px dashed var(--rule-strong)', background: 'transparent', color: 'var(--ink-3)', cursor: 'pointer', fontSize: 13, fontFamily: 'var(--font-ui)' }}
             >
               <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M8 12V4M4 8l4-4 4 4"/><path d="M2 14h12"/></svg>
-              {uploading ? 'Uploading…' : 'Attach files'}
+              {uploading ? 'Uploadingâ€¦' : 'Attach files'}
             </button>
           </div>
         </div>
 
         {/* Footer */}
         <div style={{ padding: '14px 24px', borderTop: '1px solid var(--rule-soft)', display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
-          <span style={{ fontSize: 11, color: 'var(--ink-faint)', flex: 1 }}>↵ to create · Esc to close</span>
+          <span style={{ fontSize: 11, color: 'var(--ink-faint)', flex: 1 }}>â†µ to create Â· Esc to close</span>
           <button className="k-btn k-btn--ghost k-btn--sm" onClick={onClose}>Cancel</button>
           <button className="k-btn k-btn--primary k-btn--sm" onClick={handleSubmit} disabled={saving}>
-            {saving ? 'Creating…' : 'Create task'}
+            {saving ? 'Creatingâ€¦' : 'Create task'}
           </button>
         </div>
       </div>

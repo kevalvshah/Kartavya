@@ -8,7 +8,7 @@ export default function WeekStrip({ weekDates = [], dotsByDay = {}, todayIdx }) 
       {weekDates.map((d, i) => {
         const dots = dotsByDay[d.toDateString()] || 0;
         return (
-          <div key={i} className={`k-wday${i === todayIdx ? ' is-today' : ''}`}>
+          <div key={d.toDateString()} className={`k-wday${i === todayIdx ? ' is-today' : ''}`}>
             <div className="k-week__hi">{WEEK_HI[i]}</div>
             <div className="k-week__num">{d.getDate()}</div>
             <div className="k-week__dots">

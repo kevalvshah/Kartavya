@@ -129,18 +129,22 @@ async def send_push(
         ]
 
         async with httpx.AsyncClient(timeout=10) as client:
-            resp = await client.post(
-                EXPO_PUSH_URL,
-                json=messages,
-                headers={
-                    "Accept":       "application/json",
-                    "Content-Type": "application/json",
-                },
-            )
-            resp.raise_for_status()
+            for attempt in range(2):   # one retry on 5xx
+                resp = await client.post(
+                    EXPO_PUSH_URL,
+                    json=messages,
+                    headers={
+                        "Accept":       "application/json",
+                        "Content-Type": "application/json",
+                    },
+                )
+                if resp.status_code < 500 or attempt == 1:
+                    resp.raise_for_status()
+                    break
+                await asyncio.sleep(1)
 
     except Exception as exc:
-        logger.warning(f"push_service.send_push failed for {recipient_id}: {exc}")
+        logger.warning("push_service.send_push failed for %s: %s", recipient_id, exc)
 
 
 async def fan_out_push(

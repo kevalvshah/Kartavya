@@ -81,7 +81,7 @@ async def run_automation(automation: dict, context: dict, pool) -> dict:
                 results.append({"action": action_type, "ok": True})
 
         except Exception as exc:
-            logger.warning(f"automation action {action_type} failed: {exc}")
+            logger.warning("automation action %s failed: %s", action_type, exc)
             results.append({"action": action_type, "ok": False, "error": str(exc)})
 
     return {"action_results": results}
@@ -113,4 +113,4 @@ async def fire_automations(pool, event_type: str, context: dict):
                 auto["automation_id"]
             )
     except Exception as exc:
-        logger.warning(f"fire_automations swallowed: {exc}")
+        logger.warning("fire_automations swallowed: %s", exc)

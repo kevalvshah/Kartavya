@@ -14,6 +14,7 @@ Sections:
 """
 
 import json
+import re
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
@@ -22,6 +23,20 @@ from fastapi import Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
 from db import get_pool
+
+
+# ── 0. Logging helpers ───────────────────────────────────────────────────────
+
+_CTRL_RE = re.compile(r'[\x00-\x1f\x7f]|\x1b\[[0-?]*[ -/]*[@-~]')
+
+
+def log_safe(value: object) -> str:
+    """Sanitize a value for use in log messages (CWE-117 log injection prevention).
+
+    Strips all ASCII control characters (including CR/LF that could forge log
+    entries) and ANSI escape sequences that could corrupt log output or terminals.
+    """
+    return _CTRL_RE.sub('', str(value))
 
 
 # ── 1. Datetime helpers ───────────────────────────────────────────────────────
@@ -41,6 +56,9 @@ def parse_dt(value: Optional[str]) -> Optional[datetime]:
         raise HTTPException(status_code=400, detail=f"Invalid datetime: {value}") from e
     return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
 
+
+# Shared SQL fragments — import these instead of duplicating across routers
+SQL_USER_ROLE = "SELECT role FROM users WHERE user_id=$1"
 
 # ── 2. DB dependency ──────────────────────────────────────────────────────────
 
@@ -264,7 +282,10 @@ def row_to_task(r) -> TaskOut:
     """Convert an asyncpg Record (from the tasks table) to a TaskOut model."""
     def pj(v, d):
         if isinstance(v, str):
-            return json.loads(v)
+            try:
+                return json.loads(v)
+            except (json.JSONDecodeError, ValueError):
+                return d
         return v if v is not None else d
 
     def col(key, default=None):

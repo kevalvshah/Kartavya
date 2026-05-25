@@ -1,4 +1,5 @@
 ﻿import React from "react";
+import { relTime } from "../lib/utils";
 
 const TYPE_META = {
   created:         { icon: "✨", verb: "created this task" },
@@ -17,21 +18,14 @@ const TYPE_META = {
   default:         { icon: "📋", verb: "" },
 };
 
-function timeAgo(iso) {
-  const diff = Date.now() - new Date(iso).getTime();
-  if (diff < 60_000)    return "just now";
-  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`;
-  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`;
-  return new Date(iso).toLocaleDateString();
-}
 
 function DiffBadge({ from, to }) {
   if (from == null && to == null) return null;
   return (
     <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, marginLeft: 6 }}>
-      {from != null && <span style={{ background: "#fee2e2", color: "var(--danger)", borderRadius: 4, padding: "1px 5px" }}>{String(from)}</span>}
-      {from != null && to != null && <span style={{ color: "var(--ink-3)" }}>→</span>}
-      {to   != null && <span style={{ background: "#dcfce7", color: "#16a34a", borderRadius: 4, padding: "1px 5px" }}>{String(to)}</span>}
+      {from !== null && from !== undefined && <span style={{ background: "#fee2e2", color: "var(--danger)", borderRadius: 4, padding: "1px 5px" }}>{String(from)}</span>}
+      {from !== null && from !== undefined && to !== null && to !== undefined && <span style={{ color: "var(--ink-3)" }}>→</span>}
+      {to   !== null && to !== undefined && <span style={{ background: "#dcfce7", color: "#16a34a", borderRadius: 4, padding: "1px 5px" }}>{String(to)}</span>}
     </span>
   );
 }
@@ -105,7 +99,7 @@ export default function ActivityList({ events = [], loading = false, showTask = 
                 <FieldDiff data={evt.data} />
               </div>
               <div style={{ color: "var(--ink-faint)", fontSize: 11, marginTop: 2 }}>
-                {timeAgo(evt.created_at)}
+                {relTime(evt.created_at)}
               </div>
             </div>
           </div>

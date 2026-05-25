@@ -3,7 +3,7 @@ export function urlBase64ToUint8Array(base64String) {
   const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
   const rawData = window.atob(base64);
   const outputArray = new Uint8Array(rawData.length);
-  for (let i = 0; i < rawData.length; ++i) {
+  for (let i = 0; i < rawData.length; i += 1) {
     outputArray[i] = rawData.charCodeAt(i);
   }
   return outputArray;
@@ -13,7 +13,10 @@ export async function ensureServiceWorkerRegistered() {
   if (!("serviceWorker" in navigator)) {
     throw new Error("Service worker not supported");
   }
-  // sw.js is served from /public
-  const reg = await navigator.serviceWorker.register("/sw.js");
-  return reg;
+  try {
+    const reg = await navigator.serviceWorker.register('/sw.js');
+    return reg;
+  } catch (err) {
+    throw new Error(`Service Worker registration failed: ${err.message}`);
+  }
 }

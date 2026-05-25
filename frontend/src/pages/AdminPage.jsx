@@ -7,6 +7,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { api } from '../lib/api';
 import { useToast } from '../components/ui/toast';
 import { PageHeader, StatTile } from '../components/editorial';
+import ConfirmDialog from '../components/ui/ConfirmDialog';
 
 const ROLE_COLORS = { admin: '#0082c6', member: '#6E7B91', client: '#ec4899', owner: '#8b5cf6' };
 const AVATARS     = ['#0082c6','#05b7aa','#8b5cf6','#ec4899','#f59e0b','#10b981'];
@@ -78,7 +79,7 @@ function DeleteUserModal({ user, otherUsers, onConfirm, onClose }) {
       style={{ position: 'fixed', inset: 0, zIndex: 500, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}
       onClick={e => e.target === e.currentTarget && onClose()}
     >
-      <div style={{ background: 'var(--surface)', borderRadius: 'var(--r-lg)', width: '100%', maxWidth: 460, boxShadow: '0 24px 64px rgba(0,0,0,0.35)', overflow: 'hidden' }}>
+      <div role="dialog" aria-modal="true" aria-label="Remove user" style={{ background: 'var(--surface)', borderRadius: 'var(--r-lg)', width: '100%', maxWidth: 460, boxShadow: '0 24px 64px rgba(0,0,0,0.35)', overflow: 'hidden' }}>
 
         {/* Red header */}
         <div style={{ background: 'linear-gradient(135deg, #b91c1c 0%, #dc2626 100%)', padding: '22px 24px 20px' }}>
@@ -180,7 +181,7 @@ function EditSlideOver({ user, onClose, onSaved, pushToast }) {
 
   return (
     <div onClick={handleBackdrop} style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(5,14,26,.45)', display: 'flex', justifyContent: 'flex-end' }}>
-      <div ref={panelRef} style={{ width: 420, maxWidth: '90vw', height: '100%', background: 'var(--surface)', display: 'flex', flexDirection: 'column', boxShadow: '-8px 0 40px rgba(0,0,0,.18)' }}>
+      <div ref={panelRef} role="dialog" aria-modal="true" aria-label="Edit user" style={{ width: 420, maxWidth: '90vw', height: '100%', background: 'var(--surface)', display: 'flex', flexDirection: 'column', boxShadow: '-8px 0 40px rgba(0,0,0,.18)' }}>
         {/* Header */}
         <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--rule-soft)', display: 'flex', alignItems: 'center', gap: 12 }}>
           <UserAvatar user={user} index={0} size={36} />
@@ -265,9 +266,10 @@ export default function AdminPage() {
   const [copiedId,    setCopiedId]    = useState(null);
   const [editUser,    setEditUser]    = useState(null);   // user being edited
   const [deleteTarget, setDeleteTarget] = useState(null); // user pending deletion
+  const [confirmState, setConfirmState] = useState(null);
 
   const me = useMemo(() => {
-    try { return JSON.parse(localStorage.getItem('kartavya_user') || 'null'); } catch { return null; }
+    try { return JSON.parse(sessionStorage.getItem('kartavya_user') || 'null'); } catch { return null; }
   }, []);
 
   const load = () => Promise.all([
@@ -306,15 +308,20 @@ export default function AdminPage() {
     setTimeout(() => setCopiedId(null), 2000);
   };
 
-  const revokeInvite = async (id) => {
-    if (!window.confirm('Revoke this invite? The link will stop working immediately.')) return;
-    try {
-      await api.delete(`/admin/invites/${id}`);
-      setInvites(prev => prev.filter(i => i.invite_id !== id));
-      pushToast({ type: 'success', title: 'Invite revoked' });
-    } catch (_) {
-      pushToast({ type: 'error', title: 'Could not revoke invite' }); load();
-    }
+  const revokeInvite = (id) => {
+    setConfirmState({
+      message: 'Revoke this invite? The link will stop working immediately.',
+      confirmLabel: 'Revoke',
+      onConfirm: async () => {
+        try {
+          await api.delete(`/admin/invites/${id}`);
+          setInvites(prev => prev.filter(i => i.invite_id !== id));
+          pushToast({ type: 'success', title: 'Invite revoked' });
+        } catch (_) {
+          pushToast({ type: 'error', title: 'Could not revoke invite' }); load();
+        }
+      },
+    });
   };
 
   // ── User actions ──────────────────────────────────────────────────────────
@@ -343,7 +350,6 @@ export default function AdminPage() {
   // ── Derived ───────────────────────────────────────────────────────────────
 
   const pendingInvites  = invites.filter(i => !i.accepted_at && new Date(i.expires_at) > new Date());
-  const acceptedInvites = invites.filter(i => i.accepted_at);
   const roleCounts      = users.reduce((acc, u) => { acc[u.role] = (acc[u.role] || 0) + 1; return acc; }, {});
 
   const labelSt = { fontSize: 11, fontWeight: 700, color: 'var(--ink-3)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 5, display: 'block' };
@@ -541,7 +547,7 @@ export default function AdminPage() {
 
                 {/* Remove button */}
                 <button className="k-iconbtn" style={{ color: 'var(--danger)', opacity: isSelf ? 0.3 : 1 }}
-                  onClick={() => removeUser(u)} disabled={isSelf} title="Remove user">
+                  onClick={() => removeUser(u)} disabled={isSelf} title="Remove user" aria-label="Remove user">
                   <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4"><path d="M3 4h10M5 4V3h6v1M6 7v5M10 7v5M4 4l1 9h6l1-9"/></svg>
                 </button>
               </div>
@@ -568,6 +574,7 @@ export default function AdminPage() {
           );
         })}
       </div>
+      <ConfirmDialog state={confirmState} onClose={() => setConfirmState(null)} />
     </div>
   );
 }

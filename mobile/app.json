@@ -54,8 +54,7 @@
       "expo-document-picker"
     ],
     "extra": {
-      "eas": { "projectId": "196c2be9-caab-49a6-a359-a2adbfc6d821" },
-      "apiUrl": "https://kartavya-production.up.railway.app"
+      "eas": { "projectId": "196c2be9-caab-49a6-a359-a2adbfc6d821" }
     },
     "runtimeVersion": {
       "policy": "appVersion"

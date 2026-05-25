@@ -17,6 +17,7 @@
  */
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
+import { logger } from '../lib/utils';
 
 export function useRealtimeTasks(projectId, initialTasks = []) {
   const [tasks, setTasks] = useState(initialTasks);
@@ -74,10 +75,10 @@ export function useRealtimeTasks(projectId, initialTasks = []) {
       )
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') {
-          console.debug(`[Realtime] subscribed to tasks for project ${projectId}`);
+          logger.debug(`[Realtime] subscribed to tasks for project ${projectId}`);
         }
         if (status === 'CHANNEL_ERROR') {
-          console.warn(`[Realtime] channel error for project ${projectId}`);
+          logger.warn(`[Realtime] channel error for project ${projectId}`);
         }
       });
 

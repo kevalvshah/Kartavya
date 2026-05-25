@@ -4,7 +4,6 @@
 import React from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { currentUser } from '../../lib/auth';
-import { K } from '../../lib/brand';
 
 // ── Nav icons (inline SVG, stroke-based) ────────────────────────────────
 const ICONS = {

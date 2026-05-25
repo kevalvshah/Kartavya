@@ -1,6 +1,7 @@
-/**
- * useFields — fetch field definitions + values for a task/team, handle saves.
+﻿/**
+ * useFields â€” fetch field definitions + values for a task/team, handle saves.
  */
+import { logger } from '../lib/utils';
 import { useState, useEffect, useCallback } from 'react';
 import { api } from '../lib/api';
 
@@ -13,7 +14,7 @@ export function useFieldDefs(teamId) {
     setLoading(true);
     api.get(`/fields/team/${teamId}`)
        .then(r => setDefs(r.data))
-       .catch(console.error)
+       .catch(logger.error)
        .finally(() => setLoading(false));
   }, [teamId]);
 
@@ -49,7 +50,7 @@ export function useFieldValues(taskId) {
          r.data.forEach(v => { vals[v.field_id] = v.value; });
          setValues(vals);
        })
-       .catch(console.error)
+       .catch(logger.error)
        .finally(() => setLoading(false));
   }, [taskId]);
 
@@ -58,7 +59,7 @@ export function useFieldValues(taskId) {
     try {
       await api.put(`/fields/task/${taskId}/values`, [{ field_id: fieldId, value }]);
     } catch (e) {
-      console.error('Field value save failed', e);
+      logger.error('Field value save failed', e);
     }
   }, [taskId]);
 
@@ -66,7 +67,7 @@ export function useFieldValues(taskId) {
 }
 
 /**
- * Combined convenience hook — some components import { useFields }.
+ * Combined convenience hook â€” some components import { useFields }.
  * Returns { defs, fieldValues, loading, createField, updateField, deleteField, setValue }.
  */
 export function useFields(teamId, taskId) {

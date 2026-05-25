@@ -15,6 +15,7 @@
  *   await flushQueue();   // called by NetInfo reconnect handler in App.tsx
  */
 
+import * as Crypto from 'expo-crypto';
 import { storage } from '../lib/storage';
 import { apiClient } from '../api/client';
 import type { MutationQueueItem } from '../api/types';
@@ -66,8 +67,7 @@ function scrubBody(body: unknown, stripFields?: string[]): unknown {
 export function enqueueMutation(opts: EnqueueOptions): string {
   const q = readQueue();
 
-  const id = opts.optimistic_id
-    ?? `${Date.now()}_${Math.random().toString(36).slice(2)}`;
+  const id = opts.optimistic_id ?? Crypto.randomUUID();
 
   const safeBody = scrubBody(opts.body, opts.stripFields);
 
@@ -136,7 +136,7 @@ export async function flushQueue(): Promise<FlushResult> {
   for (const item of q) {
     try {
       await dispatch(item);
-      result.succeeded++;
+      result.succeeded += 1;
       // Do NOT push to remaining — success removes from queue
     } catch (err: any) {
       const status     = err?.response?.status;

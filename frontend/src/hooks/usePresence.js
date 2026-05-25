@@ -15,12 +15,7 @@
  */
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
-
-// 8 distinct colors for avatar backgrounds — cycles by user_id hash
-const AVATAR_COLORS = [
-  '#378ADD', '#1D9E75', '#BA7517', '#7F77DD',
-  '#D85A30', '#3B6D11', '#993556', '#0F6E56',
-];
+import { AVATAR_COLORS, logger } from '../lib/utils';
 
 function colorForUser(userId = '') {
   let hash = 0;
@@ -74,10 +69,10 @@ export function usePresence(projectId, user) {
         setOnlineUsers(users);
       })
       .on('presence', { event: 'join' }, ({ newPresences }) => {
-        console.debug('[Presence] joined', newPresences.map(p => p.name));
+        logger.debug('[Presence] joined', newPresences.map(p => p.name));
       })
       .on('presence', { event: 'leave' }, ({ leftPresences }) => {
-        console.debug('[Presence] left', leftPresences.map(p => p.name));
+        logger.debug('[Presence] left', leftPresences.map(p => p.name));
       })
       .subscribe(async (status) => {
         if (status === 'SUBSCRIBED') {

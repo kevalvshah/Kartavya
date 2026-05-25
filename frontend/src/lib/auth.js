@@ -5,26 +5,26 @@ import { api } from './api';
 // ── Auth ──────────────────────────────────────────────────────────────────────
 export async function apiLogin(email, password) {
   const res = await api.post('/auth/login', { email, password });
-  localStorage.setItem('auth_token', res.data.token);
-  localStorage.setItem('kartavya_user', JSON.stringify(res.data.user));
+  sessionStorage.setItem('auth_token', res.data.token);
+  sessionStorage.setItem('kartavya_user', JSON.stringify(res.data.user));
   return res.data;
 }
 
 export async function apiAcceptInvite(token, name, password) {
   const res = await api.post('/auth/accept-invite', { token, name, password });
-  localStorage.setItem('auth_token', res.data.token);
-  localStorage.setItem('kartavya_user', JSON.stringify(res.data.user));
+  sessionStorage.setItem('auth_token', res.data.token);
+  sessionStorage.setItem('kartavya_user', JSON.stringify(res.data.user));
   return res.data;
 }
 
 export async function apiLogout() {
-  try { await api.post('/auth/logout'); } catch (_) {}
-  localStorage.removeItem('auth_token');
-  localStorage.removeItem('kartavya_user');
+  try { await api.post('/auth/logout'); } catch (_) { /* fire-and-forget: logout always proceeds */ }
+  sessionStorage.removeItem('auth_token');
+  sessionStorage.removeItem('kartavya_user');
 }
 
 export function currentUser() {
-  try { return JSON.parse(localStorage.getItem('kartavya_user') || 'null'); } catch { return null; }
+  try { return JSON.parse(sessionStorage.getItem('kartavya_user') || 'null'); } catch { return null; }
 }
 
 // ── Theme ─────────────────────────────────────────────────────────────────────

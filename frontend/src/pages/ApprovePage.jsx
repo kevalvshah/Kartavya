@@ -4,9 +4,9 @@
  * Validates token, renders the editorial approval card, two big buttons.
  */
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { api } from '../lib/api';
-
-const PRIORITY_COLOR = { low: '#22c55e', medium: '#f59e0b', high: '#ef4444', urgent: '#dc2626' };
+import { priorityColor } from '../lib/utils';
 
 function Logo() {
   return (
@@ -35,8 +35,9 @@ export default function ApprovePage() {
   const [rejectNote, setRejectNote] = useState('');
   const [showReject, setShowReject] = useState(false);
 
-  const token  = new URLSearchParams(window.location.search).get('token');
-  const action = new URLSearchParams(window.location.search).get('action'); // ?action=reject from email
+  const [searchParams] = useSearchParams();
+  const token  = searchParams.get('token');
+  const action = searchParams.get('action'); // ?action=reject from email
 
   useEffect(() => {
     if (!token) { setState('error'); setErrorMsg('No approval token in URL.'); return; }
@@ -128,9 +129,9 @@ export default function ApprovePage() {
               <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
                 {task.priority && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
-                    <span style={{ width: 7, height: 7, borderRadius: '50%', background: PRIORITY_COLOR[task.priority] || '#94a3b8', display: 'inline-block' }} />
+                    <span style={{ width: 7, height: 7, borderRadius: '50%', background: priorityColor(task.priority), display: 'inline-block' }} />
                     <span style={{ color: 'var(--ink-3)' }}>Priority:</span>
-                    <span style={{ color: PRIORITY_COLOR[task.priority], fontWeight: 600, textTransform: 'capitalize' }}>{task.priority}</span>
+                    <span style={{ color: priorityColor(task.priority), fontWeight: 600, textTransform: 'capitalize' }}>{task.priority}</span>
                   </div>
                 )}
                 {task.due_at && (

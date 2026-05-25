@@ -3,6 +3,7 @@ activity_logger.py — Write activity events on every mutation.
 Call log_event() from any router after a successful DB write.
 Week 2: added assign_changed + field_changed helpers.
 """
+import json
 import uuid
 from typing import Optional
 import logging
@@ -45,10 +46,10 @@ async def log_event(
             resolved_team_id,
             actor_id,
             event_type,
-            __import__('json').dumps(data or {}),  # stored as jsonb — asyncpg accepts json string
+            json.dumps(data or {}),  # stored as jsonb — asyncpg accepts json string
         )
     except Exception as exc:
-        log.warning(f"activity_logger swallowed error: {exc}")
+        log.warning("activity_logger swallowed error: %s", exc)
 
 
 async def log_assigned(pool, *, task_id: str, actor_id: str, added: list, removed: list):

@@ -11,9 +11,29 @@ export default function MentionTextarea({ value, onChange, onSubmit, members = [
     ? members.filter(m => m.display_name.toLowerCase().startsWith(popup.query.toLowerCase())).slice(0, 8)
     : [];
 
-  function getCaretCoords(el) {
-    const rect = el.getBoundingClientRect();
-    return { top: rect.bottom + window.scrollY + 4, left: rect.left + window.scrollX };
+  function getCaretCoords(el, caretPos) {
+    const style = window.getComputedStyle(el);
+    const mirror = document.createElement("div");
+    mirror.style.cssText = [
+      "position:absolute", "visibility:hidden", "white-space:pre-wrap",
+      "word-wrap:break-word", "overflow-wrap:break-word",
+      `width:${el.offsetWidth}px`,
+      `font:${style.font}`, `padding:${style.padding}`,
+      `border:${style.border}`, `line-height:${style.lineHeight}`,
+    ].join(";");
+    const pre = document.createTextNode(el.value.slice(0, caretPos));
+    const span = document.createElement("span");
+    span.textContent = "​"; // zero-width space marks caret
+    mirror.appendChild(pre);
+    mirror.appendChild(span);
+    document.body.appendChild(mirror);
+    const mirrorRect = mirror.getBoundingClientRect();
+    const spanRect   = span.getBoundingClientRect();
+    document.body.removeChild(mirror);
+    const elRect = el.getBoundingClientRect();
+    const top  = elRect.top  + (spanRect.top  - mirrorRect.top)  + span.offsetHeight + window.scrollY + 4;
+    const left = elRect.left + (spanRect.left - mirrorRect.left) + window.scrollX;
+    return { top, left };
   }
 
   function handleChange(e) {
@@ -25,7 +45,7 @@ export default function MentionTextarea({ value, onChange, onSubmit, members = [
     if (atIdx !== -1) {
       const query = slice.slice(atIdx + 1);
       if (!query.includes(" ") && query.length <= 30) {
-        const coords = getCaretCoords(e.target);
+        const coords = getCaretCoords(e.target, atIdx);
         setPopup({ query, anchorTop: coords.top, anchorLeft: coords.left, atIdx });
         setCursor(0);
         return;

@@ -1,3 +1,4 @@
+﻿import { logger } from '../lib/utils';
 import { useState, useEffect, useCallback } from 'react';
 import { api } from '../lib/api';
 
@@ -7,7 +8,7 @@ export function useAutomations(teamId) {
   useEffect(()=>{
     if(!teamId)return;
     setLoading(true);
-    api.get(`/automations/team/${teamId}`).then(r=>setAutomations(r.data)).catch(console.error).finally(()=>setLoading(false));
+    api.get(`/automations/team/${teamId}`).then(r=>setAutomations(r.data)).catch(logger.error).finally(()=>setLoading(false));
   },[teamId]);
   const create=useCallback(async(payload)=>{
     const res=await api.post('/automations/',{team_id:teamId,...payload});

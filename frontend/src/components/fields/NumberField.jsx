@@ -4,7 +4,7 @@ export default function NumberField({ field, value, onChange, readOnly }) {
   const { prefix, suffix, min, max, step = 1 } = field.config || {};
 
   if (readOnly) {
-    if (value == null) return <span style={{ color: "var(--ink-faint)", fontSize: 12 }}>—</span>;
+    if (value === null || value === undefined) return <span style={{ color: "var(--ink-faint)", fontSize: 12 }}>—</span>;
     return (
       <span style={{ fontSize: 13, fontVariantNumeric: "tabular-nums", color: "var(--ink-2)" }}>
         {prefix}{value}{suffix}

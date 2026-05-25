@@ -9,7 +9,7 @@ PDF matches the 5-page editorial design from report-pdf.jsx / report-pdf.css:
 """
 import html
 import io
-from datetime import datetime
+from datetime import datetime, timezone
 
 # ── Design tokens ──────────────────────────────────────────────────────────────
 _BG       = "#F6F3EC"
@@ -47,17 +47,20 @@ _MEMBER_COLORS = ["#0082c6","#f59e0b","#05b7aa","#8b5cf6","#10b981","#ec4899","#
 
 
 def _initials(name: str) -> str:
+    """Return up to two uppercase initials from a display name."""
     parts = (name or "?").split()
     return "".join(p[0].upper() for p in parts[:2]) or "?"
 
 
 def _fmt_mins(m: int) -> str:
+    """Format an integer number of minutes as a human-readable hours/minutes string."""
     if not m: return "0h"
     h = m // 60; mn = m % 60
     return f"{h}h {mn}m" if mn else f"{h}h"
 
 
 def _fmt_date(iso) -> str:
+    """Format an ISO date string as a short human-readable day-month label."""
     if not iso: return "—"
     try:
         return datetime.fromisoformat(str(iso)).strftime("%-d %b")
@@ -66,6 +69,7 @@ def _fmt_date(iso) -> str:
 
 
 def _pri_color(pri: str) -> str:
+    """Return the hex colour for a task priority level."""
     return {"urgent": "#dc2626", "high": "#ef4444", "medium": "#f59e0b", "low": "#10b981"}.get(
         (pri or "").lower(), "#6E7B91"
     )
@@ -84,6 +88,7 @@ def _status_style(status: str):
 
 
 def _page_shell(body_html: str, brand: str, meta_right: str, foot_left: str, page_n: int, page_of: int) -> str:
+    """Wrap page body HTML in the standard PDF page shell with header and footer."""
     return f"""
 <div class="pdf">
   <div class="pdf__head">
@@ -108,6 +113,7 @@ def _page_shell(body_html: str, brand: str, meta_right: str, foot_left: str, pag
 
 
 def _build_html(data: dict, team_name: str, period_from: str, period_to: str) -> str:
+    """Build the full 5-page HTML report document from raw report data."""
     team_name   = html.escape(team_name)
     period_from = html.escape(period_from)
     period_to   = html.escape(period_to)
@@ -133,15 +139,10 @@ def _build_html(data: dict, team_name: str, period_from: str, period_to: str) ->
         by_member_time[nm] = by_member_time.get(nm, 0) + (e.get("minutes") or 0)
     time_sorted = sorted(by_member_time.items(), key=lambda x: -x[1])
 
-    generated = datetime.utcnow().strftime("%-d %b %Y · %H:%M UTC")
+    generated = datetime.now(tz=timezone.utc).strftime("%-d %b %Y · %H:%M UTC")
     period_label = f"{period_from} – {period_to}"
 
     # ── PAGE 1 — COVER ─────────────────────────────────────────────────────────
-    # kpi tones
-    done_kpi_cls  = "kpi--ok"
-    over_kpi_cls  = "kpi--bad" if overdue > 0 else ""
-    prog_kpi_cls  = "kpi--blue"
-
     # executive summary (auto-generated)
     champion_name = html.escape(by_member_t[0]["user_name"] if by_member_t else (time_sorted[0][0] if time_sorted else "the team"))
     exec_summary = (
@@ -223,10 +224,6 @@ def _build_html(data: dict, team_name: str, period_from: str, period_to: str) ->
 
     # ── PAGE 2 — TASK BREAKDOWN ────────────────────────────────────────────────
     total_nz = max(total_tasks, 1)
-    def status_bar(count, color):
-        pct = round(count / total_nz * 100)
-        return f'<div style="flex:1;height:8px;background:{_RULE_SOFT};border-radius:99px;overflow:hidden;"><div style="height:100%;width:{pct}%;background:{color};border-radius:99px;min-width:4px;"></div></div>'
-
     breakdown_rows = ""
     for label, count, color, hi in [
         ("Done",        done,        _OK,    "पूर्ण"),
@@ -235,7 +232,6 @@ def _build_html(data: dict, team_name: str, period_from: str, period_to: str) ->
         ("Overdue",     overdue,     _DANGER,"विलंबित"),
     ]:
         pct = round(count / total_nz * 100)
-        bd_color = _DANGER if label == "Overdue" and count > 0 else _INK
         breakdown_rows += f"""
         <tr>
           <td style="padding:12px 10px;font-size:12px;font-weight:600;color:{_INK};vertical-align:middle;">{label} <span style="font-family:{_FONT_HINDI};font-size:11px;color:{_INK3};font-weight:400;">{hi}</span></td>
@@ -829,6 +825,7 @@ body{{ background:{_BG}; font-family:{_FONT_UI}; color:{_INK}; -webkit-print-col
 
 
 def generate_pdf(data: dict, team_name: str, period_from: str, period_to: str) -> bytes:
+    """Render report data to a PDF byte string via WeasyPrint."""
     try:
         from weasyprint import HTML
     except ImportError as e:
@@ -838,6 +835,7 @@ def generate_pdf(data: dict, team_name: str, period_from: str, period_to: str) -
 
 
 def generate_excel(data: dict, team_name: str, period_from: str, period_to: str) -> bytes:
+    """Render report data to an Excel (xlsx) byte string with Summary, Tasks, Time, and By-Member sheets."""
     import openpyxl
     from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
     from openpyxl.utils import get_column_letter
@@ -847,7 +845,8 @@ def generate_excel(data: dict, team_name: str, period_from: str, period_to: str)
     task_list  = data.get("task_list", [])
     by_mt      = data.get("by_member_tasks", [])
 
-    C_INK  = "FF1A2230"; C_INK3 = "FF6E7B91"; C_TEAL = "FF05b7aa"
+    C_INK  = "FF1A2230"
+    C_INK3 = "FF6E7B91"
     C_DEEP = "FF0082c6"; C_BG   = "FFF6F3EC"; C_SURF = "FFFCFAF5"; C_HDR = "FF1A2230"
 
     thin = Border(bottom=Side(style="thin", color="FFE2DCC9"))
@@ -881,7 +880,7 @@ def generate_excel(data: dict, team_name: str, period_from: str, period_to: str)
     ws1["A1"].font = Font(name="Georgia", bold=True, size=16, color=C_INK)
     ws1["A2"] = f"Period: {period_from} – {period_to}"
     ws1["A2"].font = Font(name="Calibri", size=10, color=C_INK3)
-    ws1["A3"] = f"Generated: {datetime.utcnow().strftime('%d %b %Y %H:%M UTC')}"
+    ws1["A3"] = f"Generated: {datetime.now(tz=timezone.utc).strftime('%d %b %Y %H:%M UTC')}"
     ws1["A3"].font = Font(name="Calibri", size=10, italic=True, color=C_INK3)
     hdr_row(ws1, 5, "Metric", "Value")
     summary_data = [

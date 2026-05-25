@@ -5,8 +5,9 @@
 import React from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity,
-  StyleSheet, Platform,
+  StyleSheet,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
@@ -23,6 +24,7 @@ export default function MeScreen() {
   const { t }        = useTheme();
   const { user }     = useAuth();
   const nav          = useNavigation<Nav>();
+  const insets       = useSafeAreaInsets();
 
   const { data: myTasks = [] } = useQuery({
     queryKey: ['tasks', 'mine'],
@@ -30,32 +32,25 @@ export default function MeScreen() {
     staleTime: 60_000,
   });
 
-  const done    = myTasks.filter(t => t.status === 'done' && (
-    t.created_by_user_id === user?.user_id || (t.assignee_user_ids ?? []).includes(user?.user_id ?? '')
-  )).length;
-  const open    = myTasks.filter(t => t.status !== 'done' && (
-    t.user_id === user?.user_id || (t.assignee_user_ids ?? []).includes(user?.user_id ?? '')
-  )).length;
-  const overdue = myTasks.filter(t => {
-    if (t.status === 'done' || !t.due_at) return false;
-    if (!(t.user_id === user?.user_id || (t.assignee_user_ids ?? []).includes(user?.user_id ?? ''))) return false;
-    return new Date(t.due_at) < new Date();
-  }).length;
+  const myId = user?.user_id ?? '';
+  const isMine = (task: typeof myTasks[number]) =>
+    task.created_by_user_id === myId || (task.assignee_user_ids ?? []).includes(myId);
+
+  const done    = myTasks.filter(task => task.status === 'done'  && isMine(task)).length;
+  const open    = myTasks.filter(task => task.status !== 'done'  && isMine(task)).length;
+  const overdue = myTasks.filter(task =>
+    task.status !== 'done' && !!task.due_at && isMine(task) && new Date(task.due_at) < new Date()
+  ).length;
 
   const initials = user ? userInitials(user.name ?? user.full_name ?? '?') : '?';
   const bgColor  = user ? avatarColor(user.user_id) : '#0082c6';
 
-  const menuItems: Array<{ icon: string; label: string; onPress: () => void; danger?: boolean }> = [
-    { icon: 'settings-outline',        label: 'Settings & Notifications', onPress: () => (nav as any).navigate('Settings') },
-    { icon: 'notifications-outline',   label: 'Notification preferences', onPress: () => (nav as any).navigate('Settings') },
-  ];
-
   return (
     <ScrollView style={[s.root, { backgroundColor: t.bg }]} contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
       {/* Header */}
-      <View style={[s.header, { backgroundColor: t.surface, borderBottomColor: t.outline }]}>
+      <View style={[s.header, { backgroundColor: t.surface, borderBottomColor: t.outline, paddingTop: insets.top + 16 }]}>
         <Text style={[s.title, { color: t.ink }]}>Me</Text>
-        <TouchableOpacity onPress={() => (nav as any).navigate('Settings')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+        <TouchableOpacity onPress={() => nav.navigate('Settings')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
           <Ionicons name="settings-outline" size={22} color={t.ink3} />
         </TouchableOpacity>
       </View>
@@ -111,7 +106,7 @@ function StatCard({ label, value, color, t }: { label: string; value: number; co
 
 const s = StyleSheet.create({
   root:         { flex: 1 },
-  header:       { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: Platform.OS === 'ios' ? 56 : 36, paddingHorizontal: 20, paddingBottom: 16, borderBottomWidth: 1 },
+  header:       { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingBottom: 16, borderBottomWidth: 1 },
   title:        { fontSize: 26, fontWeight: '900' },
   profileCard:  { flexDirection: 'row', alignItems: 'center', gap: 14, margin: 16, borderRadius: 16, padding: 16, borderWidth: 1 },
   avatar:       { width: 50, height: 50, borderRadius: 25, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },

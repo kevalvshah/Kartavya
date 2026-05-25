@@ -6,7 +6,7 @@ import {
 } from 'react-native';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { format, isToday, isPast } from 'date-fns';
@@ -100,8 +100,8 @@ function NewTaskModal({
       });
       reset();
       onCreated();
-    } catch (err: any) {
-      Alert.alert('Error', err?.message ?? 'Could not create task.');
+    } catch (err: unknown) {
+      Alert.alert('Error', err instanceof Error ? err.message : 'Could not create task.');
     } finally {
       setSaving(false);
     }
@@ -224,13 +224,16 @@ export default function BoardScreen() {
     nav.navigate('TaskDetail', { taskId });
   }, [nav]);
 
-  const onCreated = () => {
+  const onCreated = useCallback(() => {
     setAdding(false);
     qc.invalidateQueries({ queryKey: ['tasks', projectId] });
-  };
+  }, [qc, projectId]);
 
   // ── Render views ────────────────────────────────────────────────────────────
-  const renderBoard = () => (
+  // I4: wrapped in useCallback so they are not recreated on every render
+  // I5: Board columns use .map() instead of FlatList scrollEnabled={false}
+  //     (scrollEnabled=false disables virtualisation anyway — map is cleaner)
+  const renderBoard = useCallback(() => (
     <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flex: 1 }}>
       {columns.map(col => (
         <View key={col.column_id} style={[s.column, { borderTopColor: col.color }]}>
@@ -241,24 +244,21 @@ export default function BoardScreen() {
               <Text style={{ color: col.color, fontSize: 11, fontWeight: '800' }}>{grouped[col.column_id]?.length ?? 0}</Text>
             </View>
           </View>
-          <FlatList
-            data={grouped[col.column_id]}
-            keyExtractor={item => item.task_id}
-            scrollEnabled={false}
-            ListEmptyComponent={<Text style={[s.emptyCol, { color: t.ink4 }]}>No tasks</Text>}
-            renderItem={({ item }) => (
-              <BoardCard task={item} col={col} onPress={() => openTask(item.task_id)} />
-            )}
-          />
+          {(grouped[col.column_id] ?? []).length === 0
+            ? <Text style={[s.emptyCol, { color: t.ink4 }]}>No tasks</Text>
+            : (grouped[col.column_id] ?? []).map(item => (
+                <BoardCard key={item.task_id} task={item} col={col} onPress={() => openTask(item.task_id)} />
+              ))
+          }
         </View>
       ))}
     </ScrollView>
-  );
+  ), [columns, grouped, t, openTask]);
 
-  const renderList = () => (
+  const renderList = useCallback(() => (
     <FlatList
       data={tasks}
-      keyExtractor={t => t.task_id}
+      keyExtractor={task => task.task_id}
       contentContainerStyle={{ padding: 16, paddingBottom: 32, gap: 8 }}
       ListEmptyComponent={<Text style={[s.empty, { color: t.ink3 }]}>No tasks yet.</Text>}
       refreshControl={<RefreshControl refreshing={isFetching && !isLoading} onRefresh={refetch} tintColor={t.primary} />}
@@ -283,14 +283,14 @@ export default function BoardScreen() {
         );
       }}
     />
-  );
+  ), [tasks, columns, t, isFetching, isLoading, refetch, openTask]);
 
-  const renderSchedule = () => {
-    const sorted = [...tasks].filter(t => t.due_at).sort((a, b) => new Date(a.due_at!).getTime() - new Date(b.due_at!).getTime());
+  const renderSchedule = useCallback(() => {
+    const sorted = [...tasks].filter(task => task.due_at).sort((a, b) => new Date(a.due_at!).getTime() - new Date(b.due_at!).getTime());
     return (
       <FlatList
         data={sorted}
-        keyExtractor={t => t.task_id}
+        keyExtractor={task => task.task_id}
         contentContainerStyle={{ padding: 16, paddingBottom: 32, gap: 8 }}
         ListEmptyComponent={<Text style={[s.empty, { color: t.ink3 }]}>No tasks with due dates.</Text>}
         renderItem={({ item }) => {
@@ -317,9 +317,9 @@ export default function BoardScreen() {
         }}
       />
     );
-  };
+  }, [tasks, columns, t, openTask]);
 
-  const renderTracker = () => (
+  const renderTracker = useCallback(() => (
     <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 40 }}>
       {columns.map(col => {
         const count = (grouped[col.column_id] ?? []).length;
@@ -345,7 +345,7 @@ export default function BoardScreen() {
         <Text style={{ color: t.primary, fontSize: 28, fontWeight: '900' }}>{tasks.length}</Text>
       </View>
     </ScrollView>
-  );
+  ), [columns, grouped, tasks, t]);
 
   return (
     <View style={[s.root, { backgroundColor: t.bg }]}>

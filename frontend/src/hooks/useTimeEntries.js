@@ -1,3 +1,4 @@
+﻿import { logger } from '../lib/utils';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { api } from '../lib/api';
 
@@ -12,7 +13,7 @@ export function useTimeEntries(taskId) {
   const load=useCallback(()=>{
     if(!taskId)return;
     setLoading(true);
-    api.get(`/time/task/${taskId}`).then(r=>{setEntries(r.data.entries);setTotalMinutes(r.data.total_minutes);}).catch(console.error).finally(()=>setLoading(false));
+    api.get(`/time/task/${taskId}`).then(r=>{setEntries(r.data.entries);setTotalMinutes(r.data.total_minutes);}).catch(logger.error).finally(()=>setLoading(false));
   },[taskId]);
   useEffect(load,[load]);
 

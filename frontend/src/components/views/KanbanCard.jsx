@@ -1,6 +1,6 @@
 import React from 'react';
+import { priorityColor } from '../../lib/utils';
 
-const PRIORITY_COLOR = { low: '#22c55e', medium: '#f59e0b', high: '#ef4444', urgent: '#dc2626' };
 const PRIORITY_LABEL = { low: 'Low', medium: 'Medium', high: 'High', urgent: 'Urgent' };
 const AVATAR_COLORS  = ['#0082c6','#05b7aa','#8b5cf6','#ec4899','#f59e0b','#10b981','#6366f1'];
 
@@ -16,7 +16,7 @@ function relDue(due) {
 
 export default function KanbanCard({ task, onClick, dragging = false }) {
   const priority = task.priority || 'medium';
-  const color    = PRIORITY_COLOR[priority] || '#94a3b8';
+  const color    = priorityColor(priority);
   const due      = relDue(task.due_at);
   const assignees = task.assignee_user_ids || [];
   const approvalPending = task.approval_status === 'pending' || task.approval_status === 'pending_client';

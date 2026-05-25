@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
-  View, Text, TouchableOpacity, StyleSheet, Platform,
+  View, TouchableOpacity, StyleSheet, Platform,
 } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -24,6 +24,7 @@ import LoginScreen      from '../screens/LoginScreen';
 import ClientPortalScreen from '../screens/ClientPortalScreen';
 import { useAuth } from '../hooks/useAuth';
 import { Splash } from '../App';
+import NewTaskSheet from '../components/NewTaskSheet';
 
 // ── Param lists ───────────────────────────────────────────────────────────────
 export type RootStackParamList = {
@@ -48,7 +49,6 @@ const Tab   = createBottomTabNavigator<MainTabParamList>();
 
 // ── Centre "+" tab button ─────────────────────────────────────────────────────
 function AddButton({ onPress }: { onPress: () => void }) {
-  const { t } = useTheme();
   return (
     <TouchableOpacity onPress={onPress} activeOpacity={0.85} style={s.addWrap}>
       <LinearGradient
@@ -64,7 +64,8 @@ function AddButton({ onPress }: { onPress: () => void }) {
 
 // ── Main tabs ─────────────────────────────────────────────────────────────────
 function MainTabs() {
-  const { t, scheme } = useTheme();
+  const { t } = useTheme();
+  const [showNewTask, setShowNewTask] = useState(false);
 
   return (
     <Tab.Navigator
@@ -121,15 +122,14 @@ function MainTabs() {
         options={{
           title: '',
           tabBarButton: (props) => (
-            <AddButton onPress={() => {
-              // TODO Phase 2: open new-task sheet
-            }} />
+            <AddButton onPress={() => setShowNewTask(true)} />
           ),
         }}
       />
       <Tab.Screen name="Inbox" component={InboxScreen} options={{ title: 'Inbox' }} />
       <Tab.Screen name="Me"    component={MeScreen}    options={{ title: 'Me' }} />
     </Tab.Navigator>
+    <NewTaskSheet visible={showNewTask} onClose={() => setShowNewTask(false)} />
   );
 }
 

@@ -19,31 +19,95 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator, EmailStr
 
 from auth_router import require_user, require_admin
 from db import get_pool
+from utils import log_safe as _log_safe
+
+_DATE_RE = re.compile(r'^\d{4}-\d{2}-\d{2}$')
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/reports", tags=["reports"])
 
 DISPATCH_SECRET = os.environ.get("REPORT_DISPATCH_SECRET", "")
+if not DISPATCH_SECRET:
+    logger.warning(
+        "REPORT_DISPATCH_SECRET is not set — dispatch endpoint is protected by admin auth only. "
+        "Set this env var in production to add a second layer of protection."
+    )
+elif len(DISPATCH_SECRET) < 32:
+    logger.warning(
+        "REPORT_DISPATCH_SECRET is too short (%d chars) — use a random secret of at least 32 "
+        "characters in production (e.g. openssl rand -hex 32).",
+        len(DISPATCH_SECRET),
+    )
 
 
 # ── Models ─────────────────────────────────────────────────────────────────────
 
+_VALID_FREQUENCIES   = {"daily", "weekly", "monthly"}
+_VALID_FILE_FORMATS  = {"pdf", "excel"}
+
+
 class ScheduleCreate(BaseModel):
     frequency:     str           # daily | weekly | monthly
     file_formats:  List[str]     # ["pdf"] | ["excel"] | ["pdf","excel"]
-    recipients:    List[str]     # email addresses
+    recipients:    List[EmailStr]  # validated email addresses
     day_of_week:   Optional[int] = None   # 0–6 (weekly)
     day_of_month:  Optional[int] = None   # 1–28 (monthly)
     send_hour_utc: int = 2
+
+    @field_validator("frequency")
+    @classmethod
+    def validate_frequency(cls, v: str) -> str:
+        if v not in _VALID_FREQUENCIES:
+            raise ValueError(f"frequency must be one of {sorted(_VALID_FREQUENCIES)}")
+        return v
+
+    @field_validator("file_formats")
+    @classmethod
+    def validate_file_formats(cls, v: List[str]) -> List[str]:
+        if not v:
+            raise ValueError("file_formats must not be empty")
+        for fmt in v:
+            if fmt not in _VALID_FILE_FORMATS:
+                raise ValueError(f"file format '{fmt}' must be one of {sorted(_VALID_FILE_FORMATS)}")
+        return v
+
+    @field_validator("recipients")
+    @classmethod
+    def validate_recipients(cls, v: list) -> list:
+        if not v:
+            raise ValueError("recipients must not be empty")
+        return v
+
+    @field_validator("send_hour_utc")
+    @classmethod
+    def validate_send_hour(cls, v: int) -> int:
+        if not 0 <= v <= 23:
+            raise ValueError("send_hour_utc must be between 0 and 23")
+        return v
+
+    @field_validator("day_of_week")
+    @classmethod
+    def validate_day_of_week(cls, v: Optional[int]) -> Optional[int]:
+        if v is not None and not 0 <= v <= 6:
+            raise ValueError("day_of_week must be between 0 and 6")
+        return v
+
+    @field_validator("day_of_month")
+    @classmethod
+    def validate_day_of_month(cls, v: Optional[int]) -> Optional[int]:
+        if v is not None and not 1 <= v <= 28:
+            raise ValueError("day_of_month must be between 1 and 28")
+        return v
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
 async def _assert_project_owner(pool, team_id: str, user: dict):
+    """Raise 403 unless the user is a system admin or project owner/admin."""
     if user.get("role") == "admin":
         return
     mem = await pool.fetchrow(
@@ -55,6 +119,7 @@ async def _assert_project_owner(pool, team_id: str, user: dict):
 
 
 def _next_run(frequency: str, day_of_week: int, day_of_month: int, send_hour_utc: int) -> datetime:
+    """Calculate the next UTC run time for a report schedule given its frequency settings."""
     now = datetime.now(timezone.utc)
     base = now.replace(minute=0, second=0, microsecond=0)
 
@@ -193,14 +258,15 @@ async def get_report_data(
     pool=Depends(get_pool),
     user=Depends(require_user),
 ):
-    if not re.match(r'^\d{4}-\d{2}-\d{2}$', from_date) or not re.match(r'^\d{4}-\d{2}-\d{2}$', to_date):
+    """Return raw report data (tasks, time entries, throughput) for the given project and date range."""
+    if not _DATE_RE.match(from_date) or not _DATE_RE.match(to_date):
         raise HTTPException(400, "Invalid date format — use YYYY-MM-DD")
     await _assert_project_owner(pool, team_id, user)
     try:
         return await _fetch_report_data(pool, team_id, from_date, to_date)
     except Exception as exc:
-        logger.error(f"Report data fetch failed for {team_id}: {exc}", exc_info=True)
-        raise HTTPException(500, f"Report data error: {exc}")
+        logger.error("Report data fetch failed for %s: %s", _log_safe(team_id), _log_safe(exc), exc_info=True)
+        raise HTTPException(500, "Report data error") from exc
 
 
 @router.get("/download/{team_id}")
@@ -212,7 +278,7 @@ async def download_report(
     pool=Depends(get_pool),
     user=Depends(require_user),
 ):
-    _DATE_RE = re.compile(r'^\d{4}-\d{2}-\d{2}$')
+    """Generate and stream a PDF or Excel report file for a project and date range."""
     if not _DATE_RE.match(from_date) or not _DATE_RE.match(to_date):
         raise HTTPException(400, "Invalid date format — use YYYY-MM-DD")
 
@@ -238,13 +304,15 @@ async def download_report(
             filename = f"kartavya-{safe_slug}-{from_date}-{to_date}.pdf"
             media_type = "application/pdf"
     except Exception as exc:
-        logger.error(f"Report generation failed for {team_id} fmt={fmt}: {exc}", exc_info=True)
-        raise HTTPException(500, f"Report generation failed: {exc}")
+        logger.error("Report generation failed for %s fmt=%s: %s", _log_safe(team_id), _log_safe(fmt), _log_safe(exc), exc_info=True)
+        raise HTTPException(500, "Report generation failed") from exc
 
+    from urllib.parse import quote
+    encoded_filename = quote(filename, safe="")
     return StreamingResponse(
         io.BytesIO(content),
         media_type=media_type,
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}"},
     )
 
 
@@ -254,6 +322,7 @@ async def list_schedules(
     pool=Depends(get_pool),
     user=Depends(require_user),
 ):
+    """Return all report schedules for the given project."""
     await _assert_project_owner(pool, team_id, user)
     rows = await pool.fetch(
         "SELECT * FROM report_schedules WHERE team_id=$1 ORDER BY created_at DESC",
@@ -269,15 +338,10 @@ async def create_schedule(
     pool=Depends(get_pool),
     user=Depends(require_user),
 ):
+    """Create a new report schedule for a project."""
     await _assert_project_owner(pool, team_id, user)
 
-    if payload.frequency not in ("daily", "weekly", "monthly"):
-        raise HTTPException(400, "frequency must be daily, weekly, or monthly")
-    allowed_fmts = {"pdf", "excel"}
-    if not payload.file_formats or not set(payload.file_formats).issubset(allowed_fmts):
-        raise HTTPException(400, "file_formats must be subset of ['pdf','excel']")
-    if not payload.recipients:
-        raise HTTPException(400, "At least one recipient required")
+    # Validation is now handled by ScheduleCreate field validators; no manual checks needed.
 
     next_run = _next_run(
         payload.frequency, payload.day_of_week,
@@ -304,6 +368,7 @@ async def delete_schedule(
     pool=Depends(get_pool),
     user=Depends(require_user),
 ):
+    """Delete a report schedule by ID."""
     row = await pool.fetchrow(
         "SELECT team_id FROM report_schedules WHERE schedule_id=$1", schedule_id
     )
@@ -397,9 +462,9 @@ async def dispatch_reports(
                 WHERE schedule_id=$3
             """, now, next_run, sched["schedule_id"])
             sent += 1
-            logger.info(f"Report dispatched: {sched['schedule_id']} → {sched['recipients']}")
+            logger.info("Report dispatched: %s", _log_safe(sched['schedule_id']))
         except Exception as exc:
-            logger.error(f"Report dispatch failed for {sched['schedule_id']}: {exc}")
+            logger.error("Report dispatch failed for %s: %s", _log_safe(sched['schedule_id']), _log_safe(exc), exc_info=True)
             errors.append(str(sched["schedule_id"]))
 
     return {"ok": True, "dispatched": sent, "errors": errors}

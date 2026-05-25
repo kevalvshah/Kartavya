@@ -47,7 +47,7 @@ async def upload(file: UploadFile = File(...), user=Depends(require_user)):
     content = await file.read()
 
     if len(content) > MAX_BYTES:
-        raise HTTPException(400, f"File exceeds 5 MB limit")
+        raise HTTPException(400, "File exceeds 5 MB limit")
 
     fname = (file.filename or "upload").lower()
     ext   = "." + fname.rsplit(".", 1)[-1] if "." in fname else ""
@@ -55,7 +55,7 @@ async def upload(file: UploadFile = File(...), user=Depends(require_user)):
 
     # Accept if MIME matches OR extension matches (handles HEIC from iOS which may send application/octet-stream)
     if mime not in ALLOWED_TYPES and ext not in ALLOWED_EXTENSIONS:
-        raise HTTPException(415, f"File type not allowed. Supported: images, PDF, Word, Excel, PowerPoint.")
+        raise HTTPException(415, "File type not allowed. Supported: images, PDF, Word, Excel, PowerPoint.")
 
     # Normalise HEIC mime when browser sends generic binary
     if ext in {".heic", ".heif"} and mime == "application/octet-stream":

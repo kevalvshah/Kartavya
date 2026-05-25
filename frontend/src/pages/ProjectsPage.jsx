@@ -7,6 +7,7 @@ import { api } from '../lib/api';
 import { currentUser } from '../lib/auth';
 import { useToast } from '../components/ui/toast';
 import { PageHeader, DueChip } from '../components/editorial';
+import ConfirmDialog from '../components/ui/ConfirmDialog';
 
 const PROJECT_COLORS = ['#0082c6','#05b7aa','#8b5cf6','#ec4899','#f59e0b','#10b981','#6366f1'];
 
@@ -107,6 +108,7 @@ export default function ProjectsPage() {
   const [showNew,     setShowNew]     = useState(false);
   const [showBin,     setShowBin]     = useState(false);
   const [deleteModal, setDeleteModal] = useState(null); // project object
+  const [confirmState, setConfirmState] = useState(null);
 
   const load = () => api.get('/teams').then(r => setProjects(Array.isArray(r.data) ? r.data : [])).catch(() => {});
   const loadBin = () => api.get('/teams/bin').then(r => setBinProjects(Array.isArray(r.data) ? r.data : [])).catch(() => {});
@@ -143,13 +145,18 @@ export default function ProjectsPage() {
     } catch (_) { pushToast({ type: 'error', title: 'Could not restore' }); }
   };
 
-  const purge = async (p) => {
-    if (!window.confirm(`Permanently delete "${p.name}"? This cannot be undone.`)) return;
-    try {
-      await api.delete(`/teams/${p.team_id}/purge`);
-      pushToast({ type: 'success', title: 'Permanently deleted' });
-      loadBin();
-    } catch (_) { pushToast({ type: 'error', title: 'Could not purge' }); }
+  const purge = (p) => {
+    setConfirmState({
+      message: `Permanently delete "${p.name}"? This cannot be undone.`,
+      confirmLabel: 'Delete permanently',
+      onConfirm: async () => {
+        try {
+          await api.delete(`/teams/${p.team_id}/purge`);
+          pushToast({ type: 'success', title: 'Permanently deleted' });
+          loadBin();
+        } catch (_) { pushToast({ type: 'error', title: 'Could not purge' }); }
+      },
+    });
   };
 
   return (
@@ -284,6 +291,7 @@ export default function ProjectsPage() {
                     style={{ marginLeft: 'auto', opacity: 0.45, fontSize: 12 }}
                     onClick={e => { e.stopPropagation(); setDeleteModal(p); }}
                     title="Move to bin"
+                    aria-label="Move project to bin"
                   >
                     <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M3 4h10M5 4V2.5h6V4M6 7v5M10 7v5M4 4l.8 10h6.4L12 4"/></svg>
                   </button>
@@ -314,6 +322,7 @@ export default function ProjectsPage() {
         onConfirm={confirmDelete}
         onCancel={() => setDeleteModal(null)}
       />
+      <ConfirmDialog state={confirmState} onClose={() => setConfirmState(null)} />
     </div>
   );
 }

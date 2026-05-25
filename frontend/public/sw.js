@@ -1,6 +1,6 @@
-﻿/* Kartavya Service Worker â€” PWA offline support */
+﻿/* Kartavya Service Worker — PWA offline support */
 const CACHE = 'kartavya-v1';
-const PRECACHE = ['/', '/static/js/main.chunk.js', '/static/css/main.chunk.css'];
+const PRECACHE = ['/', '/index.html'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(PRECACHE)).catch(() => {}));
@@ -14,15 +14,22 @@ self.addEventListener('activate', (e) => {
 
 self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET') return;
+  // Only cache same-origin requests — skip cross-origin (fonts, CDN) to avoid opaque response bloat
+  if (new URL(e.request.url).origin !== self.location.origin) return;
   if (e.request.url.includes('/api/')) return; // never cache API calls
   e.respondWith(
     caches.match(e.request).then((cached) => cached || fetch(e.request).then((res) => {
-      if (res.status === 200) {
+      // Only cache successful same-origin basic responses
+      if (res.status === 200 && res.type === 'basic') {
         const clone = res.clone();
         caches.open(CACHE).then((c) => c.put(e.request, clone));
       }
       return res;
-    }).catch(() => caches.match('/')))
+    }).catch(() => {
+      // Only fall back to the app shell for navigation requests, not for assets/XHR
+      if (e.request.mode === 'navigate') return caches.match('/index.html');
+      return new Response('', { status: 408, statusText: 'Offline' });
+    }))
   );
 });
 

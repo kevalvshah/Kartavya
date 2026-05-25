@@ -4,8 +4,10 @@ import {
   Switch, ActivityIndicator, Platform, Alert, Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import Constants from 'expo-constants';
 import * as Notifications from 'expo-notifications';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getDeviceId } from '../hooks/usePushNotifications';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTheme } from '../theme/ThemeProvider';
 import { useAuth } from '../hooks/useAuth';
@@ -25,7 +27,11 @@ async function registerPushToken(): Promise<string | null> {
     finalStatus = status;
   }
   if (finalStatus !== 'granted') return null;
-  const token = (await Notifications.getExpoPushTokenAsync()).data;
+  // projectId is required for production standalone builds
+  const projectId =
+    (Constants as any).expoConfig?.extra?.eas?.projectId ??
+    (Constants as any).easConfig?.projectId;
+  const token = (await Notifications.getExpoPushTokenAsync(projectId ? { projectId } : undefined)).data;
   return token;
 }
 
@@ -112,16 +118,12 @@ export default function SettingsScreen() {
         Alert.alert('Permission denied', 'Enable notifications in your device Settings.');
         return;
       }
-      let deviceId = await AsyncStorage.getItem('push_device_id');
-      if (!deviceId) {
-        deviceId = `expo_${Platform.OS}_${Math.random().toString(36).slice(2)}`;
-        await AsyncStorage.setItem('push_device_id', deviceId);
-      }
+      const deviceId = getDeviceId();
       await notificationsApi.registerToken(Platform.OS, token, deviceId);
       setPushEnabled(true);
       await AsyncStorage.setItem('push_enabled', 'true');
-    } catch (e: any) {
-      Alert.alert('Error', e.message);
+    } catch (e: unknown) {
+      Alert.alert('Error', e instanceof Error ? e.message : 'Could not enable notifications.');
     } finally {
       setRegPush(false);
     }
@@ -136,7 +138,8 @@ export default function SettingsScreen() {
     setSyncing(true);
     try {
       await flushQueue();
-      qc.invalidateQueries();
+      qc.invalidateQueries({ queryKey: ['tasks'] });
+      qc.invalidateQueries({ queryKey: ['notifications'] });
       Alert.alert('Synced', `${count} change${count === 1 ? '' : 's'} synced.`);
     } catch {
       Alert.alert('Sync failed', 'Check your connection and try again.');

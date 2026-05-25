@@ -1,6 +1,6 @@
-/**
- * DashboardPage.jsx — editorial Today screen.
- * Layout: Hero → StatRow (4 tiles) → k-twocol (main + side columns)
+﻿/**
+ * DashboardPage.jsx â€” editorial Today screen.
+ * Layout: Hero â†’ StatRow (4 tiles) â†’ k-twocol (main + side columns)
  * Data: existing /tasks + /activity/team/:id + /api/verse-of-the-day
  */
 import React, { useState, useEffect, useMemo } from 'react';
@@ -10,13 +10,13 @@ import { currentUser } from '../lib/auth';
 import {
   Hero, StatTile, Card, DueChip, PriorityDot, ProjectTag, AvatarStack, Citation,
 } from '../components/editorial';
-import { AVATAR_COLORS, relTime, userInitials } from '../lib/utils';
+import { AVATAR_COLORS, relTime, userInitials, logger } from '../lib/utils';
 
-const VIKRAM_MONTHS = ['Chaitra','Vaishākha','Jyēṣṭha','Āṣāḍha','Śrāvaṇa','Bhādra',
-  'Āśvina','Kārtika','Mārgaśīrṣa','Pauṣa','Māgha','Phālguna'];
+const VIKRAM_MONTHS = ['Chaitra','VaishÄkha','JyÄ“á¹£á¹­ha','Ä€á¹£Äá¸ha','ÅšrÄvaá¹‡a','BhÄdra',
+  'Ä€Å›vina','KÄrtika','MÄrgaÅ›Ä«rá¹£a','Pauá¹£a','MÄgha','PhÄlguna'];
 const STATUS_COLOR  = { todo:'#94a3b8', in_progress:'#0082c6', in_review:'#a78bfa', done:'#05b7aa', requested:'#f59e0b' };
 const STATUS_LABEL  = { todo:'To Do', in_progress:'In Progress', in_review:'In Review', done:'Done', requested:'Requested' };
-const STATUS_HI     = { todo:'कार्य', in_progress:'चालू', in_review:'समीक्षा', done:'सम्पन्न', requested:'अनुरोध' };
+const STATUS_HI     = { todo:'à¤•à¤¾à¤°à¥à¤¯', in_progress:'à¤šà¤¾à¤²à¥‚', in_review:'à¤¸à¤®à¥€à¤•à¥à¤·à¤¾', done:'à¤¸à¤®à¥à¤ªà¤¨à¥à¤¨', requested:'à¤…à¤¨à¥à¤°à¥‹à¤§' };
 
 function vikramDate(now) {
   const year  = now.getFullYear() + 56 + (now.getMonth() >= 3 ? 1 : 0);
@@ -24,7 +24,7 @@ function vikramDate(now) {
   return { year, month };
 }
 
-// ── Main component ────────────────────────────────────────────────────────────
+// â”€â”€ Main component â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export default function DashboardPage({ teams = [] }) {
   const navigate  = useNavigate();
   const user      = currentUser();
@@ -34,18 +34,22 @@ export default function DashboardPage({ teams = [] }) {
   const dayIdx = (now.getDay() + 6) % 7;
   const { year: vikYear, month: vikMonth } = vikramDate(now);
 
-  const weekDates = useMemo(() => Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(now); d.setDate(now.getDate() - dayIdx + i); return d;
-  }), []);
+  const weekDates = useMemo(() => {
+    const base = new Date(); base.setHours(0,0,0,0);
+    const idx  = (base.getDay() + 6) % 7;
+    return Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(base); d.setDate(base.getDate() - idx + i); return d;
+    });
+  }, []);
 
-  // ── State ──────────────────────────────────────────────────────────────────
+  // â”€â”€ State â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const [loading,  setLoading]  = useState(true);
   const [tasks,    setTasks]    = useState([]);
   const [activity, setActivity] = useState([]);
   const [verse,    setVerse]    = useState(null);
   const [teamId,   setTeamId]   = useState('');
 
-  // ── Fetch tasks ────────────────────────────────────────────────────────────
+  // â”€â”€ Fetch tasks â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   useEffect(() => {
     setLoading(true);
     Promise.all([
@@ -54,10 +58,10 @@ export default function DashboardPage({ teams = [] }) {
     ]).then(([tRes, vRes]) => {
       setTasks(Array.isArray(tRes.data) ? tRes.data : []);
       if (vRes) setVerse(vRes.data);
-    }).catch(console.error).finally(() => setLoading(false));
+    }).catch(logger.error).finally(() => setLoading(false));
   }, []);
 
-  // ── Fetch activity when team resolves ─────────────────────────────────────
+  // â”€â”€ Fetch activity when team resolves â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   useEffect(() => {
     const tid = teams?.[0]?.team_id;
     if (!tid) return;
@@ -67,7 +71,7 @@ export default function DashboardPage({ teams = [] }) {
        .catch(() => {});
   }, [teams]);
 
-  // ── Derived ────────────────────────────────────────────────────────────────
+  // â”€â”€ Derived â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const { today, tomorrow, weekEnd, weekAgo } = useMemo(() => {
     const t = new Date(); t.setHours(0,0,0,0);
     const tom = new Date(t); tom.setDate(t.getDate()+1);
@@ -81,7 +85,7 @@ export default function DashboardPage({ teams = [] }) {
     myPlate, openTasks, openProjectCount, dueToday, overdue, completedWeek, inProgress, inReview, upcoming,
   } = useMemo(() => {
     const safeTasks = Array.isArray(tasks) ? tasks : [];
-    const myTasks   = safeTasks.filter(t => t.user_id === myId || t.assignee_user_ids?.includes(myId));
+    const myTasks   = safeTasks.filter(t => t.created_by_user_id === myId || t.user_id === myId || t.assignee_user_ids?.includes(myId));
     const open      = safeTasks.filter(t => t.status !== 'done');
     return {
       myPlate:       myTasks.filter(t => t.status !== 'done').slice(0, 6),
@@ -117,12 +121,12 @@ export default function DashboardPage({ teams = [] }) {
   }, [tasks]);
 
   // Date line for Hero
-  const DAYS_HI = ['रविवार','सोमवार','मंगलवार','बुधवार','गुरुवार','शुक्रवार','शनिवार'];
+  const DAYS_HI = ['à¤°à¤µà¤¿à¤µà¤¾à¤°','à¤¸à¥‹à¤®à¤µà¤¾à¤°','à¤®à¤‚à¤—à¤²à¤µà¤¾à¤°','à¤¬à¥à¤§à¤µà¤¾à¤°','à¤—à¥à¤°à¥à¤µà¤¾à¤°','à¤¶à¥à¤•à¥à¤°à¤µà¤¾à¤°','à¤¶à¤¨à¤¿à¤µà¤¾à¤°'];
   const dateLine = [
     { label: now.toLocaleDateString('en-IN', { weekday: 'long' }).toUpperCase() },
     { label: DAYS_HI[now.getDay()], hindi: true },
     { label: now.toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' }) },
-    { label: `विक्रम संवत् ${vikYear}`, hindi: true },
+    { label: `à¤µà¤¿à¤•à¥à¤°à¤® à¤¸à¤‚à¤µà¤¤à¥ ${vikYear}`, hindi: true },
   ];
 
   const ledeCopy = loading ? null : (
@@ -130,7 +134,7 @@ export default function DashboardPage({ teams = [] }) {
       You have <b>{myPlate.length} open task{myPlate.length !== 1 ? 's' : ''}</b>
       {dueToday.length > 0 && <>, <b>{dueToday.length} due today</b></>}
       {overdue.length > 0   && <>, <b style={{ color: 'var(--danger)' }}>{overdue.length} running late</b></>}.
-      {' '}<span className="hi-mute">करणीयं कुरु —</span> <em>Do what must be done.</em>
+      {' '}<span className="hi-mute">à¤•à¤°à¤£à¥€à¤¯à¤‚ à¤•à¥à¤°à¥ â€”</span> <em>Do what must be done.</em>
     </>
   );
 
@@ -148,10 +152,10 @@ export default function DashboardPage({ teams = [] }) {
 
       {/* Stat row */}
       <div className="k-stats">
-        <StatTile variant="blue"  label="OPEN"                sanskrit="खुला"      value={openTasks.length}     sub={`across ${openProjectCount} project${openProjectCount !== 1 ? 's' : ''}`} />
-        <StatTile variant="teal"  label="DUE TODAY"           sanskrit="आज"        value={dueToday.length}      sub={`${dueToday.filter(t=>t.priority==='high'||t.priority==='urgent').length} high priority`} />
-        <StatTile variant="amber" label="OVERDUE"             sanskrit="विलंबित"   value={overdue.length}       sub={overdue.length > 0 ? 'needs attention' : 'all on track'} />
-        <StatTile variant="red"   label="COMPLETED THIS WEEK" sanskrit="इस सप्ताह" value={completedWeek.length} sub={completedWeek.length > 0 ? `↑ ${Math.round((completedWeek.length/(tasks.length||1))*100)}% on last week` : 'keep going'} />
+        <StatTile variant="blue"  label="OPEN"                sanskrit="à¤–à¥à¤²à¤¾"      value={openTasks.length}     sub={`across ${openProjectCount} project${openProjectCount !== 1 ? 's' : ''}`} />
+        <StatTile variant="teal"  label="DUE TODAY"           sanskrit="à¤†à¤œ"        value={dueToday.length}      sub={`${dueToday.filter(t=>t.priority==='high'||t.priority==='urgent').length} high priority`} />
+        <StatTile variant="amber" label="OVERDUE"             sanskrit="à¤µà¤¿à¤²à¤‚à¤¬à¤¿à¤¤"   value={overdue.length}       sub={overdue.length > 0 ? 'needs attention' : 'all on track'} />
+        <StatTile variant="red"   label="COMPLETED THIS WEEK" sanskrit="à¤‡à¤¸ à¤¸à¤ªà¥à¤¤à¤¾à¤¹" value={completedWeek.length} sub={completedWeek.length > 0 ? `â†‘ ${Math.round((completedWeek.length/(tasks.length||1))*100)}% on last week` : 'keep going'} />
       </div>
 
       {/* Two-column body */}
@@ -162,8 +166,8 @@ export default function DashboardPage({ teams = [] }) {
             {/* On your plate */}
             <Card
               title="On your plate"
-              sanskrit="आपके हाथ में"
-              right={<button className="k-link" onClick={() => navigate('/tasks')}>View all →</button>}
+              sanskrit="à¤†à¤ªà¤•à¥‡ à¤¹à¤¾à¤¥ à¤®à¥‡à¤‚"
+              right={<button className="k-link" onClick={() => navigate('/tasks')}>View all â†’</button>}
               noPad
             >
               {myPlate.length === 0 ? (
@@ -188,7 +192,7 @@ export default function DashboardPage({ teams = [] }) {
             </Card>
 
             {/* Status breakdown */}
-            <Card title="Project status" sanskrit="स्थिति विवरण" right={<button className="k-link" onClick={() => navigate('/projects')}>Open projects →</button>}>
+            <Card title="Project status" sanskrit="à¤¸à¥à¤¥à¤¿à¤¤à¤¿ à¤µà¤¿à¤µà¤°à¤£" right={<button className="k-link" onClick={() => navigate('/projects')}>Open projects â†’</button>}>
               <div className="k-stackbar">
                 {statusOrder.map(s => {
                   const count = statusCounts[s] || 0;
@@ -216,7 +220,7 @@ export default function DashboardPage({ teams = [] }) {
                   <div className="k-meter__fill" style={{ width: donePct + '%' }} />
                 </div>
                 <div className="k-meter__lbl">
-                  {donePct}% complete · <span className="hi-mute">{donePct}% सम्पन्न</span>
+                  {donePct}% complete Â· <span className="hi-mute">{donePct}% à¤¸à¤®à¥à¤ªà¤¨à¥à¤¨</span>
                 </div>
               </div>
             </Card>
@@ -225,7 +229,7 @@ export default function DashboardPage({ teams = [] }) {
           {/* RIGHT column */}
           <div className="k-col k-col--side">
             {/* Upcoming */}
-            <Card title="Upcoming this week" sanskrit="आगामी सप्ताह">
+            <Card title="Upcoming this week" sanskrit="à¤†à¤—à¤¾à¤®à¥€ à¤¸à¤ªà¥à¤¤à¤¾à¤¹">
               <div className="k-upcoming">
                 {upcoming.length === 0 ? (
                   <div style={{ color: 'var(--ink-3)', fontStyle: 'italic', fontSize: 13 }}>Nothing due this week.</div>
@@ -246,7 +250,7 @@ export default function DashboardPage({ teams = [] }) {
             </Card>
 
             {/* Recent activity */}
-            <Card title="Team pulse" sanskrit="दल की गतिविधि" right={<button className="k-link" onClick={() => navigate('/activity')}>All activity →</button>}>
+            <Card title="Team pulse" sanskrit="à¤¦à¤² à¤•à¥€ à¤—à¤¤à¤¿à¤µà¤¿à¤§à¤¿" right={<button className="k-link" onClick={() => navigate('/activity')}>All activity â†’</button>}>
               <div className="k-activity">
                 {activity.length === 0 ? (
                   <div style={{ color: 'var(--ink-3)', fontStyle: 'italic', fontSize: 13 }}>No recent activity.</div>
@@ -277,13 +281,13 @@ export default function DashboardPage({ teams = [] }) {
               <Citation
                 sanskrit={verse.sanskrit}
                 english={verse.english}
-                source={verse.ref || 'Bhagavad Gītā'}
+                source={verse.ref || 'Bhagavad GÄ«tÄ'}
               />
             ) : (
               <Citation
-                sanskrit="कर्मण्येवाधिकारस्ते मा फलेषु कदाचन"
+                sanskrit="à¤•à¤°à¥à¤®à¤£à¥à¤¯à¥‡à¤µà¤¾à¤§à¤¿à¤•à¤¾à¤°à¤¸à¥à¤¤à¥‡ à¤®à¤¾ à¤«à¤²à¥‡à¤·à¥ à¤•à¤¦à¤¾à¤šà¤¨"
                 english="You have a right to action alone, never to its fruits."
-                source="Bhagavad Gītā 2.47"
+                source="Bhagavad GÄ«tÄ 2.47"
               />
             )}
           </div>
@@ -292,7 +296,7 @@ export default function DashboardPage({ teams = [] }) {
 
       {loading && (
         <div style={{ padding: '48px 0', textAlign: 'center', color: 'var(--ink-3)', fontFamily: 'var(--font-display)', fontStyle: 'italic' }}>
-          Loading…
+          Loadingâ€¦
         </div>
       )}
     </div>
