@@ -151,6 +151,9 @@ def _next_run(frequency: str, day_of_week: int, day_of_month: int, send_hour_utc
 
 async def _fetch_report_data(pool, team_id: str, from_date: str, to_date: str) -> dict:
     """Fetch time entries + task stats + task list + leaderboard + throughput."""
+    from datetime import date as _date
+    from_dt = _date.fromisoformat(from_date)
+    to_dt   = _date.fromisoformat(to_date)
     # Time entries
     entries = await pool.fetch("""
         SELECT te.entry_id, te.minutes, te.started_at, te.description,
@@ -162,7 +165,7 @@ async def _fetch_report_data(pool, team_id: str, from_date: str, to_date: str) -
         WHERE te.started_at >= $2::timestamptz
           AND te.started_at <= ($3::date + interval '1 day')::timestamptz
         ORDER BY te.started_at DESC
-    """, team_id, from_date, to_date)
+    """, team_id, from_dt, to_dt)
 
     total_mins = sum(e["minutes"] or 0 for e in entries)
 
@@ -205,7 +208,7 @@ async def _fetch_report_data(pool, team_id: str, from_date: str, to_date: str) -
               AND t.updated_at >= $2::timestamptz
               AND t.updated_at <= ($3::date + interval '1 day')::timestamptz
             GROUP BY day ORDER BY day
-        """, team_id, from_date, to_date)
+        """, team_id, from_dt, to_dt)
     except Exception:
         throughput_rows = []
 

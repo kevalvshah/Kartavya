@@ -56,7 +56,7 @@ async def team_activity(
             access = None
         if not access:
             raise HTTPException(403, "Access denied")
-    filters, vals = ["team_id=$1"], [team_id]
+    filters, vals = ["ae.team_id=$1"], [team_id]
     if actor_id:   filters.append(f"actor_id=${len(vals)+1}"); vals.append(actor_id)
     if event_type: filters.append(f"type=${len(vals)+1}");     vals.append(event_type)
     where = " AND ".join(filters)
