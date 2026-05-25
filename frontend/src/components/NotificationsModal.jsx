@@ -1,10 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
 import { relTime } from '../lib/utils';
 
 export function NotificationsModal({ open, onOpenChange }) {
   const [items,   setItems]   = useState([]);
   const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
 
   const unreadCount = useMemo(() => items.filter(i => !i.read_at).length, [items]);
 
@@ -63,13 +65,16 @@ export function NotificationsModal({ open, onOpenChange }) {
             </div>
           )}
           {items.map(n => (
-            <div key={n.notification_id} style={{
-              padding: '12px 14px', borderRadius: 10,
-              border: `1px solid ${!n.read_at ? 'var(--k-primary)40' : 'var(--rule-soft)'}`,
-              background: !n.read_at ? 'var(--side-active)' : 'var(--bg)',
-              opacity: n.read_at ? 0.7 : 1,
-              transition: 'opacity .15s',
-            }}>
+            <div key={n.notification_id}
+              onClick={n.url ? () => { onOpenChange(false); navigate(n.url); } : undefined}
+              style={{
+                padding: '12px 14px', borderRadius: 10,
+                border: `1px solid ${!n.read_at ? 'var(--k-primary)40' : 'var(--rule-soft)'}`,
+                background: !n.read_at ? 'var(--side-active)' : 'var(--bg)',
+                opacity: n.read_at ? 0.7 : 1,
+                transition: 'opacity .15s',
+                cursor: n.url ? 'pointer' : 'default',
+              }}>
               <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 3 }}>

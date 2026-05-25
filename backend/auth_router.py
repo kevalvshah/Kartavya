@@ -142,6 +142,15 @@ async def accept_invite(body: AcceptInviteBody):
         "UPDATE team_members SET user_id=$1, status='active', updated_at=NOW() WHERE email=$2 AND status='invited'",
         user_id, invite["email"],
     )
+    # Sync to project_assignments so the user can create/view tasks
+    await pool.execute("""
+        INSERT INTO project_assignments (assignment_id, team_id, user_id, role)
+        SELECT 'pa_' || substr(md5(random()::text), 1, 12), team_id, $1,
+               CASE WHEN role IN ('owner','admin','member','client') THEN role ELSE 'member' END
+        FROM team_members
+        WHERE user_id=$1 AND status='active'
+        ON CONFLICT (team_id, user_id) DO NOTHING
+    """, user_id)
     user = await pool.fetchrow("SELECT * FROM users WHERE user_id=$1", user_id)
 
     try:

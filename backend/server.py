@@ -589,6 +589,40 @@ async def client_request_task(payload:TaskCreate,pool=Depends(get_db),user=Depen
     # Link approval to task
     await pool.execute("UPDATE approvals SET request_data=$1 WHERE approval_id=$2",
         json.dumps({**payload.model_dump(),"task_id":task_id}),approval_id)
+    # Notify project owners/admins — in-app + email
+    try:
+        reviewers = await pool.fetch("""
+            SELECT u.user_id, u.email,
+                   COALESCE(u.full_name, u.name, u.email) AS name,
+                   COALESCE(u.receives_approval_emails, TRUE) AS wants_email
+            FROM project_assignments pa
+            JOIN users u ON u.user_id = pa.user_id
+            WHERE pa.team_id=$1 AND pa.role IN ('owner','admin') AND pa.user_id != $2
+        """, payload.team_id, user["user_id"])
+        team_row = await pool.fetchrow("SELECT name FROM teams WHERE team_id=$1", payload.team_id)
+        project_name = team_row["name"] if team_row else None
+        for r in reviewers:
+            await create_notification(
+                pool, r["user_id"], "approval_request",
+                "New task request",
+                f"{actor_name} requested: {payload.title}",
+                task_id, payload.team_id, "/approvals"
+            )
+            if r["wants_email"]:
+                try:
+                    from email_service import send_approval_request_email
+                    send_approval_request_email(
+                        r["email"], r["name"],
+                        requester_name=actor_name,
+                        task_title=payload.title,
+                        notes=payload.description,
+                        project=project_name,
+                        priority=payload.priority,
+                    )
+                except Exception as email_err:
+                    logger.warning("approval request email failed: %s", email_err)
+    except Exception as notif_err:
+        logger.warning("approval request notification failed: %s", notif_err)
     return row_to_task(row)
 
 # ── Approvals ───────────────────────────────────────────────────
@@ -800,6 +834,23 @@ async def review_approval(approval_id:str,body:dict,pool=Depends(get_db),user=De
         elif status=="rejected" and existing_task_id:
             # Remove the 'requested' task since it was declined
             await pool.execute("DELETE FROM tasks WHERE task_id=$1 AND status='requested'",existing_task_id)
+        # Email the requester (client) about the decision
+        if status == "approved":
+            try:
+                requester = await pool.fetchrow(
+                    "SELECT email, COALESCE(full_name, name, email) AS name FROM users WHERE user_id=$1",
+                    approval["requested_by"]
+                )
+                reviewer_name = user.get("full_name") or user.get("name") or user.get("email", "")
+                if requester and requester["email"]:
+                    from email_service import send_request_approved_email
+                    send_request_approved_email(
+                        requester["email"], requester["name"],
+                        reviewer_name=reviewer_name,
+                        task_title=data.get("title", "your task"),
+                    )
+            except Exception as _exc:
+                logger.warning("request approved email failed: %s", _exc)
     return {"ok":True,"status":status}
 
 # ── Comments ────────────────────────────────────────────────────
@@ -1587,6 +1638,22 @@ async def startup():
                 updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
             )
         """)
+        # Notifications table
+        await pool.execute("""
+            CREATE TABLE IF NOT EXISTS notifications (
+                notification_id TEXT PRIMARY KEY,
+                user_id         TEXT NOT NULL,
+                team_id         TEXT,
+                type            TEXT NOT NULL,
+                title           TEXT NOT NULL,
+                message         TEXT NOT NULL DEFAULT '',
+                task_id         TEXT,
+                url             TEXT,
+                read_at         TIMESTAMPTZ,
+                created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            )
+        """)
+        await pool.execute("CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, created_at DESC)")
         # Custom fields tables
         await pool.execute("""
             CREATE TABLE IF NOT EXISTS field_definitions (
@@ -1608,6 +1675,25 @@ async def startup():
             )
         """)
         # (subtasks are JSONB — no separate table migration needed)
+        # Approvals table (client task request workflow)
+        await pool.execute("""
+            CREATE TABLE IF NOT EXISTS approvals (
+                approval_id  TEXT PRIMARY KEY,
+                team_id      TEXT,
+                requested_by TEXT,
+                status       TEXT NOT NULL DEFAULT 'pending',
+                request_type TEXT,
+                request_data JSONB,
+                task_id      TEXT,
+                reviewed_by  TEXT,
+                reviewed_at  TIMESTAMPTZ,
+                review_notes TEXT,
+                created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            )
+        """)
+        await pool.execute("CREATE INDEX IF NOT EXISTS idx_approvals_team ON approvals(team_id)")
+        await pool.execute("CREATE INDEX IF NOT EXISTS idx_approvals_task_id ON approvals(task_id)")
+        await pool.execute("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS approval_id TEXT")
         logger.info("Startup migrations OK")
     except Exception as e:
         logger.warning("Startup migration warning (non-fatal): %s", e)

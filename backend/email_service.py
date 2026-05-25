@@ -454,7 +454,7 @@ def send_approval_request_email(user_email: str, user_name: str,
                    f'<strong>{_h(requester_name)}</strong> has submitted a new request that needs your approval.')
         + card
         + note_html
-        + _cta_row(approve_url, "Approve &amp; queue", "approve",
+        + _cta_row(approve_url, "Approve & queue", "approve",
                    reject_url, "Decline with reason")
         + _body_text(f'<span style="font-size:12.5px;color:{_INK3};">Approving moves this task to '
                      f'<strong>To do</strong> and notifies the assignees. {_h(requester_name.split()[0])} gets an email either way.</span>')
@@ -543,7 +543,7 @@ def send_task_done_email(user_email: str, user_name: str,
         + card
         + note_html
         + attach_html
-        + _cta_row(approve_url, "Approve &amp; close", "approve",
+        + _cta_row(approve_url, "Approve & close", "approve",
                    reject_url, "Send back with notes")
     )
     return send_email(
