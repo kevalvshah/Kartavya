@@ -17,7 +17,6 @@
       },
       "env": {
         "APP_ENV": "development",
-        "NODE_ENV": "development",
         "EXPO_PUBLIC_API_URL": "https://kartavya-production.up.railway.app"
       }
     },
@@ -31,7 +30,6 @@
       },
       "env": {
         "APP_ENV": "preview",
-        "NODE_ENV": "production",
         "EXPO_PUBLIC_API_URL": "https://kartavya-production.up.railway.app"
       }
     },
@@ -42,7 +40,6 @@
       },
       "env": {
         "APP_ENV": "preview",
-        "NODE_ENV": "production",
         "EXPO_PUBLIC_API_URL": "https://kartavya-production.up.railway.app"
       }
     },
@@ -57,7 +54,6 @@
       },
       "env": {
         "APP_ENV": "production",
-        "NODE_ENV": "production",
         "EXPO_PUBLIC_API_URL": "https://kartavya-production.up.railway.app"
       }
     }
