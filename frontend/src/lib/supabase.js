@@ -5,13 +5,13 @@
  * The anon key gives read access gated by Supabase RLS policies.
  *
  * Env vars (add to Vercel dashboard):
- *   REACT_APP_SUPABASE_URL
- *   REACT_APP_SUPABASE_ANON_KEY
+ *   VITE_SUPABASE_URL
+ *   VITE_SUPABASE_ANON_KEY
  */
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl  = process.env.REACT_APP_SUPABASE_URL;
-const supabaseAnon = process.env.REACT_APP_SUPABASE_ANON_KEY;
+const supabaseUrl  = import.meta.env.VITE_SUPABASE_URL;
+const supabaseAnon = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 export const supabase = (supabaseUrl && supabaseAnon)
   ? createClient(supabaseUrl, supabaseAnon, { realtime: { params: { eventsPerSecond: 10 } } })

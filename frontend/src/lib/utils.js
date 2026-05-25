@@ -2,7 +2,7 @@ import { clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
 
 /** Production-safe logger — strips all output in production builds. */
-const isDev = process.env.NODE_ENV !== 'production';
+const isDev = import.meta.env.DEV;
 export const logger = {
   log:   (...a) => isDev && console.log(...a),
   warn:  (...a) => isDev && console.warn(...a),

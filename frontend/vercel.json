@@ -1,9 +1,9 @@
 {
   "version": 2,
-  "buildCommand": "INLINE_RUNTIME_CHUNK=false npm run build",
-  "outputDirectory": "build",
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
   "installCommand": "npm install",
-  "framework": "create-react-app",
+  "framework": "vite",
   "rewrites": [{ "source": "/((?!api/).*)", "destination": "/index.html" }],
   "headers": [
     {
