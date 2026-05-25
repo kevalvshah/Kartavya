@@ -42,7 +42,7 @@ const NAV_FULL = [
       { to: '/activity',    icon: 'activity',    en: 'Activity',    hi: 'क्रिया' },
       { to: '/automations', icon: 'automations', en: 'Automations', hi: 'स्वचालन' },
       { to: '/time',        icon: 'time',        en: 'Time Report', hi: 'काल' },
-      { to: '/reports',     icon: 'reports',     en: 'Reports',     hi: 'प्रतिवेदन' },
+      { to: '/reports',     icon: 'reports',     en: 'Reports',     hi: 'प्रतिवेदन', ownerOnly: true },
       { to: '/templates',   icon: 'templates',   en: 'Templates',   hi: 'साँचा' },
     ],
   },
@@ -98,6 +98,7 @@ export default function Sidebar({ inboxCount = 0 }) {
   const user      = currentUser();
   const isAdmin   = user?.role === 'admin';
   const isClient  = user?.role === 'client';
+  const isMember  = !isAdmin && !isClient && user?.role !== 'owner';
 
   const groups = isClient ? NAV_CLIENT : NAV_FULL;
   // Inject admin item for admins
@@ -135,7 +136,7 @@ export default function Sidebar({ inboxCount = 0 }) {
               <span>{section}</span>
               <span className="k-sidebar__section-hi">{sans}</span>
             </div>
-            {items.map(({ to, icon, en, hi, adminOnly, badge }) => {
+            {items.filter(item => !item.ownerOnly || !isMember).map(({ to, icon, en, hi, adminOnly, badge }) => {
               const badgeCount = badge === 'unread' ? inboxCount : 0;
               return (
                 <button

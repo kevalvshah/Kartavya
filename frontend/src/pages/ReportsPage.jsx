@@ -324,8 +324,6 @@ export default function ReportsPage({ teams: propTeams }) {
     summary: true, projects: true, leaderboard: true, champion: true,
     tasks: true, throughput: true, time: false, attachments: false,
   });
-  const [deliver,    setDeliver]    = useState('download');
-  const [emails,     setEmails]     = useState('');
   const [busy,       setBusy]       = useState(null);   // null | 'pdf' | 'excel'
   const [preview,    setPreview]    = useState(null);
   const [prevLoading,setPrevLoading]= useState(false);
@@ -465,7 +463,7 @@ export default function ReportsPage({ teams: propTeams }) {
         kicker="Operations · Reports"
         title="Generate report"
         sanskrit="प्रतिवेदन निर्माण"
-        lede="Build a report on demand. Pick your scope, choose what to include, and export to PDF or Excel — or email it straight to the team."
+        lede="Build a report on demand. Pick your scope, choose what to include, and export to PDF or Excel."
         right={
           <div className="gr__phead-right">
             <span className="gr__phead-meta">
@@ -605,41 +603,6 @@ export default function ReportsPage({ teams: propTeams }) {
           </div>
 
           {/* 5 · Delivery */}
-          <div className="gr__block">
-            <div className="gr__block-h">
-              <span className="gr__step">5</span>
-              <h3>Delivery</h3>
-              <span className="gr__block-sans">प्रेषण</span>
-            </div>
-            <div className="gr__deliver">
-              <label className={'gr__radio' + (deliver === 'download' ? ' is-on' : '')}>
-                <input type="radio" checked={deliver === 'download'} onChange={() => setDeliver('download')} />
-                <span className="gr__radio-mark" />
-                <span>
-                  <b>Download to this device</b>
-                  <span className="gr__radio-hint">File is generated and downloaded over HTTPS.</span>
-                </span>
-              </label>
-              <label className={'gr__radio' + (deliver === 'email' ? ' is-on' : '')}>
-                <input type="radio" checked={deliver === 'email'} onChange={() => setDeliver('email')} />
-                <span className="gr__radio-mark" />
-                <span>
-                  <b>Email as attachment</b>
-                  <span className="gr__radio-hint">Uploaded to R2 and emailed as an attachment. Download link valid for 30 days.</span>
-                </span>
-              </label>
-              {deliver === 'email' && (
-                <div className="gr__emails">
-                  <label>
-                    <span>Send to</span>
-                    <input type="text" value={emails} onChange={e => setEmails(e.target.value)}
-                      placeholder="comma-separated emails" />
-                  </label>
-                  <div className="gr__email-hint">Defaults to all admins and team owners on Aekam Workspace.</div>
-                </div>
-              )}
-            </div>
-          </div>
         </div>
 
         {/* ── RIGHT: preview + export + history ────────────────── */}
@@ -733,9 +696,7 @@ export default function ReportsPage({ teams: propTeams }) {
               <div>
                 <b>Where it goes</b>
                 <span>
-                  {deliver === 'download'
-                    ? `Saved to your Downloads folder.${projectIds.length > 1 ? ` ${projectIds.length} files, one per project.` : ''}`
-                    : `Uploaded to R2 and emailed to ${emails.split(',').filter(s => s.trim()).length || 0} recipient${emails.split(',').filter(s => s.trim()).length !== 1 ? 's' : ''}.`}
+                  {`Saved to your Downloads folder.${projectIds.length > 1 ? ` ${projectIds.length} files, one per project.` : ''}`}
                 </span>
               </div>
               <div>
