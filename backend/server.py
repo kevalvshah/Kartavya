@@ -1736,6 +1736,30 @@ async def startup():
             )
         """)
         await pool.execute("CREATE INDEX IF NOT EXISTS idx_pws_user ON push_web_subscriptions(user_id)")
+        # Tasks extra columns
+        await pool.execute("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS completed_at TIMESTAMPTZ")
+        await pool.execute("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS completed_by_user_id TEXT")
+        # Report schedules
+        await pool.execute("""
+            CREATE TABLE IF NOT EXISTS report_schedules (
+                schedule_id   TEXT PRIMARY KEY,
+                team_id       TEXT NOT NULL,
+                created_by    TEXT,
+                frequency     TEXT NOT NULL DEFAULT 'weekly',
+                file_formats  TEXT[] NOT NULL DEFAULT ARRAY['pdf'],
+                recipients    TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
+                day_of_week   INTEGER,
+                day_of_month  INTEGER,
+                send_hour_utc INTEGER NOT NULL DEFAULT 2,
+                is_active     BOOLEAN NOT NULL DEFAULT TRUE,
+                next_run_at   TIMESTAMPTZ,
+                last_sent_at  TIMESTAMPTZ,
+                created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            )
+        """)
+        await pool.execute("CREATE INDEX IF NOT EXISTS idx_report_sched_team ON report_schedules(team_id)")
+        await pool.execute("CREATE INDEX IF NOT EXISTS idx_report_sched_next ON report_schedules(next_run_at) WHERE is_active=TRUE")
         logger.info("Startup migrations OK")
     except Exception as e:
         logger.warning("Startup migration warning (non-fatal): %s", e)
