@@ -12,7 +12,9 @@
       "resizeMode": "contain",
       "backgroundColor": "#050e1a"
     },
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.aekaminc.kartavya",
@@ -25,7 +27,7 @@
     },
     "android": {
       "package": "com.aekaminc.kartavya",
-      "versionCode": 1,
+      "versionCode": 2,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#0082c6"
@@ -40,21 +42,31 @@
       ]
     },
     "plugins": [
-      ["expo-notifications", {
-        "icon": "./assets/icon.png",
-        "color": "#05b7aa",
-        "defaultChannel": "default",
-        "sounds": ["./assets/notification.wav"]
-      }],
-      ["expo-image-picker", {
-        "photosPermission": "Allow Kartavya to attach photos to tasks.",
-        "cameraPermission": "Allow Kartavya to capture photos for tasks."
-      }],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#05b7aa",
+          "defaultChannel": "default",
+          "sounds": [
+            "./assets/notification.wav"
+          ]
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Kartavya to attach photos to tasks.",
+          "cameraPermission": "Allow Kartavya to capture photos for tasks."
+        }
+      ],
       "expo-av",
       "expo-document-picker"
     ],
     "extra": {
-      "eas": { "projectId": "196c2be9-caab-49a6-a359-a2adbfc6d821" }
+      "eas": {
+        "projectId": "196c2be9-caab-49a6-a359-a2adbfc6d821"
+      }
     },
     "runtimeVersion": {
       "policy": "appVersion"
