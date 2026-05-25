@@ -308,7 +308,8 @@ export default function TaskDetailScreen() {
     </View>
   );
 
-  const canEdit         = user?.role === 'admin' || user?.role === 'owner' || task.created_by_user_id === user?.user_id;
+  const isClient        = user?.role === 'client';
+  const canEdit         = !isClient && (user?.role === 'admin' || user?.role === 'owner' || task.created_by_user_id === user?.user_id);
   const priColor        = PRIORITY_COLOR[task.priority] ?? '#636366';
   const assignedMembers = members.filter(m => (task.assignee_user_ids ?? []).includes(memberId(m)));
 

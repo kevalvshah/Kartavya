@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, EmailStr
 from typing import Optional, List
 from datetime import datetime, timezone
+import asyncio
 import uuid
 import jwt as _jwt
 
@@ -350,9 +351,11 @@ async def client_approve_task(task_id: str, payload: ApprovalRequest,
         await send_approval_notification(pool, task_id, task["title"],
                                          task["created_by_user_id"], "approved", payload.notes, team_id=task.get("team_id"))
 
-    # Fan-out team-sync email: all project members/owners + the client themselves
+    # Fan-out: in-app notification + email to all project members/owners + client
     try:
         from email_service import send_team_sync_email
+        from services.web_push_service import send_web_push
+        from services.expo_push_service import send_expo_push
         recipients = await pool.fetch("""
             SELECT DISTINCT u.user_id, u.email, COALESCE(u.full_name, u.name, u.email) AS name
             FROM project_assignments pa
@@ -362,13 +365,24 @@ async def client_approve_task(task_id: str, payload: ApprovalRequest,
             SELECT u.user_id, u.email, COALESCE(u.full_name, u.name, u.email) AS name
             FROM users u WHERE u.user_id=$2
         """, task["team_id"], user["user_id"])
+        notif_title = f"{client_name} approved a task"
+        notif_body  = task["title"]
+        task_url    = f"/tasks/{task_id}"
         for r in recipients:
+            if r["user_id"] == user["user_id"]:
+                continue  # don't notify the client themselves
             try:
                 send_team_sync_email(r["email"], r["name"], client_name, task["title"], task_id)
             except Exception:
                 pass
+            try:
+                await _notify(pool, task_id, task["title"], r["user_id"], "approved", payload.notes, team_id=task.get("team_id"))
+            except Exception:
+                pass
+            asyncio.create_task(send_web_push(pool, user_id=r["user_id"], title=notif_title, body=notif_body, url=task_url))
+            asyncio.create_task(send_expo_push(pool, user_id=r["user_id"], title=notif_title, body=notif_body, url=task_url, task_id=task_id))
     except Exception as exc:
-        import logging; logging.getLogger(__name__).warning("team-sync email failed: %s", exc)
+        import logging; logging.getLogger(__name__).warning("team-sync fan-out failed: %s", exc)
 
     return {"message": "Task approved by client", "approval_status": "approved",
             "new_column_id": new_col_id}
@@ -434,7 +448,7 @@ async def approve_by_token(token: str, payload_body: ApprovalRequest, pool=Depen
     if task.get("created_by_user_id") and task["created_by_user_id"] != client_user_id:
         await send_approval_notification(pool, task_id, task["title"],
                                          task["created_by_user_id"], "approved", payload_body.notes, team_id=task.get("team_id"))
-    # Fan-out email: all project members/owners + the client themselves
+    # Fan-out: in-app notification + email to all project members/owners
     try:
         client_row = await pool.fetchrow(
             "SELECT COALESCE(full_name, name, email) AS name FROM users WHERE user_id=$1", client_user_id
@@ -450,13 +464,26 @@ async def approve_by_token(token: str, payload_body: ApprovalRequest, pool=Depen
             FROM users u WHERE u.user_id=$2
         """, task["team_id"], client_user_id)
         from email_service import send_team_sync_email
+        from services.web_push_service import send_web_push
+        from services.expo_push_service import send_expo_push
+        notif_title = f"{client_name} approved a task"
+        notif_body  = task["title"]
+        task_url    = f"/tasks/{task_id}"
         for r in recipients:
+            if r["user_id"] == client_user_id:
+                continue  # don't notify the client themselves
             try:
                 send_team_sync_email(r["email"], r["name"], client_name, task["title"], task_id)
             except Exception:
                 pass
+            try:
+                await _notify(pool, task_id, task["title"], r["user_id"], "approved", payload_body.notes, team_id=task.get("team_id"))
+            except Exception:
+                pass
+            asyncio.create_task(send_web_push(pool, user_id=r["user_id"], title=notif_title, body=notif_body, url=task_url))
+            asyncio.create_task(send_expo_push(pool, user_id=r["user_id"], title=notif_title, body=notif_body, url=task_url, task_id=task_id))
     except Exception as exc:
-        import logging; logging.getLogger(__name__).warning("team-sync email fan-out failed: %s", exc)
+        import logging; logging.getLogger(__name__).warning("team-sync fan-out failed: %s", exc)
     return {"message": "Task approved by client", "approval_status": "approved"}
 
 
