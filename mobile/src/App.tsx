@@ -14,6 +14,8 @@ import { queryClient, persister, setupQueryPersistence } from './offline/queryCl
 import { useFonts } from './theme/fonts';
 import { flushQueue, getQueueCount, clearQueue, friendlyFlushError } from './offline/mutationQueue';
 import { usePushNotifications } from './hooks/usePushNotifications';
+import { NotificationProvider } from './context/NotificationContext';
+import { NotificationBannerContainer } from './components/NotificationBanner';
 import RootStack from './nav/RootStack';
 
 // ── Offline banner ────────────────────────────────────────────────────────────
@@ -188,6 +190,7 @@ function InnerApp() {
         onClear={banner?.canClear ? handleClear : undefined}
       />
       <RootStack />
+      <NotificationBannerContainer />
     </>
   );
 }
@@ -207,7 +210,9 @@ export default function App() {
       >
         <ThemeProvider>
           <AuthProvider>
-            <InnerApp />
+            <NotificationProvider>
+              <InnerApp />
+            </NotificationProvider>
           </AuthProvider>
         </ThemeProvider>
       </PersistQueryClientProvider>

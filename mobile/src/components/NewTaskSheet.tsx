@@ -1,151 +1,296 @@
 /**
- * NewTaskSheet — bottom-sheet modal for quick task creation.
- * Presents as a slide-up modal with title, optional due-date, and project picker.
+ * NewTaskSheet — bottom-sheet task creation.
+ * Matches web NewTaskModal field-for-field.
+ * Client role: header = "Request task", hides Status + Assignees,
+ * routes to POST /client/tasks/request instead of POST /tasks.
  */
-import React, { useState, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
-  Modal, View, Text, TextInput, TouchableOpacity,
+  Modal, View, Text, TextInput, TouchableOpacity, ScrollView,
   StyleSheet, KeyboardAvoidingView, Platform, ActivityIndicator,
-  ScrollView,
+  Pressable,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
 import { useTheme } from '../theme/ThemeProvider';
-import { tasksApi } from '../api/tasks';
+import { useAuth } from '../hooks/useAuth';
 import { apiClient } from '../api/client';
-import type { Project } from '../api/types';
+import type { TeamMember } from '../api/types';
 
 interface Props {
   visible: boolean;
   onClose: () => void;
 }
 
+const PRIORITY = [
+  { key: 'urgent', label: 'Urgent', color: '#C0392B' },
+  { key: 'high',   label: 'High',   color: '#B06A00' },
+  { key: 'medium', label: 'Medium', color: '#0082c6' },
+  { key: 'low',    label: 'Low',    color: '#7D8BA6' },
+] as const;
+
+type Priority = typeof PRIORITY[number]['key'];
+
 export default function NewTaskSheet({ visible, onClose }: Props) {
-  const { t } = useTheme();
-  const qc    = useQueryClient();
+  const { t }      = useTheme();
+  const { user }   = useAuth();
+  const qc         = useQueryClient();
+  const isClient   = user?.role === 'client';
 
-  const [title,     setTitle]     = useState('');
-  const [projectId, setProjectId] = useState<string | null>(null);
-  const [error,     setError]     = useState<string | null>(null);
+  const [title,      setTitle]      = useState('');
+  const [projectId,  setProjectId]  = useState<string | null>(null);
+  const [status,     setStatus]     = useState<string>('todo');
+  const [priority,   setPriority]   = useState<Priority>('medium');
+  const [dueAt,      setDueAt]      = useState('');
+  const [description,setDescription]= useState('');
+  const [assignees,  setAssignees]  = useState<string[]>([]);
+  const [titleError, setTitleError] = useState(false);
+  const [saving,     setSaving]     = useState(false);
+  const [error,      setError]      = useState<string | null>(null);
 
-  const { data: projects = [] } = useQuery<Project[]>({
-    queryKey: ['projects'],
-    queryFn:  () => apiClient.get<Project[]>('/projects').then(r => r.data),
-    enabled:  visible,
-  });
+  const [projects,   setProjects]   = useState<{ team_id: string; name: string; color?: string }[]>([]);
+  const [members,    setMembers]    = useState<TeamMember[]>([]);
 
-  const { mutate: create, isPending } = useMutation({
-    mutationFn: () =>
-      tasksApi.create({
-        title:   title.trim(),
-        team_id: projectId ?? undefined,
-        status:  'todo',
-      }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['tasks'] });
-      handleClose();
-    },
-    onError: (err: unknown) => {
-      const msg = err instanceof Error ? err.message : 'Could not create task.';
-      setError(msg);
-    },
-  });
+  // Reset on open
+  useEffect(() => {
+    if (!visible) return;
+    setTitle(''); setProjectId(null); setStatus('todo'); setPriority('medium');
+    setDueAt(''); setDescription(''); setAssignees([]);
+    setTitleError(false); setError(null);
+    apiClient.get('/teams').then(r => setProjects(Array.isArray(r.data) ? r.data : [])).catch(() => {});
+  }, [visible]);
+
+  // Fetch members when project changes
+  useEffect(() => {
+    if (!projectId) { setMembers([]); return; }
+    apiClient.get(`/teams/${projectId}`)
+      .then(r => setMembers(Array.isArray(r.data?.members) ? r.data.members : []))
+      .catch(() => setMembers([]));
+  }, [projectId]);
+
+  const toggleAssignee = (uid: string) => {
+    setAssignees(prev => prev.includes(uid) ? prev.filter(x => x !== uid) : [...prev, uid]);
+  };
 
   const handleClose = useCallback(() => {
-    setTitle('');
-    setProjectId(null);
-    setError(null);
     onClose();
   }, [onClose]);
 
-  const handleSubmit = () => {
-    if (!title.trim()) { setError('Title is required.'); return; }
+  const handleSubmit = async () => {
+    if (!title.trim()) { setTitleError(true); return; }
+    if (saving) return;
+    setSaving(true);
     setError(null);
-    create();
+    try {
+      const payload: Record<string, unknown> = {
+        title:    title.trim(),
+        status,
+        priority,
+        description: description.trim() || null,
+      };
+      if (projectId)        payload.team_id          = projectId;
+      if (dueAt)            payload.due_at            = new Date(dueAt).toISOString();
+      if (assignees.length) payload.assignee_user_ids = assignees;
+
+      const endpoint = isClient ? '/client/tasks/request' : '/tasks';
+      await apiClient.post(endpoint, payload);
+      qc.invalidateQueries({ queryKey: ['tasks'] });
+      handleClose();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Could not create task.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const s = styles(t);
 
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="slide"
-      onRequestClose={handleClose}
-    >
-      <TouchableOpacity style={s.backdrop} activeOpacity={1} onPress={handleClose} />
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={handleClose}>
+      <Pressable style={s.backdrop} onPress={handleClose} />
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={s.sheetWrap}
       >
         <View style={s.sheet}>
-          {/* Handle bar */}
+          {/* Handle */}
           <View style={s.handle} />
 
           {/* Header */}
           <View style={s.header}>
-            <Text style={s.headerTitle}>New Task</Text>
+            <View>
+              <Text style={s.headerKicker}>
+                {isClient ? 'REQUEST TASK · अनुरोध' : 'NEW TASK · नया कार्य'}
+              </Text>
+              <Text style={s.headerTitle}>What needs doing?</Text>
+            </View>
             <TouchableOpacity onPress={handleClose} hitSlop={12}>
               <Ionicons name="close" size={22} color={t.ink3} />
             </TouchableOpacity>
           </View>
 
-          {/* Title input */}
-          <TextInput
-            value={title}
-            onChangeText={v => { setTitle(v); setError(null); }}
-            placeholder="Task title…"
-            placeholderTextColor={t.ink3}
-            style={s.input}
-            autoFocus
-            returnKeyType="done"
-            onSubmitEditing={handleSubmit}
-          />
+          <ScrollView style={s.body} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
 
-          {/* Project picker */}
-          {projects.length > 0 && (
-            <>
-              <Text style={s.label}>PROJECT</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.projectRow}>
-                {projects.map((p) => (
-                  <TouchableOpacity
-                    key={p.team_id}
-                    onPress={() => setProjectId(p.team_id === projectId ? null : p.team_id)}
-                    style={[s.chip, projectId === p.team_id && s.chipActive]}
-                  >
-                    <Text style={[s.chipText, projectId === p.team_id && s.chipTextActive]}>
-                      {p.name}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-            </>
-          )}
+            {/* Title */}
+            <TextInput
+              value={title}
+              onChangeText={v => { setTitle(v); if (v.trim()) setTitleError(false); }}
+              placeholder="Write a clear, action-first title…"
+              placeholderTextColor={t.ink3}
+              style={[s.titleInput, { borderBottomColor: titleError ? '#dc2626' : t.outline, color: t.ink }]}
+              autoFocus
+              multiline
+              returnKeyType="done"
+              blurOnSubmit
+              onSubmitEditing={handleSubmit}
+            />
+            {titleError && <Text style={s.fieldError}>Title is required.</Text>}
 
-          {/* Error */}
-          {error && <Text style={s.errorText}>{error}</Text>}
+            {/* Project */}
+            <FieldLabel t={t}>PROJECT · परियोजना</FieldLabel>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.chipRow}>
+              {projects.map(p => (
+                <TouchableOpacity
+                  key={p.team_id}
+                  onPress={() => setProjectId(p.team_id === projectId ? null : p.team_id)}
+                  style={[s.chip, projectId === p.team_id && { borderColor: t.primary, backgroundColor: t.primary + '18' }]}
+                >
+                  {p.color && <View style={[s.projectDot, { backgroundColor: p.color }]} />}
+                  <Text style={[s.chipText, projectId === p.team_id && { color: t.primary }]}>{p.name}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+
+            {/* Status — hidden for clients */}
+            {!isClient && (
+              <>
+                <FieldLabel t={t}>STATUS · स्थिति</FieldLabel>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.chipRow}>
+                  {(['todo','in_progress','in_review','done'] as const).map(s2 => {
+                    const labels: Record<string, string> = { todo: 'To do', in_progress: 'In progress', in_review: 'In review', done: 'Done' };
+                    return (
+                      <TouchableOpacity
+                        key={s2}
+                        onPress={() => setStatus(s2)}
+                        style={[styles(t).chip, status === s2 && { borderColor: t.primary, backgroundColor: t.primary + '18' }]}
+                      >
+                        <Text style={[styles(t).chipText, status === s2 && { color: t.primary }]}>{labels[s2]}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              </>
+            )}
+
+            {/* Priority */}
+            <FieldLabel t={t}>PRIORITY · प्राथमिकता</FieldLabel>
+            <View style={s.priorityRow}>
+              {PRIORITY.map(p => (
+                <TouchableOpacity
+                  key={p.key}
+                  onPress={() => setPriority(p.key)}
+                  style={[s.priorityChip, priority === p.key && { borderColor: p.color, backgroundColor: p.color + '18' }]}
+                >
+                  <View style={[s.prioDot, { backgroundColor: p.color }]} />
+                  <Text style={[s.priorityLabel, priority === p.key && { color: p.color, fontWeight: '700' }]}>{p.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {/* Due date */}
+            <FieldLabel t={t}>DUE DATE · नियत तिथि</FieldLabel>
+            <TextInput
+              value={dueAt}
+              onChangeText={setDueAt}
+              placeholder="YYYY-MM-DD"
+              placeholderTextColor={t.ink3}
+              style={[s.input, { color: t.ink }]}
+              keyboardType="numbers-and-punctuation"
+            />
+
+            {/* Assignees — hidden for clients */}
+            {!isClient && projectId && members.length > 0 && (
+              <>
+                <FieldLabel t={t}>ASSIGNEES · नियुक्त</FieldLabel>
+                <View style={s.memberList}>
+                  {members.map((m, i) => {
+                    const uid  = (m.user_id ?? m.member_id) as string;
+                    const name = m.display_name ?? m.full_name ?? m.name ?? m.email ?? '';
+                    if (!name || !uid) return null;
+                    const checked = assignees.includes(uid);
+                    const initials = name.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase();
+                    const avatarColors = ['#0082c6','#05b7aa','#8b5cf6','#ec4899','#f59e0b','#10b981','#6366f1'];
+                    const bg = avatarColors[i % avatarColors.length];
+                    return (
+                      <TouchableOpacity
+                        key={uid}
+                        onPress={() => toggleAssignee(uid)}
+                        style={[s.memberRow, checked && { backgroundColor: t.primary + '12' }]}
+                      >
+                        <View style={[s.memberAvatar, { backgroundColor: bg }]}>
+                          <Text style={s.memberInitials}>{initials}</Text>
+                        </View>
+                        <Text style={[s.memberName, { color: t.ink }]}>{name}</Text>
+                        {checked && <Ionicons name="checkmark-circle" size={18} color={t.primary} />}
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </>
+            )}
+
+            {/* Description */}
+            <FieldLabel t={t}>DESCRIPTION · विवरण</FieldLabel>
+            <TextInput
+              value={description}
+              onChangeText={setDescription}
+              placeholder="Add a description, brief, or checklist…"
+              placeholderTextColor={t.ink3}
+              style={[s.input, s.descInput, { color: t.ink }]}
+              multiline
+              numberOfLines={4}
+              textAlignVertical="top"
+            />
+
+            {error && <Text style={s.fieldError}>{error}</Text>}
+
+            <View style={{ height: 24 }} />
+          </ScrollView>
 
           {/* Submit */}
-          <TouchableOpacity
-            style={[s.btn, (!title.trim() || isPending) && s.btnDisabled]}
-            onPress={handleSubmit}
-            disabled={!title.trim() || isPending}
-          >
-            {isPending
-              ? <ActivityIndicator color="#fff" size="small" />
-              : <Text style={s.btnText}>Add Task</Text>
-            }
-          </TouchableOpacity>
+          <View style={s.footer}>
+            <TouchableOpacity
+              style={[s.btn, (!title.trim() || saving) && s.btnDisabled]}
+              onPress={handleSubmit}
+              disabled={!title.trim() || saving}
+            >
+              {saving
+                ? <ActivityIndicator color="#fff" size="small" />
+                : <Text style={s.btnText}>{isClient ? 'Submit Request' : 'Create Task'}</Text>
+              }
+            </TouchableOpacity>
+          </View>
         </View>
       </KeyboardAvoidingView>
     </Modal>
   );
 }
 
+function FieldLabel({ children, t }: { children: React.ReactNode; t: ReturnType<typeof useTheme>['t'] }) {
+  return (
+    <Text style={{
+      fontSize: 10, fontWeight: '800', letterSpacing: 1.2,
+      color: t.primary, marginBottom: 8, marginTop: 16,
+    }}>
+      {children}
+    </Text>
+  );
+}
+
 const styles = (t: ReturnType<typeof useTheme>['t']) => StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.35)',
+    backgroundColor: 'rgba(0,0,0,0.4)',
   },
   sheetWrap: {
     position: 'absolute',
@@ -153,68 +298,137 @@ const styles = (t: ReturnType<typeof useTheme>['t']) => StyleSheet.create({
   },
   sheet: {
     backgroundColor: t.surface,
-    borderTopLeftRadius:  20,
-    borderTopRightRadius: 20,
-    paddingHorizontal: 20,
+    borderTopLeftRadius:  24,
+    borderTopRightRadius: 24,
     paddingBottom: Platform.OS === 'ios' ? 40 : 24,
-    paddingTop: 12,
+    maxHeight: '92%',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.12,
-    shadowRadius: 16,
-    elevation: 16,
+    shadowOffset: { width: 0, height: -6 },
+    shadowOpacity: 0.18,
+    shadowRadius: 20,
+    elevation: 20,
   },
   handle: {
-    width: 40, height: 4,
+    width: 36, height: 4,
     backgroundColor: t.outline,
     borderRadius: 2,
     alignSelf: 'center',
-    marginBottom: 16,
+    marginTop: 10, marginBottom: 4,
   },
   header: {
-    flexDirection: 'row', alignItems: 'center',
+    flexDirection: 'row',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
-    marginBottom: 16,
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: t.outline,
+  },
+  headerKicker: {
+    fontSize: 10, fontWeight: '800', letterSpacing: 1.2,
+    color: t.primary, marginBottom: 2,
   },
   headerTitle: {
-    fontSize: 17, fontWeight: '700', color: t.ink,
+    fontSize: 20, fontWeight: '400',
+    color: t.ink,
+    fontFamily: Platform.OS === 'ios' ? 'Georgia' : 'serif',
+  },
+  body: {
+    paddingHorizontal: 20,
+    paddingTop: 4,
+  },
+  titleInput: {
+    fontSize: 20,
+    fontFamily: Platform.OS === 'ios' ? 'Georgia' : 'serif',
+    color: t.ink,
+    borderBottomWidth: 2,
+    paddingBottom: 10,
+    marginTop: 16,
+    minHeight: 36,
+  },
+  fieldError: {
+    fontSize: 11, color: '#dc2626', marginTop: 4,
+  },
+  chipRow: {
+    flexDirection: 'row',
+  },
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: t.outline,
+    marginRight: 8,
+    backgroundColor: t.bg,
+  },
+  chipText: {
+    fontSize: 13, color: t.ink3, fontWeight: '600',
+  },
+  projectDot: {
+    width: 8, height: 8, borderRadius: 2,
+  },
+  priorityRow: {
+    flexDirection: 'row', flexWrap: 'wrap', gap: 8,
+  },
+  priorityChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingHorizontal: 14, paddingVertical: 6,
+    borderRadius: 20, borderWidth: 1.5,
+    borderColor: t.outline,
+  },
+  prioDot: {
+    width: 7, height: 7, borderRadius: 99,
+  },
+  priorityLabel: {
+    fontSize: 13, color: t.ink3, fontWeight: '500',
   },
   input: {
     borderWidth: 1,
     borderColor: t.outline,
     borderRadius: 10,
     paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 15,
-    color: t.ink,
+    paddingVertical: 11,
+    fontSize: 14,
     backgroundColor: t.bg,
-    marginBottom: 16,
   },
-  label: {
-    fontSize: 10, fontWeight: '700', letterSpacing: 1.2,
-    color: t.ink3, marginBottom: 8,
+  descInput: {
+    minHeight: 88,
+    paddingTop: 12,
   },
-  projectRow: {
-    flexDirection: 'row', marginBottom: 16,
-  },
-  chip: {
-    paddingHorizontal: 14, paddingVertical: 7,
-    borderRadius: 20, borderWidth: 1,
+  memberList: {
+    borderRadius: 12,
+    overflow: 'hidden',
+    borderWidth: 1,
     borderColor: t.outline,
-    marginRight: 8, backgroundColor: t.bg,
   },
-  chipActive: {
-    borderColor: t.primary,
-    backgroundColor: `${t.primary}18`,
+  memberRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: t.outline,
   },
-  chipText: {
-    fontSize: 13, color: t.ink3, fontWeight: '600',
+  memberAvatar: {
+    width: 30, height: 30, borderRadius: 15,
+    alignItems: 'center', justifyContent: 'center',
   },
-  chipTextActive: {
-    color: t.primary,
+  memberInitials: {
+    fontSize: 11, fontWeight: '700', color: '#fff',
   },
-  errorText: {
-    fontSize: 13, color: '#dc2626', marginBottom: 12,
+  memberName: {
+    flex: 1, fontSize: 14, fontWeight: '500',
+  },
+  footer: {
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: t.outline,
   },
   btn: {
     backgroundColor: t.primary,
@@ -222,9 +436,7 @@ const styles = (t: ReturnType<typeof useTheme>['t']) => StyleSheet.create({
     paddingVertical: 14,
     alignItems: 'center',
   },
-  btnDisabled: {
-    opacity: 0.45,
-  },
+  btnDisabled: { opacity: 0.45 },
   btnText: {
     color: '#fff', fontWeight: '700', fontSize: 15,
   },

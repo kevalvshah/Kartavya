@@ -97,7 +97,7 @@ export default function TaskDetailScreen() {
   const [newSubtask,     setNewSubtask]     = useState('');
   const [showAssignee,   setShowAssignee]   = useState(false);
   const [showMove,       setShowMove]       = useState(false);
-  const [approvalAction, setApprovalAction] = useState<'request' | 'approve' | 'reject' | 'client' | null>(null);
+  const [approvalAction, setApprovalAction] = useState<'request' | 'approve' | 'reject' | 'client' | 'client_approve' | 'client_reject' | null>(null);
   const [uploadingFile,  setUploadingFile]  = useState(false);
   const scrollRef = useRef<ScrollView>(null);
 
@@ -175,6 +175,10 @@ export default function TaskDetailScreen() {
         await tasksApi.reviewApproval(taskId, 'pending_client', {
           notes, send_to_client: true, client_email: extra?.client_email,
         });
+      } else if (approvalAction === 'client_approve') {
+        await tasksApi.clientApprove(taskId);
+      } else if (approvalAction === 'client_reject') {
+        await tasksApi.clientReject(taskId, notes);
       }
       setApprovalAction(null);
       invalidate();

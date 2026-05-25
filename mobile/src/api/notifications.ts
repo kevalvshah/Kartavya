@@ -8,6 +8,9 @@ export const notificationsApi = {
   unreadCount: () =>
     apiClient.get<{ count: number }>('/notifications/unread_count').then(r => r.data.count),
 
+  poll: () =>
+    apiClient.get<{ unread: number; fresh: import('./types').Notification[] }>('/notifications/poll').then(r => r.data),
+
   markRead:    (ids?: string[]) =>
     apiClient.post('/notifications/mark_read', ids ? { notification_ids: ids } : { mark_all: true })
       .then(r => r.data),

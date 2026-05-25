@@ -23,6 +23,7 @@ import BoardScreen      from '../screens/BoardScreen';
 import LoginScreen      from '../screens/LoginScreen';
 import ClientPortalScreen from '../screens/ClientPortalScreen';
 import { useAuth } from '../hooks/useAuth';
+import { useNotifications } from '../context/NotificationContext';
 import { Splash } from '../App';
 import NewTaskSheet from '../components/NewTaskSheet';
 
@@ -64,7 +65,8 @@ function AddButton({ onPress }: { onPress: () => void }) {
 
 // ── Main tabs ─────────────────────────────────────────────────────────────────
 function MainTabs() {
-  const { t } = useTheme();
+  const { t }      = useTheme();
+  const { unread } = useNotifications();
   const [showNewTask, setShowNewTask] = useState(false);
 
   return (
@@ -127,7 +129,7 @@ function MainTabs() {
           ),
         }}
       />
-      <Tab.Screen name="Inbox" component={InboxScreen} options={{ title: 'Inbox' }} />
+      <Tab.Screen name="Inbox" component={InboxScreen} options={{ title: 'Inbox', tabBarBadge: unread > 0 ? (unread > 99 ? '99+' : unread) : undefined }} />
       <Tab.Screen name="Me"    component={MeScreen}    options={{ title: 'Me' }} />
     </Tab.Navigator>
     <NewTaskSheet visible={showNewTask} onClose={() => setShowNewTask(false)} />

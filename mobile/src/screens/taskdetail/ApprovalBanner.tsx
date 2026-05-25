@@ -11,13 +11,14 @@ interface Props {
   task:     Task;
   userRole: string;
   userId:   string;
-  onAction: (action: 'request' | 'approve' | 'reject' | 'client') => void;
+  onAction: (action: 'request' | 'approve' | 'reject' | 'client' | 'client_approve' | 'client_reject') => void;
 }
 
 export function ApprovalBanner({ task, userRole, userId, onAction }: Props) {
   const { t } = useTheme();
   const status    = task.approval_status;
   const canReview = userRole === 'admin' || userRole === 'owner';
+  const isClient  = userRole === 'client';
 
   if (!status) {
     if (task.created_by_user_id === userId || task.assignee_user_ids?.includes(userId) || canReview) {
@@ -53,6 +54,8 @@ export function ApprovalBanner({ task, userRole, userId, onAction }: Props) {
       {task.approval_notes ? (
         <Text style={[s.approvalNotes, { color: t.ink3 }]}>{task.approval_notes}</Text>
       ) : null}
+
+      {/* Internal review actions — owner/admin */}
       {status === 'pending' && canReview && (
         <View style={s.approvalActions}>
           <TouchableOpacity
@@ -78,6 +81,28 @@ export function ApprovalBanner({ task, userRole, userId, onAction }: Props) {
           >
             <Ionicons name="send" size={13} color="#7c3aed" accessibilityElementsHidden />
             <Text style={{ color: '#7c3aed', fontSize: 12, fontWeight: '700' }}>Send to client</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* Client approval actions */}
+      {status === 'pending_client' && isClient && (
+        <View style={s.approvalActions}>
+          <TouchableOpacity
+            onPress={() => onAction('client_approve')}
+            style={[s.approvalBtn, { backgroundColor: '#16a34a22', borderColor: '#16a34a' }]}
+            {...a11yButton('Approve this task')}
+          >
+            <Ionicons name="checkmark-circle" size={14} color="#16a34a" accessibilityElementsHidden />
+            <Text style={{ color: '#16a34a', fontSize: 12, fontWeight: '700' }}>Approve</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => onAction('client_reject')}
+            style={[s.approvalBtn, { backgroundColor: '#ef444422', borderColor: '#ef4444' }]}
+            {...a11yButton('Request changes')}
+          >
+            <Ionicons name="close-circle" size={14} color="#ef4444" accessibilityElementsHidden />
+            <Text style={{ color: '#ef4444', fontSize: 12, fontWeight: '700' }}>Request changes</Text>
           </TouchableOpacity>
         </View>
       )}

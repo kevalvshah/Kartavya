@@ -54,6 +54,7 @@ from services.web_push_service import (
     fan_out_web_push,
     VAPID_PUBLIC_KEY as VAPID_PUB,
 )
+from services.expo_push_service import send_expo_push, fan_out_expo_push
 from utils import SQL_USER_ROLE
 
 # ── Shared constants ──────────────────────────────────────
@@ -207,8 +208,9 @@ async def create_notification(pool, user_id, notif_type, title, message, task_id
         "INSERT INTO notifications (notification_id,user_id,team_id,type,title,message,task_id,url) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)",
         f"notif_{uuid.uuid4().hex[:12]}", user_id, team_id, notif_type, title, message, task_id, url,
     )
-    # Fire Web Push (non-blocking, swallows errors internally)
+    # Fire Web Push (browser) + Expo Push (mobile) — both non-blocking
     asyncio.create_task(send_web_push(pool, user_id=user_id, title=title, body=message, url=url or "/"))
+    asyncio.create_task(send_expo_push(pool, user_id=user_id, title=title, body=message, url=url or "/", task_id=task_id))
 
 async def ensure_default_columns(pool, team_id):
     """Create the five default kanban columns for a new project if none exist yet."""
