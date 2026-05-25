@@ -16,6 +16,7 @@ import { NotificationsModal } from '../NotificationsModal';
 import NewTaskModal from '../NewTaskModal';
 import Sidebar from './Sidebar';
 import Topbar  from './Topbar';
+import { NotifToastContainer, NotifPermissionPrompt } from './NotifToast';
 import { Bell, Menu, X } from 'lucide-react';
 
 function requestBrowserPermission() {
@@ -28,7 +29,7 @@ function fireBrowserNotif(title, body) {
   try {
     if (navigator.serviceWorker?.controller) {
       navigator.serviceWorker.ready.then(reg =>
-        reg.showNotification(title, { body, icon: '/icon-192.png', badge: '/icon-192.png' })
+        reg.showNotification(title, { body, icon: '/logo192.png', badge: '/logo192.png' })
       );
     } else {
       new Notification(title, { body, icon: '/icon-192.png' });
@@ -44,6 +45,7 @@ export default function AppShell() {
   const [teams,        setTeams]        = useState([]);
   const [teamsLoaded,  setTeamsLoaded]  = useState(false);
   const [notifPrompt,  setNotifPrompt]  = useState(false);
+  const [toasts,       setToasts]       = useState([]);
   const prevUnread = useRef(null);
   const location = useLocation();
 
@@ -73,14 +75,23 @@ export default function AppShell() {
       try {
         const r = await api.get('/notifications/poll');
         const count = r.data.unread ?? 0;
+        const fresh = r.data.fresh ?? [];
         if (live) {
-          // Fire browser toast when new notifications arrive
-          if (prevUnread.current !== null && count > prevUnread.current && Notification.permission === 'granted') {
-            const diff = count - prevUnread.current;
-            fireBrowserNotif(
-              diff === 1 ? 'New notification' : `${diff} new notifications`,
-              'Open Kartavya to view'
-            );
+          if (prevUnread.current !== null && count > prevUnread.current) {
+            if (document.visibilityState === 'visible') {
+              // Show custom in-app toasts for each fresh notification
+              if (fresh.length > 0) {
+                setToasts(prev => [...prev, ...fresh.filter(n => !prev.find(p => p.notification_id === n.notification_id))]);
+              } else {
+                // Fallback synthetic toast if fresh list is empty
+                setToasts(prev => [...prev, { notification_id: `synth-${Date.now()}`, title: 'New notification', message: 'Open notifications to view', url: null }]);
+              }
+            } else if (Notification.permission === 'granted') {
+              fireBrowserNotif(
+                fresh[0]?.title ?? 'New notification',
+                fresh[0]?.message ?? 'Open Kartavya to view'
+              );
+            }
           }
           prevUnread.current = count;
           setUnread(count);
@@ -142,33 +153,6 @@ export default function AppShell() {
           <Topbar unread={unread} onOpenNotifications={() => setNotifOpen(true)} onNewTask={() => setNewTaskOpen(true)} />
         </div>
 
-        {/* Browser notification permission prompt */}
-        {notifPrompt && (
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: 10,
-            padding: '10px 18px',
-            background: 'color-mix(in srgb, var(--k-primary) 10%, var(--surface))',
-            borderBottom: '1px solid color-mix(in srgb, var(--k-primary) 25%, transparent)',
-            fontSize: 13, color: 'var(--ink-2)',
-          }}>
-            <Bell size={15} style={{ color: 'var(--k-primary)', flexShrink: 0 }} />
-            <span style={{ flex: 1 }}>Get browser notifications for new approvals and updates.</span>
-            <button
-              className="k-btn k-btn--primary k-btn--sm"
-              onClick={() => { setNotifPrompt(false); requestBrowserPermission(); }}
-            >
-              Allow
-            </button>
-            <button
-              className="k-iconbtn"
-              aria-label="Dismiss"
-              onClick={() => setNotifPrompt(false)}
-              style={{ color: 'var(--ink-3)' }}
-            >
-              <X size={14} />
-            </button>
-          </div>
-        )}
 
         {/* Page content */}
         <main className="k-content">
@@ -178,6 +162,22 @@ export default function AppShell() {
 
       <NotificationsModal open={notifOpen} onOpenChange={setNotifOpen} />
       <NewTaskModal open={newTaskOpen} onClose={() => setNewTaskOpen(false)} onCreated={() => setNewTaskOpen(false)} />
+
+      {/* Corner notification permission prompt */}
+      {notifPrompt && (
+        <div style={{ position: 'fixed', bottom: 20, right: 20, zIndex: 9998, pointerEvents: 'all' }}>
+          <NotifPermissionPrompt
+            onAllow={() => { setNotifPrompt(false); requestBrowserPermission(); }}
+            onDismiss={() => setNotifPrompt(false)}
+          />
+        </div>
+      )}
+
+      {/* In-app toast stack */}
+      <NotifToastContainer
+        toasts={toasts}
+        onDismiss={(id) => setToasts(prev => prev.filter(t => t.notification_id !== id))}
+      />
     </div>
   );
 }

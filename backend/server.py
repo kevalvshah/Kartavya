@@ -1498,8 +1498,7 @@ async def dashboard_summary(pool=Depends(get_db),user=Depends(require_user)):
 
 @api_router.get("/notifications/poll")
 async def poll_notifications(pool=Depends(get_db),user=Depends(require_user)):
-    """Single endpoint replacing the two-request (process + fetch) polling cycle.
-    Processes due reminders and returns unread count in one round-trip."""
+    """Process due reminders, return unread count + any notifications created in the last 70 s."""
     team_ids=await get_visible_team_ids(pool,user["user_id"],_user_dict=user)
     # Process reminders
     rows=await pool.fetch(
@@ -1513,12 +1512,20 @@ async def poll_notifications(pool=Depends(get_db),user=Depends(require_user)):
         for uid in recipients:
             await create_notification(pool,uid,"reminder","Task reminder",f"Due soon: {t['title']}",t["task_id"],t["team_id"],"/tasks")
         await pool.execute("UPDATE tasks SET reminder_sent_at=NOW(),updated_at=NOW() WHERE task_id=$1",t["task_id"])
-    # Return unread count
     unread=await pool.fetchval(
         "SELECT COUNT(*) FROM notifications WHERE user_id=$1 AND read_at IS NULL",
         user["user_id"]
     )
-    return {"unread": unread or 0}
+    # Return notifications created in the last 70 s so the client can toast them
+    fresh=await pool.fetch(
+        "SELECT * FROM notifications WHERE user_id=$1 AND read_at IS NULL"
+        " AND created_at > NOW() - INTERVAL '70 seconds' ORDER BY created_at DESC LIMIT 5",
+        user["user_id"]
+    )
+    return {
+        "unread": unread or 0,
+        "fresh": [NotificationOut(**dict(r)).model_dump(mode="json") for r in fresh],
+    }
 
 @api_router.get("/push/vapid-public-key")
 async def get_vapid_public_key(user=Depends(require_user)): return {"public_key":"not-configured"}
