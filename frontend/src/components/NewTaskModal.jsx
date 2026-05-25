@@ -4,7 +4,7 @@
  */
 import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../lib/api';
-import { AVATAR_COLORS, userInitials, logger } from '../lib/utils';
+import { AVATAR_COLORS, userInitials, logger } from '../lib/utils';import { currentUser } from '../lib/auth';
 
 const PRIORITY_DOTS = {
   low:    { color: '#10b981', label: 'Low',    hi: 'लघु' },
@@ -13,7 +13,7 @@ const PRIORITY_DOTS = {
   urgent: { color: '#dc2626', label: 'Urgent', hi: 'अत्यावश्यक' },
 };
 
-export default function NewTaskModal({ open, onClose, onCreated }) {
+export default function NewTaskModal({ open, onClose, onCreated }) {  const isClient = currentUser()?.role === 'client';
   const [title,       setTitle]       = useState('');
   const [projectId,   setProjectId]   = useState('');
   const [status,      setStatus]      = useState('todo');
@@ -94,7 +94,7 @@ export default function NewTaskModal({ open, onClose, onCreated }) {
       if (dueAt)            payload.due_at             = new Date(dueAt).toISOString();
       if (assignees.length) payload.assignee_user_ids  = assignees;
       if (files.length)     payload.attachments        = files.map(f => ({ name: f.name, url: f.url, key: f.key || null }));
-      await api.post('/tasks', payload);
+      await (isClient ? api.post('/client/tasks/request', payload) : api.post('/tasks', payload));
       onCreated?.();
       onClose();
     } catch (err) {
@@ -126,7 +126,7 @@ export default function NewTaskModal({ open, onClose, onCreated }) {
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 4 }}>
             <div>
               <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--k-primary)', marginBottom: 2 }}>
-                NEW TASK · <span style={{ fontFamily: 'var(--font-hindi)', textTransform: 'none', letterSpacing: 0 }}>नया कार्य</span>
+                {isClient ? 'REQUEST TASK' : 'NEW TASK'} · <span style={{ fontFamily: 'var(--font-hindi)', textTransform: 'none', letterSpacing: 0 }}>{isClient ? 'अनुरोध' : 'नया कार्य'}</span>
               </div>
               <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 400, color: 'var(--ink)' }}>
                 What needs doing?
@@ -153,7 +153,7 @@ export default function NewTaskModal({ open, onClose, onCreated }) {
           </div>
 
           {/* PROJECT + STATUS */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: isClient ? '1fr' : '1fr 1fr', gap: 16, marginBottom: 16 }}>
             <div>
               <FieldLabel>PROJECT · परियोजना</FieldLabel>
               <select className="k-select" style={{ width: '100%' }} value={projectId} onChange={e => setProjectId(e.target.value)}>
@@ -161,6 +161,7 @@ export default function NewTaskModal({ open, onClose, onCreated }) {
                 {projects.map(p => <option key={p.team_id} value={p.team_id}>{p.name}</option>)}
               </select>
             </div>
+            {!isClient && (
             <div>
               <FieldLabel>STATUS · स्थिति</FieldLabel>
               <select className="k-select" style={{ width: '100%' }} value={status} onChange={e => setStatus(e.target.value)}>
@@ -170,6 +171,7 @@ export default function NewTaskModal({ open, onClose, onCreated }) {
                 <option value="done">Done</option>
               </select>
             </div>
+            )}
           </div>
 
           {/* PRIORITY */}
@@ -327,7 +329,7 @@ export default function NewTaskModal({ open, onClose, onCreated }) {
           <span style={{ fontSize: 11, color: 'var(--ink-faint)', flex: 1 }}>↵ to create · Esc to close</span>
           <button className="k-btn k-btn--ghost k-btn--sm" onClick={onClose}>Cancel</button>
           <button className="k-btn k-btn--primary k-btn--sm" onClick={handleSubmit} disabled={saving}>
-            {saving ? 'Creating…' : 'Create task'}
+            {saving ? (isClient ? 'Submitting…' : 'Creating…') : (isClient ? 'Submit request' : 'Create task')}
           </button>
         </div>
       </div>

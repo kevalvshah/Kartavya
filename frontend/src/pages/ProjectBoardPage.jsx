@@ -346,6 +346,7 @@ export default function ProjectBoardPage() {
         defaultTeamId={projectId}
         defaultColumnId={newTaskEditor.columnId}
         lockToProject
+        clientMode={me?.role === 'client'}
         onSaved={(task) => {
           setTasks((prev) => [task, ...prev]);
           setNewTaskEditor({ open: false, columnId: null });
