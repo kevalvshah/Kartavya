@@ -27,7 +27,7 @@
     },
     "android": {
       "package": "com.aekaminc.kartavya",
-      "versionCode": 3,
+      "versionCode": 4,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#0082c6"
