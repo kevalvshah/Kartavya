@@ -68,6 +68,7 @@ function MainTabs() {
   const [showNewTask, setShowNewTask] = useState(false);
 
   return (
+    <>
     <Tab.Navigator
       screenOptions={({ route }) => ({
         headerShown: false,
@@ -130,6 +131,7 @@ function MainTabs() {
       <Tab.Screen name="Me"    component={MeScreen}    options={{ title: 'Me' }} />
     </Tab.Navigator>
     <NewTaskSheet visible={showNewTask} onClose={() => setShowNewTask(false)} />
+    </>
   );
 }
 
