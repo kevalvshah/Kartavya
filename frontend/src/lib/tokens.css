@@ -14,6 +14,9 @@
   --font-wordmark: 'Inter', system-ui, -apple-system, sans-serif;
   --font-display:  'Newsreader', serif;
   --font-devanagari: 'Tiro Devanagari Hindi', serif;
+  --font-hindi:      'Tiro Devanagari Hindi', serif;
+  --font-ui:         'Inter', system-ui, -apple-system, sans-serif;
+  --font-mono:       'JetBrains Mono', monospace;
   --font-code:     'JetBrains Mono', monospace;
   --font-alt-display: 'Spectral', serif;
   --font-alt-serif:  'Instrument Serif', serif;

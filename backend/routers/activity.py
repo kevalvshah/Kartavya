@@ -43,15 +43,17 @@ async def team_activity(
     """Return paginated activity events for a team, with optional actor and type filters."""
     # Enforce team visibility: admin sees all; others must be a member or assignee
     if user.get("role") != "admin":
-        access = await pool.fetchrow(
-            """
-            SELECT 1 FROM team_members      WHERE team_id=$1 AND user_id=$2 AND status='active'
-            UNION ALL
-            SELECT 1 FROM project_assignments WHERE team_id=$1 AND user_id=$2
-            LIMIT 1
-            """,
-            team_id, user["user_id"],
-        )
+        try:
+            access = await pool.fetchrow(
+                """
+                SELECT 1 FROM team_members WHERE team_id=$1 AND user_id=$2 AND status='active'
+                LIMIT 1
+                """,
+                team_id, user["user_id"],
+            )
+        except Exception as exc:
+            logger.error("team_members check failed: %s", exc)
+            access = None
         if not access:
             raise HTTPException(403, "Access denied")
     filters, vals = ["team_id=$1"], [team_id]
@@ -74,6 +76,10 @@ async def team_activity(
         """, *vals, limit, offset)
         return _normalize(rows)
     except Exception as exc:
+        # Gracefully return empty list if table doesn't exist yet (first deploy)
+        if "activity_events" in str(exc) and "does not exist" in str(exc):
+            logger.warning("activity_events table missing, returning empty: %s", exc)
+            return []
         logger.error("Activity fetch failed for %s: %s", team_id, exc, exc_info=True)
         raise HTTPException(500, "Activity fetch error") from exc
 

@@ -1520,6 +1520,22 @@ async def startup():
     try:
         pool = await get_pool()
         await pool.execute("""
+            CREATE TABLE IF NOT EXISTS project_assignments (
+                assignment_id TEXT PRIMARY KEY DEFAULT ('pa_' || substr(md5(random()::text), 1, 12)),
+                team_id       TEXT NOT NULL,
+                user_id       TEXT NOT NULL,
+                role          TEXT NOT NULL DEFAULT 'member',
+                created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                UNIQUE(team_id, user_id)
+            )
+        """)
+        await pool.execute("""
+            CREATE INDEX IF NOT EXISTS idx_project_assignments_user ON project_assignments(user_id)
+        """)
+        await pool.execute("""
+            CREATE INDEX IF NOT EXISTS idx_project_assignments_team ON project_assignments(team_id)
+        """)
+        await pool.execute("""
             CREATE TABLE IF NOT EXISTS activity_events (
                 event_id    TEXT PRIMARY KEY DEFAULT ('evt_' || substr(md5(random()::text), 1, 12)),
                 task_id     TEXT REFERENCES tasks(task_id) ON DELETE CASCADE,
