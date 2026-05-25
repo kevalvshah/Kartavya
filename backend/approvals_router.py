@@ -339,9 +339,9 @@ async def client_approve_task(task_id: str, payload: ApprovalRequest,
 
     await pool.execute("""
         UPDATE tasks
-        SET approval_status='approved', approved_by=$1, approval_notes=$2,
+        SET approval_status='approved', approved_by=$1::text, approval_notes=$2,
             approval_decided_at=NOW(), column_id=$3, status='done',
-            completed_at=NOW(), completed_by_user_id=$1, updated_at=NOW()
+            completed_at=NOW(), completed_by_user_id=$1::text, updated_at=NOW()
         WHERE task_id=$4
     """, user["user_id"], payload.notes, new_col_id, task_id)
 
@@ -425,9 +425,9 @@ async def approve_by_token(token: str, payload_body: ApprovalRequest, pool=Depen
     )
     new_col_id = done_col["column_id"] if done_col else task["column_id"]
     await pool.execute("""
-        UPDATE tasks SET approval_status='approved', approved_by=$1, approval_notes=$2,
+        UPDATE tasks SET approval_status='approved', approved_by=$1::text, approval_notes=$2,
             approval_decided_at=NOW(), column_id=$3, status='done',
-            completed_at=NOW(), completed_by_user_id=$1, updated_at=NOW()
+            completed_at=NOW(), completed_by_user_id=$1::text, updated_at=NOW()
         WHERE task_id=$4
     """, client_user_id, payload_body.notes, new_col_id, task_id)
     # Notify task creator in-app
