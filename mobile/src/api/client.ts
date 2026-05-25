@@ -1,8 +1,7 @@
 import axios from 'axios';
-import Constants from 'expo-constants';
 
 const BASE_URL =
-  Constants.expoConfig?.extra?.apiUrl ??
+  process.env.EXPO_PUBLIC_API_URL ??
   'https://kartavya-production.up.railway.app';
 
 export const apiClient = axios.create({

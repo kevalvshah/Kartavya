@@ -6,8 +6,8 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import Constants from 'expo-constants';
 import * as Notifications from 'expo-notifications';
-import * as Crypto from 'expo-crypto';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getDeviceId } from '../hooks/usePushNotifications';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTheme } from '../theme/ThemeProvider';
 import { useAuth } from '../hooks/useAuth';
@@ -118,11 +118,7 @@ export default function SettingsScreen() {
         Alert.alert('Permission denied', 'Enable notifications in your device Settings.');
         return;
       }
-      let deviceId = await AsyncStorage.getItem('push_device_id');
-      if (!deviceId) {
-        deviceId = `expo_${Platform.OS}_${Crypto.randomUUID()}`;
-        await AsyncStorage.setItem('push_device_id', deviceId);
-      }
+      const deviceId = getDeviceId();
       await notificationsApi.registerToken(Platform.OS, token, deviceId);
       setPushEnabled(true);
       await AsyncStorage.setItem('push_enabled', 'true');
