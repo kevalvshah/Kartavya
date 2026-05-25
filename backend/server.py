@@ -578,13 +578,14 @@ async def client_request_task(payload:TaskCreate,pool=Depends(get_db),user=Depen
     max_row=await pool.fetchrow("SELECT MAX(sort_order) AS mo FROM tasks WHERE team_id=$1 AND column_id=$2",payload.team_id,column_id)
     next_order=(max_row["mo"] or -1)+1; task_id=f"task_{uuid.uuid4().hex[:12]}"
     actor_name=user.get("full_name") or user.get("name") or user.get("email","")
+    atts_json=json.dumps([a.model_dump() for a in (payload.attachments or [])])
     row=await pool.fetchrow("""
         INSERT INTO tasks (task_id,team_id,column_id,created_by_user_id,created_by_name,
             title,description,status,priority,approval_id,attachments,custom_fields,subtasks,sort_order)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,'requested',$8,$9,'[]'::jsonb,'{}' ::jsonb,'[]'::jsonb,$10)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,'requested',$8,$9,$10::jsonb,'{}' ::jsonb,'[]'::jsonb,$11)
         RETURNING *""",
         task_id,payload.team_id,column_id,user["user_id"],actor_name,
-        payload.title,payload.description,payload.priority or "medium",approval_id,next_order)
+        payload.title,payload.description,payload.priority or "medium",approval_id,atts_json,next_order)
     # Link approval to task
     await pool.execute("UPDATE approvals SET request_data=$1 WHERE approval_id=$2",
         json.dumps({**payload.model_dump(),"task_id":task_id}),approval_id)

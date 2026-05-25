@@ -7,6 +7,7 @@ import { api } from '../lib/api';
 import { toLocal, fromLocal } from '../lib/auth';
 import { useToast } from './ui/toast';
 import { AVATAR_COLORS, userInitials } from '../lib/utils';
+import FilesField from './fields/FilesField';
 
 export default function TaskEditor({
   open,
@@ -32,6 +33,7 @@ export default function TaskEditor({
 
   const [members, setMembers] = useState([]);
   const [assigneeOpen, setAssigneeOpen] = useState(false);
+  const [attachments, setAttachments] = useState([]);
 
   // Fetch members when team changes
   useEffect(() => {
@@ -72,6 +74,7 @@ export default function TaskEditor({
         assignee_user_ids: [],
       });
     }
+    setAttachments([]);
     setTimeout(() => titleRef.current?.focus(), 60);
   }, [open, editing, defaultTeamId]);
 
@@ -97,6 +100,7 @@ export default function TaskEditor({
       team_id:            teamId,
       due_at:             fromLocal(form.due_at),
       assignee_user_ids:  form.assignee_user_ids,
+      attachments:        attachments.map(f => ({ name: f.name, url: f.url })),
     };
     if (!editing && defaultColumnId) payload.column_id = defaultColumnId;
     try {
@@ -108,6 +112,7 @@ export default function TaskEditor({
       } else {
         r = await api.post('/tasks', payload);
       }
+
       pushToast({ type: 'success', title: editing ? 'Task updated' : clientMode ? 'Task submitted for approval' : 'Task created' });
       onSaved(r.data);
       onOpenChange(false);
@@ -311,6 +316,18 @@ export default function TaskEditor({
               placeholder="Acceptance criteria, context, links..."
             />
           </div>
+
+          {/* Attachments — shown for client requests and new tasks */}
+          {(clientMode || !editing) && (
+            <div>
+              <label style={lbl}>ATTACHMENTS · संलग्नक</label>
+              <FilesField
+                value={attachments}
+                onChange={setAttachments}
+                readOnly={false}
+              />
+            </div>
+          )}
         </div>
 
         {/* Footer */}
