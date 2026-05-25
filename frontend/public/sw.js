@@ -12,6 +12,32 @@ self.addEventListener('activate', (e) => {
   self.clients.claim();
 });
 
+/* Push notification handler — fires when backend sends a Web Push message */
+self.addEventListener('push', (e) => {
+  let data = { title: 'Kartavya', body: 'You have a new notification.' };
+  try { data = e.data?.json() ?? data; } catch (_) {}
+  e.waitUntil(
+    self.registration.showNotification(data.title, {
+      body:  data.body,
+      icon:  '/icon-192.png',
+      badge: '/icon-192.png',
+      data:  { url: data.url || '/' },
+    })
+  );
+});
+
+self.addEventListener('notificationclick', (e) => {
+  e.notification.close();
+  const url = e.notification.data?.url || '/';
+  e.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(cs => {
+      const match = cs.find(c => c.url.includes(self.location.origin));
+      if (match) return match.focus().then(c => c.navigate(url));
+      return clients.openWindow(url);
+    })
+  );
+});
+
 self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET') return;
   // Only cache same-origin requests — skip cross-origin (fonts, CDN) to avoid opaque response bloat

@@ -9,14 +9,32 @@
  *   outlet context, causing those pages to fire requests with no team_id.
  *   Child pages should render a loading state while teamId === null.
  */
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { api } from '../../lib/api';
 import { NotificationsModal } from '../NotificationsModal';
 import NewTaskModal from '../NewTaskModal';
 import Sidebar from './Sidebar';
 import Topbar  from './Topbar';
-import { Bell, Menu } from 'lucide-react';
+import { Bell, Menu, X } from 'lucide-react';
+
+function requestBrowserPermission() {
+  if (!('Notification' in window)) return;
+  if (Notification.permission === 'default') Notification.requestPermission();
+}
+
+function fireBrowserNotif(title, body) {
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  try {
+    if (navigator.serviceWorker?.controller) {
+      navigator.serviceWorker.ready.then(reg =>
+        reg.showNotification(title, { body, icon: '/icon-192.png', badge: '/icon-192.png' })
+      );
+    } else {
+      new Notification(title, { body, icon: '/icon-192.png' });
+    }
+  } catch (_) {}
+}
 
 export default function AppShell() {
   const [notifOpen,    setNotifOpen]    = useState(false);
@@ -25,7 +43,22 @@ export default function AppShell() {
   const [sidebarOpen,  setSidebarOpen]  = useState(false);
   const [teams,        setTeams]        = useState([]);
   const [teamsLoaded,  setTeamsLoaded]  = useState(false);
+  const [notifPrompt,  setNotifPrompt]  = useState(false);
+  const prevUnread = useRef(null);
   const location = useLocation();
+
+  // Register SW and ask for browser notification permission after 4 s
+  useEffect(() => {
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').catch(() => {});
+    }
+    const t = setTimeout(() => {
+      if (!('Notification' in window)) return;
+      if (Notification.permission === 'default') setNotifPrompt(true);
+      else if (Notification.permission === 'granted') requestBrowserPermission();
+    }, 4000);
+    return () => clearTimeout(t);
+  }, []);
 
   useEffect(() => {
     api.get('/teams')
@@ -39,7 +72,19 @@ export default function AppShell() {
     const tick = async () => {
       try {
         const r = await api.get('/notifications/poll');
-        if (live) setUnread(r.data.unread ?? 0);
+        const count = r.data.unread ?? 0;
+        if (live) {
+          // Fire browser toast when new notifications arrive
+          if (prevUnread.current !== null && count > prevUnread.current && Notification.permission === 'granted') {
+            const diff = count - prevUnread.current;
+            fireBrowserNotif(
+              diff === 1 ? 'New notification' : `${diff} new notifications`,
+              'Open Kartavya to view'
+            );
+          }
+          prevUnread.current = count;
+          setUnread(count);
+        }
       } catch (_) {}
     };
     tick();
@@ -96,6 +141,34 @@ export default function AppShell() {
         <div className="k-app__topbar">
           <Topbar unread={unread} onOpenNotifications={() => setNotifOpen(true)} onNewTask={() => setNewTaskOpen(true)} />
         </div>
+
+        {/* Browser notification permission prompt */}
+        {notifPrompt && (
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 10,
+            padding: '10px 18px',
+            background: 'color-mix(in srgb, var(--k-primary) 10%, var(--surface))',
+            borderBottom: '1px solid color-mix(in srgb, var(--k-primary) 25%, transparent)',
+            fontSize: 13, color: 'var(--ink-2)',
+          }}>
+            <Bell size={15} style={{ color: 'var(--k-primary)', flexShrink: 0 }} />
+            <span style={{ flex: 1 }}>Get browser notifications for new approvals and updates.</span>
+            <button
+              className="k-btn k-btn--primary k-btn--sm"
+              onClick={() => { setNotifPrompt(false); requestBrowserPermission(); }}
+            >
+              Allow
+            </button>
+            <button
+              className="k-iconbtn"
+              aria-label="Dismiss"
+              onClick={() => setNotifPrompt(false)}
+              style={{ color: 'var(--ink-3)' }}
+            >
+              <X size={14} />
+            </button>
+          </div>
+        )}
 
         {/* Page content */}
         <main className="k-content">
