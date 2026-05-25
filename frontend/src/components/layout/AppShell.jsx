@@ -17,11 +17,33 @@ import NewTaskModal from '../NewTaskModal';
 import Sidebar from './Sidebar';
 import Topbar  from './Topbar';
 import { NotifToastContainer, NotifPermissionPrompt } from './NotifToast';
+import { urlBase64ToUint8Array } from '../../lib/push';
 import { Bell, Menu, X } from 'lucide-react';
+
+async function subscribeToPush() {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const existing = await reg.pushManager.getSubscription();
+    if (existing) return; // already subscribed
+    const keyRes = await api.get('/push/vapid-public-key');
+    const pubKey = keyRes.data?.public_key;
+    if (!pubKey || pubKey === 'not-configured') return;
+    const sub = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(pubKey),
+    });
+    await api.post('/push/subscribe', sub.toJSON());
+  } catch (_) {}
+}
 
 function requestBrowserPermission() {
   if (!('Notification' in window)) return;
-  if (Notification.permission === 'default') Notification.requestPermission();
+  if (Notification.permission === 'default') {
+    Notification.requestPermission().then(perm => { if (perm === 'granted') subscribeToPush(); });
+  } else if (Notification.permission === 'granted') {
+    subscribeToPush();
+  }
 }
 
 function fireBrowserNotif(title, body) {

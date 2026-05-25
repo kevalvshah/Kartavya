@@ -45,7 +45,15 @@ from routers.templates   import router as templates_router
 from routers.time_entries import router as time_router
 from routers.uploads     import router as uploads_router   # R2-backed upload
 from routers.reports     import router as reports_router
-from services.gita       import get_verse_of_the_day
+from services.gita            import get_verse_of_the_day
+from services.web_push_service import (
+    is_configured as wp_is_configured,
+    save_subscription as wp_save_subscription,
+    remove_subscription as wp_remove_subscription,
+    send_web_push,
+    fan_out_web_push,
+    VAPID_PUBLIC_KEY as VAPID_PUB,
+)
 from utils import SQL_USER_ROLE
 
 # ── Shared constants ──────────────────────────────────────
@@ -194,11 +202,13 @@ async def normalize_orders(pool, scope_col, scope_val, column_id):
     )
 
 async def create_notification(pool, user_id, notif_type, title, message, task_id=None, team_id=None, url=None):
-    """Insert a notification row for the given user."""
+    """Insert a notification row and fire a Web Push if the user has a subscription."""
     await pool.execute(
         "INSERT INTO notifications (notification_id,user_id,team_id,type,title,message,task_id,url) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)",
         f"notif_{uuid.uuid4().hex[:12]}", user_id, team_id, notif_type, title, message, task_id, url,
     )
+    # Fire Web Push (non-blocking, swallows errors internally)
+    asyncio.create_task(send_web_push(pool, user_id=user_id, title=title, body=message, url=url or "/"))
 
 async def ensure_default_columns(pool, team_id):
     """Create the five default kanban columns for a new project if none exist yet."""
@@ -1528,11 +1538,23 @@ async def poll_notifications(pool=Depends(get_db),user=Depends(require_user)):
     }
 
 @api_router.get("/push/vapid-public-key")
-async def get_vapid_public_key(user=Depends(require_user)): return {"public_key":"not-configured"}
+async def get_vapid_public_key(user=Depends(require_user)):
+    return {"public_key": VAPID_PUB if wp_is_configured() else "not-configured"}
+
 @api_router.post("/push/subscribe")
-async def subscribe_push(payload:PushSubscriptionIn,user=Depends(require_user)): return {"ok":True}
+async def subscribe_push(payload: PushSubscriptionIn, user=Depends(require_user)):
+    pool = await get_pool()
+    sub = payload.model_dump()
+    await wp_save_subscription(pool, user["user_id"], sub)
+    return {"ok": True}
+
 @api_router.post("/push/unsubscribe")
-async def unsubscribe_push(payload:PushSubscriptionIn,user=Depends(require_user)): return {"ok":True}
+async def unsubscribe_push(payload: PushSubscriptionIn, user=Depends(require_user)):
+    pool = await get_pool()
+    endpoint = (payload.model_dump() or {}).get("endpoint", "")
+    if endpoint:
+        await wp_remove_subscription(pool, endpoint)
+    return {"ok": True}
 
 
 # ── App assembly ────────────────────────────────────────────────────
@@ -1701,6 +1723,19 @@ async def startup():
         await pool.execute("CREATE INDEX IF NOT EXISTS idx_approvals_team ON approvals(team_id)")
         await pool.execute("CREATE INDEX IF NOT EXISTS idx_approvals_task_id ON approvals(task_id)")
         await pool.execute("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS approval_id TEXT")
+        # Web Push subscriptions
+        await pool.execute("""
+            CREATE TABLE IF NOT EXISTS push_web_subscriptions (
+                id         TEXT PRIMARY KEY DEFAULT ('pws_' || substr(md5(random()::text),1,12)),
+                user_id    TEXT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+                endpoint   TEXT NOT NULL UNIQUE,
+                p256dh     TEXT NOT NULL,
+                auth       TEXT NOT NULL,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            )
+        """)
+        await pool.execute("CREATE INDEX IF NOT EXISTS idx_pws_user ON push_web_subscriptions(user_id)")
         logger.info("Startup migrations OK")
     except Exception as e:
         logger.warning("Startup migration warning (non-fatal): %s", e)
