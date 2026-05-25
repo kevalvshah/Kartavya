@@ -318,11 +318,13 @@ async def client_approve_task(task_id: str, payload: ApprovalRequest,
                                pool=Depends(get_pool), user=Depends(require_user)):
     """Allow an authenticated client user to approve a pending_client task."""
     task   = await get_task_with_permission(pool, task_id, user["user_id"])
-    access = await pool.fetchrow(
-        "SELECT 1 FROM task_clients WHERE task_id=$1 AND user_id=$2", task_id, user["user_id"]
-    )
-    if not access and user.get("role") != "admin":
-        raise HTTPException(403, "Only the assigned client can approve this task")
+    if user.get("role") != "admin":
+        access = await pool.fetchrow(
+            "SELECT 1 FROM project_assignments WHERE team_id=$1 AND user_id=$2",
+            task["team_id"], user["user_id"]
+        )
+        if not access:
+            raise HTTPException(403, "You are not a member of this project")
 
     done_col = await pool.fetchrow(
         "SELECT column_id FROM project_columns WHERE team_id=$1 AND is_done=TRUE ORDER BY sort_order DESC LIMIT 1",
@@ -474,11 +476,13 @@ async def client_reject_task(task_id: str, payload: ApprovalRequest,
                               pool=Depends(get_pool), user=Depends(require_user)):
     """Allow an authenticated client user to reject a pending_client task with a reason."""
     task   = await get_task_with_permission(pool, task_id, user["user_id"])
-    access = await pool.fetchrow(
-        "SELECT 1 FROM task_clients WHERE task_id=$1 AND user_id=$2", task_id, user["user_id"]
-    )
-    if not access and user.get("role") != "admin":
-        raise HTTPException(403, "Only the assigned client can reject this task")
+    if user.get("role") != "admin":
+        access = await pool.fetchrow(
+            "SELECT 1 FROM project_assignments WHERE team_id=$1 AND user_id=$2",
+            task["team_id"], user["user_id"]
+        )
+        if not access:
+            raise HTTPException(403, "You are not a member of this project")
 
     if not payload.notes or not payload.notes.strip():
         raise HTTPException(400, _REJECTION_REQUIRED)

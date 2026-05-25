@@ -44,6 +44,8 @@ async def get_task_time(task_id: str, pool=Depends(get_pool), user=Depends(requi
 @router.post("/start")
 async def start_timer(task_id: str, pool=Depends(get_pool), user=Depends(require_user)):
     """Start a running timer. Auto-stops any existing running timer first."""
+    if user.get("role") == "client":
+        raise HTTPException(403, "Clients cannot log time")
     # Stop existing running timer
     await pool.execute(
         """
@@ -100,6 +102,8 @@ async def stop_timer(pool=Depends(get_pool), user=Depends(require_user)):
 
 @router.post("/manual")
 async def add_manual_entry(body: TimeEntryCreate, pool=Depends(get_pool), user=Depends(require_user)):
+    if user.get("role") == "client":
+        raise HTTPException(403, "Clients cannot log time")
     entry_id = f"te_{uuid.uuid4().hex[:12]}"
     mins = body.minutes
     if mins is None and body.ended_at:

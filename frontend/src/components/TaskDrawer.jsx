@@ -397,7 +397,7 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
     ['details',  'Details',  'विवरण'],
     ['files',    'Files',    'फ़ाइलें'],
     ['activity', 'Activity', 'क्रिया'],
-    ['time',     'Time',     'काल'],
+    ...(!isClient ? [['time', 'Time', 'काल']] : []),
   ];
 
   return (
