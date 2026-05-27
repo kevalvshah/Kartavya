@@ -69,39 +69,50 @@ function ProjectPicker({
 }
 
 // ── Board card ────────────────────────────────────────────────────────────────
+const BC_AVATAR_COLORS = ['#0082c6','#05b7aa','#8b5cf6','#f59e0b','#ec4899'];
+const IS_ANDROID = Platform.OS === 'android';
+
 function BoardCard({ task, col, onPress }: { task: Task; col?: ProjectColumn; onPress: () => void }) {
   const { t } = useTheme();
-  const pri   = PRIORITY_COLOR[task.priority] ?? '#636366';
-  const done  = (task.subtasks ?? []).filter(s => s.is_done).length;
-  const total = (task.subtasks ?? []).length;
-  const isLate = task.due_at ? isPast(new Date(task.due_at)) && !isToday(new Date(task.due_at)) : false;
-  const isApproval = col?.name?.toLowerCase().includes('approval');
+  const priColor = PRIORITY_COLOR[task.priority] ?? '#636366';
+  const isLate   = task.due_at ? isPast(new Date(task.due_at)) && !isToday(new Date(task.due_at)) : false;
+
+  // Approval chip
+  let approvalBg = ''; let approvalFg = ''; let approvalLabel = '';
+  if (task.approval_status === 'approved') {
+    approvalBg = IS_ANDROID ? t.primaryContainer : 'rgba(5,183,170,0.16)';
+    approvalFg = IS_ANDROID ? t.onPrimaryContainer : '#0A7A6E';
+    approvalLabel = 'Approved';
+  } else if (task.approval_status === 'pending_client') {
+    approvalBg = IS_ANDROID ? t.purpleContainer : 'rgba(167,139,250,0.16)';
+    approvalFg = t.purple;
+    approvalLabel = 'Client review';
+  } else if (task.approval_status === 'pending') {
+    approvalBg = IS_ANDROID ? t.tertiaryContainer : 'rgba(255,159,10,0.18)';
+    approvalFg = IS_ANDROID ? t.onTertiaryContainer : '#B06A00';
+    approvalLabel = 'Owner sign-off';
+  }
+
+  // Due chip colors
+  const dueBg   = isLate ? (IS_ANDROID ? t.errorBg   : 'rgba(255,69,58,0.12)') : t.surface2;
+  const dueFg   = isLate ? (IS_ANDROID ? t.error     : '#FF453A')               : t.ink2;
 
   return (
     <TouchableOpacity
-      style={[bc.card, { backgroundColor: t.surface }]}
+      style={[bc.card, IS_ANDROID
+        ? { backgroundColor: t.surfaceLow, borderRadius: 24 }
+        : { backgroundColor: t.surface,    borderRadius: 16,
+            shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
+            shadowOpacity: 0.05, shadowRadius: 3, elevation: 1 },
+      ]}
       onPress={onPress}
       activeOpacity={0.75}
     >
-      {/* Priority + ID row */}
+      {/* Priority dot + label + ID */}
       <View style={bc.topRow}>
-        <View style={[bc.priDot, { backgroundColor: pri }]} />
-        <Text style={[bc.priLabel, { color: t.ink3 }]}>{task.priority}</Text>
-        {task.approval_status === 'pending' && (
-          <View style={bc.ownerChip}>
-            <Text style={bc.ownerChipText}>OWNER SIGN-OFF</Text>
-          </View>
-        )}
-        {task.approval_status === 'pending_client' && (
-          <View style={[bc.ownerChip, { backgroundColor: 'rgba(167,139,250,0.18)' }]}>
-            <Text style={[bc.ownerChipText, { color: '#6B46C1' }]}>CLIENT REVIEW</Text>
-          </View>
-        )}
-        {task.approval_status === 'approved' && (
-          <View style={[bc.ownerChip, { backgroundColor: 'rgba(5,183,170,0.16)' }]}>
-            <Text style={[bc.ownerChipText, { color: '#0A7A6E' }]}>APPROVED</Text>
-          </View>
-        )}
+        <View style={[bc.priDot, { backgroundColor: priColor, borderRadius: 99 }]} />
+        <Text style={[bc.priLabel, { color: t.ink2 }]}>{task.priority}</Text>
+        <Text style={[bc.taskId, { color: t.ink3 }]}>{task.task_id.slice(0, 8)}</Text>
       </View>
 
       {/* Title */}
@@ -110,52 +121,42 @@ function BoardCard({ task, col, onPress }: { task: Task; col?: ProjectColumn; on
       {/* Footer */}
       <View style={bc.footer}>
         {task.due_at && (
-          <View style={[bc.dueChip, {
-            backgroundColor: isLate ? 'rgba(239,68,68,0.12)' : 'rgba(0,0,0,0.06)',
-          }]}>
-            <Ionicons name="calendar-outline" size={10} color={isLate ? '#ef4444' : t.ink3} />
-            <Text style={[bc.dueText, { color: isLate ? '#ef4444' : t.ink3 }]}>
+          <View style={[bc.chip, { backgroundColor: dueBg }]}>
+            <Text style={[bc.chipText, { color: dueFg }]}>
               {format(new Date(task.due_at), 'd MMM')}
             </Text>
           </View>
         )}
+        {!!approvalLabel && (
+          <View style={[bc.chip, { backgroundColor: approvalBg }]}>
+            <Text style={[bc.chipText, { color: approvalFg }]}>{approvalLabel.toUpperCase()}</Text>
+          </View>
+        )}
         <View style={{ flex: 1 }} />
-        {/* Comment + attachment counts */}
+        {/* Meta counts */}
         {(task.comments_count ?? 0) > 0 && (
           <View style={bc.metaItem}>
-            <Ionicons name="chatbubble-outline" size={10} color={t.ink3} />
+            <Ionicons name="chatbubble-outline" size={11} color={t.ink3} />
             <Text style={[bc.metaCount, { color: t.ink3 }]}>{task.comments_count}</Text>
           </View>
         )}
         {((task.attachments ?? []).length) > 0 && (
           <View style={bc.metaItem}>
-            <Ionicons name="attach-outline" size={10} color={t.ink3} />
+            <Ionicons name="attach-outline" size={11} color={t.ink3} />
             <Text style={[bc.metaCount, { color: t.ink3 }]}>{task.attachments!.length}</Text>
           </View>
         )}
         {/* Assignee avatars */}
         {(task.assignee_names ?? []).slice(0, 3).map((name, i) => (
           <View key={i} style={[bc.avatar, {
-            backgroundColor: ['#0082c6','#05b7aa','#8b5cf6','#f59e0b','#ec4899'][i % 5] + 'cc',
-            marginLeft: i > 0 ? -6 : 0,
+            backgroundColor: BC_AVATAR_COLORS[i % BC_AVATAR_COLORS.length],
+            marginLeft: i > 0 ? -7 : 0,
+            borderColor: IS_ANDROID ? t.surfaceLow : t.surface,
           }]}>
             <Text style={bc.avatarText}>{name?.[0]?.toUpperCase() ?? '?'}</Text>
           </View>
         ))}
       </View>
-
-      {/* Subtask progress bar */}
-      {total > 0 && (
-        <View style={bc.progressRow}>
-          <View style={[bc.progressTrack, { backgroundColor: t.outline }]}>
-            <View style={[bc.progressBar, {
-              width: `${(done / total) * 100}%` as any,
-              backgroundColor: col?.color ?? '#0082c6',
-            }]} />
-          </View>
-          <Text style={[bc.progressText, { color: t.ink3 }]}>{done}/{total}</Text>
-        </View>
-      )}
     </TouchableOpacity>
   );
 }
