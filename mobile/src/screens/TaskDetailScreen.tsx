@@ -7,15 +7,14 @@ import React, { useState, useRef, useMemo } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity,
   TextInput, ActivityIndicator, Alert, KeyboardAvoidingView,
-  Platform, Linking, ActionSheetIOS, Keyboard,
+  Platform, Linking, Keyboard,
 } from 'react-native';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import * as ImagePicker from 'expo-image-picker';
-import * as DocumentPicker from 'expo-document-picker';
+import AttachmentSourceSheet, { type PickedFile } from '../components/AttachmentSourceSheet';
 import { format, isToday, isPast } from 'date-fns';
 import { useTheme } from '../theme/ThemeProvider';
 import { useAuth } from '../hooks/useAuth';
@@ -99,6 +98,7 @@ export default function TaskDetailScreen() {
   const [showMove,       setShowMove]       = useState(false);
   const [approvalAction, setApprovalAction] = useState<'request' | 'approve' | 'reject' | 'client' | 'client_approve' | 'client_reject' | null>(null);
   const [uploadingFile,  setUploadingFile]  = useState(false);
+  const [showAttachPicker, setShowAttachPicker] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
 
   // ── Mutations ────────────────────────────────────────────────────────────────
@@ -187,65 +187,19 @@ export default function TaskDetailScreen() {
     }
   };
 
-  const handleUpload = async (source: 'camera' | 'library' | 'file') => {
+  const handleFilePicked = async (files: PickedFile[]) => {
+    setUploadingFile(true);
     try {
-      setUploadingFile(true);
-      let uri: string | undefined;
-      let name = 'attachment';
-      let type = 'application/octet-stream';
-
-      if (source === 'file') {
-        const result = await DocumentPicker.getDocumentAsync({ copyToCacheDirectory: true });
-        if (result.canceled || !result.assets?.[0]) return;
-        const asset = result.assets[0];
-        uri  = asset.uri;
-        name = asset.name;
-        type = asset.mimeType ?? type;
-      } else {
-        const perm = source === 'camera'
-          ? await ImagePicker.requestCameraPermissionsAsync()
-          : await ImagePicker.requestMediaLibraryPermissionsAsync();
-        if (!perm.granted) { Alert.alert('Permission required', 'Allow access in Settings.'); return; }
-
-        const result = source === 'camera'
-          ? await ImagePicker.launchCameraAsync({ mediaTypes: ImagePicker.MediaTypeOptions.All, quality: 0.85 })
-          : await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.All, quality: 0.85 });
-        if (result.canceled || !result.assets?.[0]) return;
-        const asset = result.assets[0];
-        uri  = asset.uri;
-        name = asset.fileName ?? `photo_${Date.now()}.jpg`;
-        type = asset.mimeType ?? 'image/jpeg';
+      for (const f of files) {
+        const fd = new FormData();
+        fd.append('file', { uri: f.uri, name: f.name, type: f.type } as unknown as Blob);
+        await tasksApi.uploadAttachment(taskId, fd);
       }
-
-      if (!uri) return;
-      const fd = new FormData();
-      fd.append('file', { uri, name, type } as unknown as Blob);
-      await tasksApi.uploadAttachment(taskId, fd);
       invalidate();
     } catch (e: unknown) {
       Alert.alert('Upload failed', e instanceof Error ? e.message : 'Could not upload file.');
     } finally {
       setUploadingFile(false);
-    }
-  };
-
-  const showUploadSheet = () => {
-    if (Platform.OS === 'ios') {
-      ActionSheetIOS.showActionSheetWithOptions(
-        { options: ['Cancel', 'Take Photo', 'Photo Library', 'Browse Files'], cancelButtonIndex: 0 },
-        (idx) => {
-          if (idx === 1) handleUpload('camera');
-          if (idx === 2) handleUpload('library');
-          if (idx === 3) handleUpload('file');
-        }
-      );
-    } else {
-      Alert.alert('Add Attachment', 'Choose source', [
-        { text: 'Camera',        onPress: () => handleUpload('camera') },
-        { text: 'Photo Library', onPress: () => handleUpload('library') },
-        { text: 'Browse Files',  onPress: () => handleUpload('file') },
-        { text: 'Cancel', style: 'cancel' },
-      ]);
     }
   };
 
@@ -526,7 +480,7 @@ export default function TaskDetailScreen() {
           <Section
             label="ATTACHMENTS"
             t={t}
-            action={canEdit ? { icon: uploadingFile ? 'hourglass-outline' : 'attach-outline', onPress: showUploadSheet } : undefined}
+            action={canEdit ? { icon: uploadingFile ? 'hourglass-outline' : 'attach-outline', onPress: () => setShowAttachPicker(true) } : undefined}
           >
             {task.attachments.length === 0 && !uploadingFile && (
               <Text style={[s.emptyHint, { color: t.ink4 }]}>{canEdit ? 'Tap + to attach files' : 'No attachments'}</Text>
@@ -651,6 +605,13 @@ export default function TaskDetailScreen() {
         action={approvalAction}
         onClose={() => setApprovalAction(null)}
         onConfirm={handleApprovalConfirm}
+      />
+
+      <AttachmentSourceSheet
+        visible={showAttachPicker}
+        onClose={() => setShowAttachPicker(false)}
+        onPicked={handleFilePicked}
+        maxFiles={5 - (task?.attachments?.length ?? 0)}
       />
     </View>
   );

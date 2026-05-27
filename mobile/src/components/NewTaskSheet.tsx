@@ -10,12 +10,17 @@ import {
   StyleSheet, KeyboardAvoidingView, Platform, ActivityIndicator,
   Pressable,
 } from 'react-native';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTheme } from '../theme/ThemeProvider';
 import { useAuth } from '../hooks/useAuth';
 import { apiClient } from '../api/client';
+import AttachmentSourceSheet, { type PickedFile } from './AttachmentSourceSheet';
 import type { TeamMember } from '../api/types';
+
+const MAX_ATTACHMENTS = 5;
+const MAX_MB = 5;
 
 interface Props {
   visible: boolean;
@@ -41,9 +46,13 @@ export default function NewTaskSheet({ visible, onClose }: Props) {
   const [projectId,  setProjectId]  = useState<string | null>(null);
   const [status,     setStatus]     = useState<string>('todo');
   const [priority,   setPriority]   = useState<Priority>('medium');
-  const [dueAt,      setDueAt]      = useState('');
+  const [dueAt,      setDueAt]      = useState<Date | null>(null);
+  const [showDatePicker, setShowDatePicker] = useState(false);
   const [description,setDescription]= useState('');
   const [assignees,  setAssignees]  = useState<string[]>([]);
+  const [attachments, setAttachments] = useState<{ name: string; url: string; key: string | null }[]>([]);
+  const [showAttachPicker, setShowAttachPicker] = useState(false);
+  const [uploadingFiles, setUploadingFiles] = useState(false);
   const [titleError, setTitleError] = useState(false);
   const [saving,     setSaving]     = useState(false);
   const [error,      setError]      = useState<string | null>(null);
@@ -55,7 +64,8 @@ export default function NewTaskSheet({ visible, onClose }: Props) {
   useEffect(() => {
     if (!visible) return;
     setTitle(''); setProjectId(null); setStatus('todo'); setPriority('medium');
-    setDueAt(''); setDescription(''); setAssignees([]);
+    setDueAt(null); setShowDatePicker(false); setDescription(''); setAssignees([]);
+    setAttachments([]); setShowAttachPicker(false); setUploadingFiles(false);
     setTitleError(false); setError(null);
     apiClient.get('/teams').then(r => setProjects(Array.isArray(r.data) ? r.data : [])).catch(() => {});
   }, [visible]);
@@ -71,6 +81,27 @@ export default function NewTaskSheet({ visible, onClose }: Props) {
   const toggleAssignee = (uid: string) => {
     setAssignees(prev => prev.includes(uid) ? prev.filter(x => x !== uid) : [...prev, uid]);
   };
+
+  const handleFilePicked = useCallback(async (files: PickedFile[]) => {
+    if (attachments.length >= MAX_ATTACHMENTS) return;
+    const slots = MAX_ATTACHMENTS - attachments.length;
+    const toUpload = files.slice(0, slots);
+    setUploadingFiles(true);
+    try {
+      const uploaded: typeof attachments = [];
+      for (const f of toUpload) {
+        const fd = new FormData();
+        fd.append('file', { uri: f.uri, name: f.name, type: f.type } as unknown as Blob);
+        const res = await apiClient.post('/upload', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+        uploaded.push({ name: f.name, url: res.data.url, key: res.data.key ?? null });
+      }
+      setAttachments(prev => [...prev, ...uploaded]);
+    } catch {
+      setError('Could not upload file. Try again.');
+    } finally {
+      setUploadingFiles(false);
+    }
+  }, [attachments]);
 
   const handleClose = useCallback(() => {
     onClose();
@@ -89,8 +120,9 @@ export default function NewTaskSheet({ visible, onClose }: Props) {
         description: description.trim() || null,
       };
       if (projectId)        payload.team_id          = projectId;
-      if (dueAt)            payload.due_at            = new Date(dueAt).toISOString();
-      if (assignees.length) payload.assignee_user_ids = assignees;
+      if (dueAt)            payload.due_at            = dueAt.toISOString();
+      if (assignees.length)    payload.assignee_user_ids = assignees;
+      if (attachments.length)  payload.attachments       = attachments;
 
       const endpoint = isClient ? '/client/tasks/request' : '/tasks';
       await apiClient.post(endpoint, payload);
@@ -199,14 +231,26 @@ export default function NewTaskSheet({ visible, onClose }: Props) {
 
             {/* Due date */}
             <FieldLabel t={t}>DUE DATE · नियत तिथि</FieldLabel>
-            <TextInput
-              value={dueAt}
-              onChangeText={setDueAt}
-              placeholder="YYYY-MM-DD"
-              placeholderTextColor={t.ink3}
-              style={[s.input, { color: t.ink }]}
-              keyboardType="numbers-and-punctuation"
-            />
+            <TouchableOpacity
+              onPress={() => setShowDatePicker(true)}
+              style={[s.input, { justifyContent: 'center' }]}
+            >
+              <Text style={{ color: dueAt ? t.ink : t.ink3, fontSize: 15 }}>
+                {dueAt ? dueAt.toLocaleDateString('en-CA') : 'Select date'}
+              </Text>
+            </TouchableOpacity>
+            {showDatePicker && (
+              <DateTimePicker
+                value={dueAt ?? new Date()}
+                mode="date"
+                display={Platform.OS === 'android' ? 'calendar' : 'spinner'}
+                minimumDate={new Date()}
+                onChange={(_, selected) => {
+                  setShowDatePicker(Platform.OS === 'ios');
+                  if (selected) setDueAt(selected);
+                }}
+              />
+            )}
 
             {/* Assignees — hidden for clients */}
             {!isClient && projectId && members.length > 0 && (
@@ -237,6 +281,51 @@ export default function NewTaskSheet({ visible, onClose }: Props) {
                   })}
                 </View>
               </>
+            )}
+
+            {/* Attachments */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 16 }}>
+              <FieldLabel t={t}>ATTACHMENTS · संलग्नक</FieldLabel>
+              {attachments.length < MAX_ATTACHMENTS && (
+                <TouchableOpacity
+                  onPress={() => setShowAttachPicker(true)}
+                  disabled={uploadingFiles}
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingBottom: 8 }}
+                >
+                  {uploadingFiles
+                    ? <ActivityIndicator size="small" color={t.primary} />
+                    : <Ionicons name="add-circle-outline" size={18} color={t.primary} />
+                  }
+                  <Text style={{ fontSize: 12, color: t.primary, fontWeight: '600' }}>
+                    {uploadingFiles ? 'Uploading…' : 'Add'}
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
+            {attachments.length === 0 && !uploadingFiles && (
+              <TouchableOpacity
+                onPress={() => setShowAttachPicker(true)}
+                style={[s.attachEmpty, { borderColor: t.outline }]}
+              >
+                <Ionicons name="attach-outline" size={18} color={t.ink3} />
+                <Text style={{ fontSize: 13, color: t.ink3 }}>Camera · Photos · Drive · Files</Text>
+              </TouchableOpacity>
+            )}
+            {attachments.length > 0 && (
+              <View style={s.attachList}>
+                {attachments.map((a, i) => {
+                  const isImage = /\.(jpg|jpeg|png|gif|webp|heic)$/i.test(a.name);
+                  return (
+                    <View key={i} style={[s.attachRow, { backgroundColor: t.bg, borderColor: t.outline }]}>
+                      <Ionicons name={isImage ? 'image-outline' : 'document-outline'} size={14} color={t.primary} />
+                      <Text style={[s.attachName, { color: t.ink }]} numberOfLines={1}>{a.name}</Text>
+                      <TouchableOpacity onPress={() => setAttachments(prev => prev.filter((_, j) => j !== i))} hitSlop={8}>
+                        <Ionicons name="close-circle" size={16} color={t.ink3} />
+                      </TouchableOpacity>
+                    </View>
+                  );
+                })}
+              </View>
             )}
 
             {/* Description */}
@@ -272,9 +361,16 @@ export default function NewTaskSheet({ visible, onClose }: Props) {
           </View>
         </View>
       </KeyboardAvoidingView>
+      <AttachmentSourceSheet
+        visible={showAttachPicker}
+        onClose={() => setShowAttachPicker(false)}
+        onPicked={handleFilePicked}
+        maxFiles={MAX_ATTACHMENTS - attachments.length}
+      />
     </Modal>
   );
 }
+
 
 function FieldLabel({ children, t }: { children: React.ReactNode; t: ReturnType<typeof useTheme>['t'] }) {
   return (
@@ -439,5 +535,21 @@ const styles = (t: ReturnType<typeof useTheme>['t']) => StyleSheet.create({
   btnDisabled: { opacity: 0.45 },
   btnText: {
     color: '#fff', fontWeight: '700', fontSize: 15,
+  },
+  attachEmpty: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    borderWidth: 1.5, borderStyle: 'dashed',
+    borderRadius: 10, paddingVertical: 12, paddingHorizontal: 14,
+  },
+  attachList: {
+    gap: 6,
+  },
+  attachRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    paddingHorizontal: 12, paddingVertical: 9,
+    borderRadius: 8, borderWidth: 1,
+  },
+  attachName: {
+    flex: 1, fontSize: 13, fontWeight: '500',
   },
 });

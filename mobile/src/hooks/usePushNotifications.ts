@@ -47,30 +47,30 @@ Notifications.setNotificationHandler({
  * Returns null on simulators, physical devices without permission, or any error.
  */
 async function registerForPushNotificationsAsync(): Promise<string | null> {
-  // Expo Go / simulators may not support push
+  // Expo Go / simulators don't support push
   if (!Constants.isDevice) return null;
 
-  const { status: existingStatus } = await Notifications.getPermissionsAsync();
-  let finalStatus = existingStatus;
-
-  if (existingStatus !== 'granted') {
-    const { status } = await Notifications.requestPermissionsAsync();
-    finalStatus = status;
-  }
-
-  if (finalStatus !== 'granted') return null;
-
-  // Android requires a notification channel
-  if (Platform.OS === 'android') {
-    await Notifications.setNotificationChannelAsync('default', {
-      name: 'Default',
-      importance: Notifications.AndroidImportance.MAX,
-      vibrationPattern: [0, 250, 250, 250],
-      lightColor: '#0082C6',
-    });
-  }
-
   try {
+    const { status: existingStatus } = await Notifications.getPermissionsAsync();
+    let finalStatus = existingStatus;
+
+    if (existingStatus !== 'granted') {
+      const { status } = await Notifications.requestPermissionsAsync();
+      finalStatus = status;
+    }
+
+    if (finalStatus !== 'granted') return null;
+
+    // Android requires a notification channel
+    if (Platform.OS === 'android') {
+      await Notifications.setNotificationChannelAsync('default', {
+        name: 'Default',
+        importance: Notifications.AndroidImportance.MAX,
+        vibrationPattern: [0, 250, 250, 250],
+        lightColor: '#0082C6',
+      });
+    }
+
     const projectId =
       Constants.expoConfig?.extra?.eas?.projectId ??
       Constants.easConfig?.projectId;
@@ -79,6 +79,7 @@ async function registerForPushNotificationsAsync(): Promise<string | null> {
     );
     return tokenData.data;
   } catch {
+    // Non-fatal — emulators and dev clients without Firebase will land here
     return null;
   }
 }

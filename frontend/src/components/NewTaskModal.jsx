@@ -1,4 +1,4 @@
-/**
+﻿/**
  * NewTaskModal.jsx — global "New task" modal. k-* design system.
  * Opened from the top-bar "+ New task" button (AppShell).
  */
@@ -297,31 +297,40 @@ export default function NewTaskModal({ open, onClose, onCreated }) {  const is
             />
           </div>
 
-          {/* ATTACHMENTS */}
-          <div>
-            <FieldLabel>ATTACHMENTS · संलग्नक</FieldLabel>
-            <input ref={fileRef} type="file" multiple style={{ display: 'none' }} onChange={handleFileChange} />
-            {files.length > 0 && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 10 }}>
-                {files.map((f, i) => (
-                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', borderRadius: 8, background: 'var(--bg)', border: '1px solid var(--rule)', fontSize: 13 }}>
-                    <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="var(--ink-3)" strokeWidth="1.5"><path d="M9 1H4a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V5L9 1z"/><path d="M9 1v4h4"/></svg>
-                    <a href={f.url} target="_blank" rel="noreferrer" style={{ flex: 1, color: 'var(--k-primary)', textDecoration: 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.name}</a>
-                    <button onClick={() => setFiles(p => p.filter((_, j) => j !== i))} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-faint)', fontSize: 16, lineHeight: 1, padding: 0 }}>×</button>
-                  </div>
-                ))}
-              </div>
-            )}
-            <button
-              type="button"
-              onClick={() => fileRef.current?.click()}
-              disabled={uploading}
-              style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '7px 14px', borderRadius: 8, border: '1.5px dashed var(--rule-strong)', background: 'transparent', color: 'var(--ink-3)', cursor: 'pointer', fontSize: 13, fontFamily: 'var(--font-ui)' }}
-            >
-              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M8 12V4M4 8l4-4 4 4"/><path d="M2 14h12"/></svg>
-              {uploading ? 'Uploading…' : 'Attach files'}
-            </button>
-          </div>
+          {/* ATTACHMENTS */}
+          <div>
+            <FieldLabel>ATTACHMENTS · संलग्नक</FieldLabel>
+            <input ref={fileRef} type="file" multiple accept=".jpg,.jpeg,.png,.gif,.heic,.heif,.pdf,.doc,.docx,.xls,.xlsx,.csv,.ppt,.pptx,.txt" style={{ display: 'none' }} onChange={handleFileChange} />
+            {files.length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 10 }}>
+                {files.map((f, i) => (
+                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', borderRadius: 8, background: 'var(--bg)', border: '1px solid var(--rule)', fontSize: 13 }}>
+                    <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="var(--k-primary)" strokeWidth="1.5"><path d="M9 1H4a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V5L9 1z"/><path d="M9 1v4h4"/></svg>
+                    <a href={f.url} target="_blank" rel="noreferrer" style={{ flex: 1, color: 'var(--ink-2)', textDecoration: 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.name}</a>
+                    <button onClick={() => setFiles(p => p.filter((_, j) => j !== i))} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-3)', fontSize: 16, lineHeight: 1, padding: 0 }}>×</button>
+                  </div>
+                ))}
+                {files.length < 5 && !uploading && (
+                  <button type="button" onClick={() => fileRef.current?.click()} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 10px', borderRadius: 8, border: '1.5px dashed var(--rule-strong)', background: 'transparent', color: 'var(--ink-3)', cursor: 'pointer', fontSize: 12, fontFamily: 'var(--font-ui)' }}>
+                    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M8 3v10M3 8h10"/></svg>
+                    Add more
+                  </button>
+                )}
+              </div>
+            )}
+            {files.length === 0 && (
+              <button
+                type="button"
+                onClick={() => fileRef.current?.click()}
+                disabled={uploading}
+                style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, width: '100%', padding: '20px 14px', borderRadius: 10, border: '1.5px dashed var(--rule-strong)', background: 'transparent', color: 'var(--ink-3)', cursor: 'pointer', fontFamily: 'var(--font-ui)', boxSizing: 'border-box' }}
+              >
+                <svg width="20" height="20" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M8 12V4M4 8l4-4 4 4"/><path d="M2 14h12"/></svg>
+                <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-2)' }}>{uploading ? 'Uploading…' : 'Drop files or click to browse'}</span>
+                <span style={{ fontSize: 11, lineHeight: 1.6, textAlign: 'center' }}>Computer · Google Drive · OneDrive · Dropbox<br/>Images, PDF, Word, Excel · max 5 MB each</span>
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Footer */}

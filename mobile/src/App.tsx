@@ -17,7 +17,11 @@ import { flushQueue, getQueueCount, clearQueue, friendlyFlushError } from './off
 import { usePushNotifications } from './hooks/usePushNotifications';
 import { NotificationProvider } from './context/NotificationContext';
 import { NotificationBannerContainer } from './components/NotificationBanner';
+import { restoreToken } from './api/auth';
 import RootStack from './nav/RootStack';
+
+// Restore JWT from MMKV into axios headers before any component mounts
+restoreToken();
 
 // ── Offline banner ────────────────────────────────────────────────────────────
 interface BannerProps {

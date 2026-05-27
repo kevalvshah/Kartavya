@@ -1406,6 +1406,81 @@ async def patch_task(task_id:str,payload:TaskUpdate,pool=Depends(get_db),user=De
     return await update_task(task_id, payload, pool, user)
 
 
+@api_router.post("/tasks/{task_id}/attachments", response_model=TaskOut)
+async def add_task_attachment(
+    task_id: str,
+    file: UploadFile = File(...),
+    pool=Depends(get_db),
+    user=Depends(require_user),
+):
+    """Upload a file to R2 and append it to the task's attachments list."""
+    from routers.uploads import MAX_BYTES, ALLOWED_TYPES, ALLOWED_EXTENSIONS
+    from services.storage import upload_file
+    import mimetypes as _mt
+
+    # Access check
+    team_ids = await get_visible_team_ids(pool, user["user_id"], _user_dict=user)
+    row = await pool.fetchrow(
+        "SELECT * FROM tasks WHERE task_id=$1 AND (user_id=$2 OR team_id=ANY($3::text[]) OR created_by_user_id=$2)",
+        task_id, user["user_id"], team_ids,
+    )
+    if not row:
+        if await client_can_access_task(pool, task_id, user["user_id"]):
+            row = await pool.fetchrow("SELECT * FROM tasks WHERE task_id=$1", task_id)
+        if not row:
+            raise HTTPException(404)
+
+    content = await file.read()
+    if len(content) > MAX_BYTES:
+        raise HTTPException(400, "File exceeds 5 MB limit")
+
+    fname = (file.filename or "upload").lower()
+    ext   = "." + fname.rsplit(".", 1)[-1] if "." in fname else ""
+    mime  = file.content_type or _mt.guess_type(file.filename or "")[0] or "application/octet-stream"
+    if mime not in ALLOWED_TYPES and ext not in ALLOWED_EXTENSIONS:
+        raise HTTPException(415, "File type not allowed.")
+    if ext in {".heic", ".heif"} and mime == "application/octet-stream":
+        mime = f"image/{ext.lstrip('.')}"
+
+    result = await upload_file(file_bytes=content, filename=file.filename or "upload", content_type=mime, user_id=user["user_id"])
+
+    current = pj(row["attachments"], [])
+    if len(current) >= 5:
+        raise HTTPException(400, "Maximum 5 attachments per task")
+
+    current.append({"name": file.filename or "upload", "url": result["url"], "key": result.get("key")})
+    updated = await pool.fetchrow(
+        "UPDATE tasks SET attachments=$1::jsonb, updated_at=$2 WHERE task_id=$3 RETURNING *",
+        json.dumps(current), now_utc(), task_id,
+    )
+    return row_to_task(updated)
+
+
+@api_router.delete("/tasks/{task_id}/attachments/{key:path}", response_model=TaskOut)
+async def delete_task_attachment(
+    task_id: str,
+    key: str,
+    pool=Depends(get_db),
+    user=Depends(require_user),
+):
+    """Remove an attachment from a task by its R2 key."""
+    team_ids = await get_visible_team_ids(pool, user["user_id"], _user_dict=user)
+    row = await pool.fetchrow(
+        "SELECT * FROM tasks WHERE task_id=$1 AND (user_id=$2 OR team_id=ANY($3::text[]) OR created_by_user_id=$2)",
+        task_id, user["user_id"], team_ids,
+    )
+    if not row:
+        raise HTTPException(404)
+
+    current  = pj(row["attachments"], [])
+    filtered = [a for a in current if a.get("key") != key]
+    updated  = await pool.fetchrow(
+        "UPDATE tasks SET attachments=$1::jsonb, updated_at=$2 WHERE task_id=$3 RETURNING *",
+        json.dumps(filtered), now_utc(), task_id,
+    )
+    return row_to_task(updated)
+
+
 @api_router.delete("/tasks/{task_id}")
 async def delete_task(task_id:str,pool=Depends(get_db),user=Depends(require_user)):
     """Permanently delete a task; only project admins/owners or the personal task owner may delete."""
