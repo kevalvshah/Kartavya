@@ -20,11 +20,13 @@ import type { RootStackParamList } from '../nav/RootStack';
 type Nav = NativeStackNavigationProp<RootStackParamList, 'Main'>;
 
 // ── Filter chips ─────────────────────────────────────────────────────────────
-type Filter = 'all' | 'today' | 'overdue';
+type Filter = 'all' | 'today' | 'overdue' | 'mentions' | 'approvals';
 const FILTER_CHIPS: Array<{ id: Filter; label: string; hindi: string }> = [
-  { id: 'all',     label: 'All',       hindi: 'सभी' },
-  { id: 'today',   label: 'Due today', hindi: 'आज' },
-  { id: 'overdue', label: 'Overdue',   hindi: 'विलंबित' },
+  { id: 'all',       label: 'All',       hindi: 'सभी' },
+  { id: 'today',     label: 'Due today', hindi: 'आज' },
+  { id: 'mentions',  label: 'Mentions',  hindi: 'उल्लेख' },
+  { id: 'approvals', label: 'Approvals', hindi: 'अनुमोदन' },
+  { id: 'overdue',   label: 'Overdue',   hindi: 'विलंबित' },
 ];
 
 // ── Section buckets ───────────────────────────────────────────────────────────
@@ -81,8 +83,24 @@ export default function TodayScreen() {
   );
 
   const sections = useMemo(() => {
-    if (activeFilter === 'today')   return allSections.filter(s => s.title === 'Due Today');
-    if (activeFilter === 'overdue') return allSections.filter(s => s.title === 'Overdue');
+    if (activeFilter === 'today')     return allSections.filter(s => s.title === 'Due Today');
+    if (activeFilter === 'overdue')   return allSections.filter(s => s.title === 'Overdue');
+    if (activeFilter === 'approvals') {
+      const approvalTasks = allSections.flatMap(s =>
+        s.data.filter(t => t.approval_status && t.approval_status !== 'approved')
+      );
+      return approvalTasks.length
+        ? [{ title: 'Awaiting Approval', titleHindi: 'अनुमोदन', accent: '#f59e0b', data: approvalTasks }]
+        : [];
+    }
+    if (activeFilter === 'mentions') {
+      const mentionTasks = allSections.flatMap(s =>
+        s.data.filter(t => t.has_mention)
+      );
+      return mentionTasks.length
+        ? [{ title: 'Mentions', titleHindi: 'उल्लेख', accent: '#0082c6', data: mentionTasks }]
+        : [];
+    }
     return allSections;
   }, [allSections, activeFilter]);
 

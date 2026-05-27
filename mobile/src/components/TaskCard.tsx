@@ -1,149 +1,110 @@
-/**
- * TaskCard — shared, memoized task card.
- * Used by TodayScreen (SectionList), BoardScreen (column FlatList), and any
- * future list views.
- *
- * Perf notes:
- *   • Wrapped in React.memo with a custom comparator — only re-renders when
- *     the fields actually visible in the card change.
- *   • All derived values are computed inline (no hooks needed — fast path).
- */
 import React from 'react';
-import {
-  View, Text, TouchableOpacity, StyleSheet,
-} from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { format, isToday, isPast } from 'date-fns';
+import { format, isToday, isPast, isTomorrow } from 'date-fns';
 import { useTheme } from '../theme/ThemeProvider';
 import { PRIORITY_COLOR } from '../theme/tokens';
 import { a11yButton } from './a11y';
 import type { Task } from '../api/types';
 
-// ── Props ─────────────────────────────────────────────────────────────────────
-
 export interface TaskCardProps {
-  task:    Task;
-  onPress: () => void;
-  /** Show project/team name below title (useful in Today view) */
+  task:         Task;
+  onPress:      () => void;
   showProject?: boolean;
-  /** True when an offline mutation for this task is pending in the queue */
-  syncing?: boolean;
+  syncing?:     boolean;
 }
 
-// ── Component ─────────────────────────────────────────────────────────────────
+const PRIO_LABEL: Record<string, string> = {
+  urgent: 'urgent', high: 'high', medium: 'medium', low: 'low',
+};
+
+function dueDateLabel(due: string): { label: string; danger: boolean; warn: boolean } {
+  const d = new Date(due);
+  if (isPast(d) && !isToday(d)) return { label: format(d, 'd MMM'), danger: true,  warn: false };
+  if (isToday(d))               return { label: 'Today',             danger: false, warn: true  };
+  if (isTomorrow(d))            return { label: 'Tomorrow',          danger: false, warn: false };
+  return { label: format(d, 'd MMM'), danger: false, warn: false };
+}
 
 function TaskCardInner({ task, onPress, showProject = false, syncing = false }: TaskCardProps) {
   const { t } = useTheme();
-
   const priColor = PRIORITY_COLOR[task.priority] ?? '#636366';
   const done     = (task.subtasks ?? []).filter(s => s.is_done).length;
   const total    = (task.subtasks ?? []).length;
-  const pct      = total > 0 ? done / total : 0;
-  const dueStr   = task.due_at ? format(new Date(task.due_at), 'd MMM') : null;
-  const isLate   = task.due_at
-    ? isPast(new Date(task.due_at)) && !isToday(new Date(task.due_at))
-    : false;
-
-  const statusLabel = task.status?.replace(/_/g, ' ') ?? '';
-  const a11yLabel   = [
-    task.title,
-    task.priority ? `${task.priority} priority` : null,
-    dueStr         ? `due ${dueStr}`             : null,
-    isLate         ? 'overdue'                   : null,
-    total > 0      ? `${done} of ${total} subtasks done` : null,
-  ].filter(Boolean).join(', ');
+  const due      = task.due_at ? dueDateLabel(task.due_at) : null;
 
   return (
     <TouchableOpacity
-      style={[s.card, { backgroundColor: t.surface, borderColor: t.outline }]}
+      style={[s.card, { backgroundColor: t.surface }]}
       onPress={onPress}
       activeOpacity={0.75}
-      {...a11yButton(a11yLabel, 'Opens task detail')}
+      {...a11yButton(task.title, 'Opens task detail')}
     >
-      {/* Priority stripe */}
-      <View style={[s.stripe, { backgroundColor: priColor }]} />
-
-      <View style={s.body}>
+      {/* Top row: project + task ID + sync indicator */}
+      <View style={s.topRow}>
         {showProject && task.team_name ? (
-          <Text style={[s.project, { color: t.ink4 }]} numberOfLines={1}>
-            {task.team_name}
-          </Text>
+          <View style={s.projectRow}>
+            <View style={[s.projDot, { backgroundColor: priColor }]} />
+            <Text style={[s.projectLabel, { color: t.ink3 }]} numberOfLines={1}>{task.team_name}</Text>
+          </View>
         ) : null}
-
-        <Text style={[s.title, { color: t.ink }]} numberOfLines={2}>
-          {task.title}
-        </Text>
-
-        {/* Meta chips */}
-        <View style={s.meta}>
-          {dueStr && (
-            <View style={[s.chip, {
-              backgroundColor: isLate ? '#ef444422' : t.surfaceLow,
-              borderColor:     isLate ? '#ef4444'   : t.outline,
-            }]}>
-              <Ionicons
-                name="calendar-outline"
-                size={10}
-                color={isLate ? '#ef4444' : t.ink3}
-              />
-              <Text style={[s.chipText, { color: isLate ? '#ef4444' : t.ink3 }]}>
-                {dueStr}
-              </Text>
-            </View>
-          )}
-
-          <View style={[s.chip, {
-            backgroundColor: priColor + '22',
-            borderColor:     priColor + '66',
-          }]}>
-            <Text style={[s.chipText, { color: priColor }]}>
-              {task.priority}
-            </Text>
-          </View>
-
-          {statusLabel ? (
-            <View style={[s.chip, { backgroundColor: t.surfaceLow, borderColor: t.outline }]}>
-              <Text style={[s.chipText, { color: t.ink3 }]}>{statusLabel}</Text>
-            </View>
-          ) : null}
-        </View>
-
-        {/* Subtask progress bar */}
-        {total > 0 && (
-          <View style={s.progress} accessibilityLabel={`${done} of ${total} subtasks complete`}>
-            <View style={[s.track, { backgroundColor: t.outline }]}>
-              <View style={[
-                s.bar,
-                { width: `${pct * 100}%` as any, backgroundColor: pct === 1 ? '#22c55e' : '#0082c6' },
-              ]} />
-            </View>
-            <Text style={[s.progressText, { color: t.ink3 }]}>{done}/{total}</Text>
-          </View>
-        )}
+        <View style={{ flex: 1 }} />
+        {syncing && <Ionicons name="sync-outline" size={11} color="#f59e0b" />}
       </View>
 
-      <View style={{ alignItems: 'center', gap: 4, flexShrink: 0, marginTop: 2 }}>
-        {syncing && (
-          <Ionicons
-            name="sync-outline"
-            size={12}
-            color="#0082c6"
-            accessibilityLabel="Syncing"
-          />
+      {/* Title */}
+      <Text style={[s.title, { color: t.ink }]} numberOfLines={2}>{task.title}</Text>
+
+      {/* Subtask progress */}
+      {total > 0 && (
+        <View style={s.progressRow}>
+          <View style={[s.progressTrack, { backgroundColor: t.outline }]}>
+            <View style={[s.progressBar, {
+              width: `${(done / total) * 100}%` as any,
+              backgroundColor: done === total ? '#05b7aa' : '#0082c6',
+            }]} />
+          </View>
+          <Text style={[s.progressText, { color: t.ink3 }]}>{done}/{total}</Text>
+        </View>
+      )}
+
+      {/* Footer chips */}
+      <View style={s.footer}>
+        {due && (
+          <View style={[s.chip, {
+            backgroundColor: due.danger ? 'rgba(239,68,68,0.12)' : due.warn ? 'rgba(245,158,11,0.14)' : t.surfaceLow ?? t.bg,
+          }]}>
+            <Ionicons name="calendar-outline" size={10}
+              color={due.danger ? '#ef4444' : due.warn ? '#f59e0b' : t.ink3} />
+            <Text style={[s.chipText, {
+              color: due.danger ? '#ef4444' : due.warn ? '#f59e0b' : t.ink3,
+            }]}>{due.label}</Text>
+          </View>
         )}
-        <Ionicons
-          name="chevron-forward"
-          size={14}
-          color={t.ink4}
-          accessibilityElementsHidden
-          importantForAccessibility="no"
-        />
+
+        <View style={[s.chip, { backgroundColor: priColor + '18' }]}>
+          <Text style={[s.chipText, { color: priColor }]}>{PRIO_LABEL[task.priority] ?? task.priority}</Text>
+        </View>
+
+        {task.approval_status && task.approval_status !== 'approved' && (
+          <View style={[s.chip, { backgroundColor: 'rgba(255,159,10,0.14)' }]}>
+            <Text style={[s.chipText, { color: '#B06A00' }]}>APPROVAL</Text>
+          </View>
+        )}
+
+        {task.status && (
+          <View style={[s.chip, { backgroundColor: t.outline + '88' }]}>
+            <Text style={[s.chipText, { color: t.ink3 }]}>{task.status.replace(/_/g, ' ')}</Text>
+          </View>
+        )}
+
+        <View style={{ flex: 1 }} />
+        <Ionicons name="chevron-forward" size={13} color={t.ink4} />
       </View>
     </TouchableOpacity>
   );
 }
 
-// Custom comparator — only re-render when visible fields change
 function areEqual(prev: TaskCardProps, next: TaskCardProps): boolean {
   const p = prev.task; const n = next.task;
   return (
@@ -156,85 +117,90 @@ function areEqual(prev: TaskCardProps, next: TaskCardProps): boolean {
     p.subtasks?.length === n.subtasks?.length &&
     (p.subtasks ?? []).filter(s => s.is_done).length ===
     (n.subtasks ?? []).filter(s => s.is_done).length &&
-    prev.showProject   === next.showProject    &&
+    prev.showProject   === next.showProject   &&
     prev.syncing       === next.syncing
   );
 }
 
 export const TaskCard = React.memo(TaskCardInner, areEqual);
 
-// ── Styles ────────────────────────────────────────────────────────────────────
-
 const s = StyleSheet.create({
   card: {
-    flexDirection:  'row',
-    alignItems:     'flex-start',
-    borderRadius:   10,
-    borderWidth:    1,
+    borderRadius:   16,
+    padding:        14,
     marginBottom:   8,
-    overflow:       'hidden',
+    shadowColor:    '#000',
+    shadowOffset:   { width: 0, height: 1 },
+    shadowOpacity:  0.06,
+    shadowRadius:   4,
+    elevation:      2,
+    gap:            6,
   },
-  stripe: {
-    width:  3,
-    alignSelf: 'stretch',
-  },
-  body: {
-    flex:            1,
-    paddingVertical: 10,
-    paddingLeft:     10,
-    paddingRight:    4,
-    gap:             4,
-  },
-  project: {
-    fontSize:   10,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  title: {
-    fontSize:   14,
-    fontWeight: '600',
-    lineHeight: 20,
-  },
-  meta: {
-    flexDirection: 'row',
-    flexWrap:      'wrap',
-    gap:           4,
-    marginTop:     2,
-  },
-  chip: {
-    flexDirection:  'row',
-    alignItems:     'center',
-    gap:            3,
-    paddingHorizontal: 6,
-    paddingVertical:   2,
-    borderRadius:   4,
-    borderWidth:    1,
-  },
-  chipText: {
-    fontSize:   10,
-    fontWeight: '600',
-  },
-  progress: {
+  topRow: {
     flexDirection: 'row',
     alignItems:    'center',
     gap:           6,
-    marginTop:     4,
+    minHeight:     16,
   },
-  track: {
+  projectRow: {
+    flexDirection: 'row',
+    alignItems:    'center',
+    gap:           5,
+  },
+  projDot: {
+    width:        7,
+    height:       7,
+    borderRadius: 2,
+  },
+  projectLabel: {
+    fontSize:      11,
+    fontWeight:    '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+  title: {
+    fontSize:   15,
+    fontWeight: '600',
+    lineHeight: 21,
+  },
+  progressRow: {
+    flexDirection: 'row',
+    alignItems:    'center',
+    gap:           8,
+  },
+  progressTrack: {
     flex:         1,
     height:       3,
     borderRadius: 2,
     overflow:     'hidden',
   },
-  bar: {
+  progressBar: {
     height:       3,
     borderRadius: 2,
   },
   progressText: {
+    fontSize:  10,
+    fontWeight:'600',
+    minWidth:  28,
+    textAlign: 'right',
+  },
+  footer: {
+    flexDirection: 'row',
+    alignItems:    'center',
+    flexWrap:      'wrap',
+    gap:           5,
+    marginTop:     2,
+  },
+  chip: {
+    flexDirection:     'row',
+    alignItems:        'center',
+    gap:               3,
+    paddingHorizontal: 7,
+    paddingVertical:   3,
+    borderRadius:      6,
+  },
+  chipText: {
     fontSize:   10,
-    fontWeight: '600',
-    minWidth:   28,
-    textAlign:  'right',
+    fontWeight: '700',
   },
 });

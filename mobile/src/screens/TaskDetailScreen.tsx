@@ -7,7 +7,7 @@ import React, { useState, useRef, useMemo } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity,
   TextInput, ActivityIndicator, Alert, KeyboardAvoidingView,
-  Platform, Linking, Keyboard,
+  Platform, Linking, Keyboard, StyleSheet,
 } from 'react-native';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -99,6 +99,8 @@ export default function TaskDetailScreen() {
   const [approvalAction, setApprovalAction] = useState<'request' | 'approve' | 'reject' | 'client' | 'client_approve' | 'client_reject' | null>(null);
   const [uploadingFile,  setUploadingFile]  = useState(false);
   const [showAttachPicker, setShowAttachPicker] = useState(false);
+  const [mentionQuery,   setMentionQuery]   = useState<string | null>(null);
+  const composerRef = useRef<TextInput>(null);
   const scrollRef = useRef<ScrollView>(null);
 
   // ── Mutations ────────────────────────────────────────────────────────────────
@@ -143,18 +145,57 @@ export default function TaskDetailScreen() {
 
   const addComment = useMutation({
     mutationFn: (body: string) => tasksApi.addComment(taskId, body),
-    onSuccess:  () => { setCommentText(''); refetchComments(); Keyboard.dismiss(); },
-    onError:    (e: any) => Alert.alert('Error', e.message),
+    onMutate: async (body: string) => {
+      await qc.cancelQueries({ queryKey: ['comments', taskId] });
+      const prev = qc.getQueryData<Comment[]>(['comments', taskId]) ?? [];
+      const optimistic: Comment = {
+        comment_id: `__opt_${Date.now()}`,
+        task_id:    taskId,
+        user_id:    user?.user_id ?? '',
+        body,
+        created_at: new Date().toISOString(),
+        author_name: userName(user ?? {}),
+      } as Comment;
+      qc.setQueryData<Comment[]>(['comments', taskId], [...prev, optimistic]);
+      setCommentText('');
+      Keyboard.dismiss();
+      return { prev };
+    },
+    onSuccess:  () => { refetchComments(); },
+    onError:    (e: any, _body, ctx: any) => {
+      if (ctx?.prev) qc.setQueryData(['comments', taskId], ctx.prev);
+      Alert.alert('Error', e.message);
+    },
   });
 
   const editComment = useMutation({
     mutationFn: ({ id, body }: { id: string; body: string }) => tasksApi.editComment(taskId, id, body),
-    onSuccess:  () => { setEditingComment(null); refetchComments(); },
+    onMutate: async ({ id, body }) => {
+      await qc.cancelQueries({ queryKey: ['comments', taskId] });
+      const prev = qc.getQueryData<Comment[]>(['comments', taskId]) ?? [];
+      qc.setQueryData<Comment[]>(['comments', taskId],
+        prev.map(c => c.comment_id === id ? { ...c, body } : c));
+      setEditingComment(null);
+      return { prev };
+    },
+    onSuccess:  () => { refetchComments(); },
+    onError:    (_e, _v, ctx: any) => {
+      if (ctx?.prev) qc.setQueryData(['comments', taskId], ctx.prev);
+    },
   });
 
   const deleteComment = useMutation({
     mutationFn: (id: string) => tasksApi.deleteComment(taskId, id),
-    onSuccess:  () => refetchComments(),
+    onMutate: async (id) => {
+      await qc.cancelQueries({ queryKey: ['comments', taskId] });
+      const prev = qc.getQueryData<Comment[]>(['comments', taskId]) ?? [];
+      qc.setQueryData<Comment[]>(['comments', taskId], prev.filter(c => c.comment_id !== id));
+      return { prev };
+    },
+    onSuccess:  () => { refetchComments(); },
+    onError:    (_e, _v, ctx: any) => {
+      if (ctx?.prev) qc.setQueryData(['comments', taskId], ctx.prev);
+    },
   });
 
   const moveTask = useMutation({
@@ -544,6 +585,46 @@ export default function TaskDetailScreen() {
 
         {/* ── Comment composer ── */}
         <View style={[s.composer, { backgroundColor: t.surface, borderTopColor: t.outline }]}>
+          {/* Mention suggestions */}
+          {mentionQuery !== null && (
+            <View style={[mentionStyles.list, { backgroundColor: t.surface, borderColor: t.outline }]}>
+              {members
+                .filter(m => {
+                  const n = memberName(m).toLowerCase();
+                  const e = (m.email ?? '').toLowerCase();
+                  const q = mentionQuery.toLowerCase();
+                  return q === '' || n.includes(q) || e.includes(q);
+                })
+                .slice(0, 6)
+                .map(m => (
+                  <TouchableOpacity
+                    key={memberId(m)}
+                    style={[mentionStyles.row, { borderBottomColor: t.outline }]}
+                    onPress={() => {
+                      const display = memberName(m).replace(/\s+/g, '_');
+                      const atIdx = commentText.lastIndexOf('@');
+                      const before = commentText.slice(0, atIdx);
+                      const after  = commentText.slice(atIdx + 1 + mentionQuery.length);
+                      setCommentText(before + '@' + display + ' ' + after);
+                      setMentionQuery(null);
+                      composerRef.current?.focus();
+                    }}
+                  >
+                    <Avatar uid={memberId(m)} name={memberName(m)} size={24} />
+                    <Text style={[mentionStyles.name, { color: t.ink }]}>{memberName(m)}</Text>
+                    {m.email ? <Text style={[mentionStyles.email, { color: t.ink3 }]}>{m.email}</Text> : null}
+                  </TouchableOpacity>
+                ))}
+              {members.filter(m => {
+                const n = memberName(m).toLowerCase();
+                const e = (m.email ?? '').toLowerCase();
+                const q = mentionQuery.toLowerCase();
+                return q === '' || n.includes(q) || e.includes(q);
+              }).length === 0 && (
+                <Text style={[mentionStyles.empty, { color: t.ink3 }]}>No members found</Text>
+              )}
+            </View>
+          )}
           {editingComment && (
             <View style={[s.editingBanner, { backgroundColor: t.primaryContainer }]}>
               <Text style={[s.editingBannerText, { color: t.primary }]}>Editing comment</Text>
@@ -555,10 +636,28 @@ export default function TaskDetailScreen() {
           <View style={s.composerRow}>
             {user && <Avatar uid={user.user_id} name={userName(user)} size={30} />}
             <TextInput
+              ref={composerRef}
               style={[s.composerInput, { backgroundColor: t.bg, borderColor: t.outline, color: t.ink }]}
               value={commentText}
-              onChangeText={setCommentText}
-              placeholder="Add a comment…"
+              onChangeText={text => {
+                setCommentText(text);
+                // Detect @mention trigger
+                const atIdx = text.lastIndexOf('@');
+                if (atIdx !== -1) {
+                  const afterAt = text.slice(atIdx + 1);
+                  // Only trigger if @ is at start or preceded by whitespace
+                  const charBefore = atIdx > 0 ? text[atIdx - 1] : ' ';
+                  if (/\s/.test(charBefore) || atIdx === 0) {
+                    // No space in partial query
+                    if (!/\s/.test(afterAt)) {
+                      setMentionQuery(afterAt);
+                      return;
+                    }
+                  }
+                }
+                setMentionQuery(null);
+              }}
+              placeholder="Add a comment… (type @ to mention)"
               placeholderTextColor={t.ink4}
               multiline
               maxLength={2000}
@@ -567,6 +666,7 @@ export default function TaskDetailScreen() {
               disabled={!commentText.trim() || addComment.isPending || editComment.isPending}
               onPress={() => {
                 if (!commentText.trim()) return;
+                setMentionQuery(null);
                 if (editingComment) {
                   editComment.mutate({ id: editingComment.comment_id, body: commentText.trim() });
                 } else {
@@ -616,3 +716,31 @@ export default function TaskDetailScreen() {
     </View>
   );
 }
+
+const mentionStyles = StyleSheet.create({
+  list: {
+    borderTopWidth: 1,
+    maxHeight: 220,
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  name: {
+    fontSize: 14,
+    fontWeight: '600',
+    flex: 1,
+  },
+  email: {
+    fontSize: 11,
+  },
+  empty: {
+    padding: 14,
+    textAlign: 'center',
+    fontSize: 13,
+  },
+});

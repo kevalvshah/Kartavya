@@ -6,7 +6,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { api } from '../lib/api';
 import { currentUser } from '../lib/auth';
 import { useToast } from '../components/ui/toast';
-import TaskEditor from '../components/TaskEditor';
+import TaskDrawer  from '../components/TaskDrawer';
+import NewTaskModal from '../components/NewTaskModal';
 import { PageHeader, DueChip, PriorityDot, StatusChip, ProjectTag, AvatarStack } from '../components/editorial';
 import { AVATAR_COLORS, priorityColor } from '../lib/utils';
 
@@ -29,7 +30,8 @@ export default function TasksListPage() {
   const [search,  setSearch]  = useState('');
   const [filter,  setFilter]  = useState('all');
   const [group,   setGroup]   = useState('priority');
-  const [editor,  setEditor]  = useState({ open: false, task: null });
+  const [drawerTaskId, setDrawerTaskId] = useState(null);
+  const [newTaskOpen,  setNewTaskOpen]  = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -98,7 +100,7 @@ export default function TasksListPage() {
         lede="The list of what's worth doing today."
         right={
           !isClient && (
-            <button className="k-btn k-btn--primary k-btn--sm" onClick={() => setEditor({ open: true, task: null })}>
+            <button className="k-btn k-btn--primary k-btn--sm" onClick={() => setNewTaskOpen(true)}>
               <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2"><path d="M8 3v10M3 8h10"/></svg>
               New task
             </button>
@@ -177,7 +179,7 @@ export default function TasksListPage() {
                   <button
                     key={t.task_id}
                     className="k-trow"
-                    onClick={() => setEditor({ open: true, task: t })}
+                    onClick={() => setDrawerTaskId(t.task_id)}
                   >
                     <div className="k-trow__cell k-c-task">
                       <PriorityDot priority={t.priority} />
@@ -204,15 +206,18 @@ export default function TasksListPage() {
         </div>
       )}
 
-      {editor.open && (
-        <TaskEditor
-          open={editor.open}
-          editing={editor.task}
-          teams={teams}
-          onOpenChange={(v) => { if (!v) setEditor({ open: false, task: null }); }}
-          onSaved={() => { setEditor({ open: false, task: null }); load(); }}
-        />
-      )}
+      <TaskDrawer
+        taskId={drawerTaskId}
+        open={!!drawerTaskId}
+        onClose={() => setDrawerTaskId(null)}
+        onSaved={() => { setDrawerTaskId(null); load(); }}
+      />
+
+      <NewTaskModal
+        open={newTaskOpen}
+        onClose={() => setNewTaskOpen(false)}
+        onCreated={() => { setNewTaskOpen(false); load(); }}
+      />
     </div>
   );
 }

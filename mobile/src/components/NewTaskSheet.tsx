@@ -17,6 +17,8 @@ import { useTheme } from '../theme/ThemeProvider';
 import { useAuth } from '../hooks/useAuth';
 import { apiClient } from '../api/client';
 import AttachmentSourceSheet, { type PickedFile } from './AttachmentSourceSheet';
+import { enqueueMutation } from '../offline/mutationQueue';
+import NetInfo from '@react-native-community/netinfo';
 import type { TeamMember } from '../api/types';
 
 const MAX_ATTACHMENTS = 5;
@@ -119,14 +121,26 @@ export default function NewTaskSheet({ visible, onClose }: Props) {
         priority,
         description: description.trim() || null,
       };
-      if (projectId)        payload.team_id          = projectId;
-      if (dueAt)            payload.due_at            = dueAt.toISOString();
-      if (assignees.length)    payload.assignee_user_ids = assignees;
-      if (attachments.length)  payload.attachments       = attachments;
+      if (projectId)           payload.team_id           = projectId;
+      if (dueAt)               payload.due_at             = dueAt.toISOString();
+      if (assignees.length)    payload.assignee_user_ids  = assignees;
+      if (attachments.length)  payload.attachments        = attachments;
 
       const endpoint = isClient ? '/client/tasks/request' : '/tasks';
-      await apiClient.post(endpoint, payload);
-      qc.invalidateQueries({ queryKey: ['tasks'] });
+      const net = await NetInfo.fetch();
+      const online = !!(net.isConnected && net.isInternetReachable !== false);
+
+      if (online) {
+        await apiClient.post(endpoint, payload);
+        qc.invalidateQueries({ queryKey: ['tasks'] });
+      } else {
+        enqueueMutation({
+          method:       'POST',
+          url:          endpoint,
+          body:         payload,
+          entity_type:  'task',
+        });
+      }
       handleClose();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Could not create task.');

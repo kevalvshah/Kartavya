@@ -15,7 +15,7 @@ import { navigationRef } from './navigationRef';
 // Phase-1 stubs; replaced in Phase 2
 import TodayScreen       from '../screens/TodayScreen';
 import SettingsScreen    from '../screens/SettingsScreen';
-import BoardsScreen     from '../screens/BoardsScreen';
+
 import InboxScreen      from '../screens/InboxScreen';
 import MeScreen         from '../screens/MeScreen';
 import TaskDetailScreen from '../screens/TaskDetailScreen';
@@ -31,7 +31,7 @@ import NewTaskSheet from '../components/NewTaskSheet';
 export type RootStackParamList = {
   Main:         undefined;
   TaskDetail:   { taskId: string };
-  Board:        { projectId: string; projectName: string };
+  Board:        { projectId?: string; projectName?: string } | undefined;
   Settings:     undefined;
   Login:        undefined;
   Client:       undefined;
@@ -118,7 +118,7 @@ function MainTabs() {
       })}
     >
       <Tab.Screen name="Today"  component={TodayScreen}  options={{ title: 'Today' }} />
-      <Tab.Screen name="Boards" component={BoardsScreen} options={{ title: 'Boards' }} />
+      <Tab.Screen name="Boards" component={BoardScreen} options={{ title: 'Boards' }} />
       <Tab.Screen
         name="Add"
         component={TodayScreen}   // never actually rendered

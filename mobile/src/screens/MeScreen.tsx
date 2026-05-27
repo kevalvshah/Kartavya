@@ -1,31 +1,43 @@
-/**
- * MeScreen — profile overview tab.
- * Full settings are in SettingsScreen (push-navigated from here).
- */
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity,
-  StyleSheet,
+  StyleSheet, Switch, Platform, ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
-import { useQuery } from '@tanstack/react-query';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTheme } from '../theme/ThemeProvider';
 import { useAuth } from '../hooks/useAuth';
 import { avatarColor, userInitials } from '../theme/tokens';
 import { tasksApi } from '../api/tasks';
+import { notificationsApi } from '../api/notifications';
 import type { RootStackParamList } from '../nav/RootStack';
+import type { NotifKind, NotifPrefsResponse } from '../api/types';
 
 type Nav = NativeStackNavigationProp<RootStackParamList, 'Main'>;
 
-export default function MeScreen() {
-  const { t }        = useTheme();
-  const { user }     = useAuth();
-  const nav          = useNavigation<Nav>();
-  const insets       = useSafeAreaInsets();
+// ── Notification kind rows ────────────────────────────────────────────────────
+const NOTIF_ROWS: Array<{ kind: NotifKind; label: string; hindi: string; icon: string; color: string }> = [
+  { kind: 'mention',          label: 'Mentions',         hindi: 'उल्लेख',     icon: 'at',                   color: '#0082c6' },
+  { kind: 'approval_request', label: 'Approval requests',hindi: 'अनुमोदन',    icon: 'checkmark-circle',     color: '#f59e0b' },
+  { kind: 'assigned',         label: 'Assigned to me',   hindi: 'असाइन किया', icon: 'person-add',           color: '#05b7aa' },
+  { kind: 'comment',          label: 'Comments',         hindi: 'टिप्पणियाँ', icon: 'chatbubble-ellipses',  color: '#8b5cf6' },
+  { kind: 'status_changed',   label: 'Status changes',   hindi: 'स्थिति',     icon: 'swap-horizontal',      color: '#64748b' },
+  { kind: 'done',             label: 'Task completed',   hindi: 'पूर्ण',      icon: 'checkmark-done',       color: '#22c55e' },
+];
 
+// ── Main screen ───────────────────────────────────────────────────────────────
+export default function MeScreen() {
+  const { t, scheme }  = useTheme();
+  const { user, logout } = useAuth();
+  const nav            = useNavigation<Nav>();
+  const insets         = useSafeAreaInsets();
+  const qc             = useQueryClient();
+
+  // Tasks stats
   const { data: myTasks = [] } = useQuery({
     queryKey: ['tasks', 'mine'],
     queryFn:  () => tasksApi.list(),
@@ -36,93 +48,192 @@ export default function MeScreen() {
   const isMine = (task: typeof myTasks[number]) =>
     task.created_by_user_id === myId || (task.assignee_user_ids ?? []).includes(myId);
 
-  const done    = myTasks.filter(task => task.status === 'done'  && isMine(task)).length;
-  const open    = myTasks.filter(task => task.status !== 'done'  && isMine(task)).length;
-  const overdue = myTasks.filter(task =>
-    task.status !== 'done' && !!task.due_at && isMine(task) && new Date(task.due_at) < new Date()
-  ).length;
+  const stats = useMemo(() => ({
+    open:    myTasks.filter(t => t.status !== 'done' && isMine(t)).length,
+    done:    myTasks.filter(t => t.status === 'done' && isMine(t)).length,
+    overdue: myTasks.filter(t =>
+      t.status !== 'done' && !!t.due_at && isMine(t) && new Date(t.due_at) < new Date()
+    ).length,
+  }), [myTasks, myId]);
+
+  // Notif prefs
+  const { data: prefs, isLoading: prefsLoading } = useQuery<NotifPrefsResponse>({
+    queryKey: ['notif-prefs'],
+    queryFn:  notificationsApi.getPrefs,
+    staleTime: 30_000,
+  });
+
+  const { mutate: savePrefs } = useMutation({
+    mutationFn: (body: NotifPrefsResponse) => notificationsApi.setPrefs(body),
+    onSuccess:  () => qc.invalidateQueries({ queryKey: ['notif-prefs'] }),
+  });
+
+  function toggleKind(kind: NotifKind, on: boolean) {
+    if (!prefs) return;
+    const kinds = on
+      ? [...(prefs.kinds ?? []), kind]
+      : (prefs.kinds ?? []).filter(k => k !== kind);
+    savePrefs({ ...prefs, kinds });
+  }
 
   const initials = user ? userInitials(user.name ?? user.full_name ?? '?') : '?';
   const bgColor  = user ? avatarColor(user.user_id) : '#0082c6';
+  const displayName = user?.name ?? user?.full_name ?? '—';
 
   return (
-    <ScrollView style={[s.root, { backgroundColor: t.bg }]} contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
-      {/* Header */}
-      <View style={[s.header, { backgroundColor: t.surface, borderBottomColor: t.outline, paddingTop: insets.top + 16 }]}>
-        <Text style={[s.title, { color: t.ink }]}>Me</Text>
-        <TouchableOpacity onPress={() => nav.navigate('Settings')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-          <Ionicons name="settings-outline" size={22} color={t.ink3} />
-        </TouchableOpacity>
-      </View>
+    <ScrollView
+      style={[s.root, { backgroundColor: t.bg }]}
+      contentContainerStyle={{ paddingBottom: insets.bottom + 32 }}
+      showsVerticalScrollIndicator={false}
+    >
+      {/* ── Hero gradient ─────────────────────────────────────────────────── */}
+      <LinearGradient
+        colors={['#0082c6', '#03a1b6', '#05b7aa']}
+        start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+        style={[s.hero, { paddingTop: insets.top + 16 }]}
+      >
+        <Text style={s.kicker}>SETTINGS · विकल्प</Text>
+        <Text style={s.heroTitle}>You &amp; your app</Text>
 
-      {/* Profile */}
-      <View style={[s.profileCard, { backgroundColor: t.surface, borderColor: t.outline }]}>
-        <View style={[s.avatar, { backgroundColor: bgColor }]}>
-          <Text style={s.avatarText}>{initials}</Text>
-        </View>
-        <View style={{ flex: 1 }}>
-          <Text style={[s.name, { color: t.ink }]}>{user?.name ?? user?.full_name ?? '—'}</Text>
-          <Text style={[s.email, { color: t.ink3 }]}>{user?.email ?? ''}</Text>
-          {user?.position ? <Text style={[s.job, { color: t.ink3 }]}>{user.position}</Text> : null}
-        </View>
-        <View style={[s.roleBadge, { backgroundColor: t.primaryContainer }]}>
-          <Text style={[s.roleText, { color: t.primary }]}>{user?.role}</Text>
-        </View>
-      </View>
-
-      {/* Stats */}
-      <View style={s.statsRow}>
-        <StatCard label="Open" value={open}    color={t.primary} t={t} />
-        <StatCard label="Done" value={done}    color="#22c55e"  t={t} />
-        <StatCard label="Overdue" value={overdue} color="#ef4444"  t={t} />
-      </View>
-
-      {/* Quick links */}
-      <Text style={[s.sectionLabel, { color: t.ink3 }]}>QUICK LINKS</Text>
-      <View style={[s.section, { backgroundColor: t.surface, borderColor: t.outline }]}>
-        <TouchableOpacity
-          style={[s.menuRow, { borderBottomColor: t.outline }]}
-          onPress={() => (nav as any).navigate('Settings')}
-        >
-          <View style={[s.menuIcon, { backgroundColor: t.primaryContainer }]}>
-            <Ionicons name="settings-outline" size={16} color={t.primary} />
+        {/* Profile row */}
+        <View style={s.profileRow}>
+          <View style={[s.avatar, { backgroundColor: bgColor }]}>
+            <Text style={s.avatarText}>{initials}</Text>
           </View>
-          <Text style={[s.menuLabel, { color: t.ink }]}>Settings & Notifications</Text>
-          <Ionicons name="chevron-forward" size={14} color={t.ink3} />
+          <View style={{ flex: 1 }}>
+            <Text style={s.profileName}>{displayName}</Text>
+            <Text style={s.profileEmail}>{user?.email ?? ''}</Text>
+          </View>
+          <View style={s.roleBadge}>
+            <Text style={s.roleText}>{user?.role ?? 'member'}</Text>
+          </View>
+        </View>
+
+        {/* Stats */}
+        <View style={s.statsRow}>
+          <StatPill label="Open"    hindi="खुले"    value={stats.open}    color="#fff" />
+          <View style={s.statsDivider} />
+          <StatPill label="Done"    hindi="पूर्ण"   value={stats.done}    color="#a7f3d0" />
+          <View style={s.statsDivider} />
+          <StatPill label="Overdue" hindi="विलंबित" value={stats.overdue} color={stats.overdue > 0 ? '#fca5a5' : 'rgba(255,255,255,0.6)'} />
+        </View>
+      </LinearGradient>
+
+      {/* ── Notification toggles ───────────────────────────────────────────── */}
+      <Text style={[s.sectionLabel, { color: t.ink3 }]}>NOTIFICATIONS · सूचनाएं</Text>
+      <View style={[s.card, { backgroundColor: t.surface, borderColor: t.outline }]}>
+        {prefsLoading ? (
+          <View style={{ padding: 20, alignItems: 'center' }}>
+            <ActivityIndicator color={t.primary} size="small" />
+          </View>
+        ) : (
+          NOTIF_ROWS.map((row, i) => {
+            const enabled = (prefs?.kinds ?? []).includes(row.kind);
+            return (
+              <View
+                key={row.kind}
+                style={[s.notifRow, i < NOTIF_ROWS.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: t.outline }]}
+              >
+                <View style={[s.notifIconWrap, { backgroundColor: row.color + '18' }]}>
+                  <Ionicons name={row.icon as any} size={15} color={row.color} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[s.notifLabel, { color: t.ink }]}>{row.label}</Text>
+                  <Text style={[s.notifHindi, { color: t.ink4 }]}>{row.hindi}</Text>
+                </View>
+                <Switch
+                  value={enabled}
+                  onValueChange={v => toggleKind(row.kind, v)}
+                  trackColor={{ false: t.outline, true: t.primary + 'aa' }}
+                  thumbColor={enabled ? t.primary : (Platform.OS === 'android' ? t.ink4 : undefined)}
+                  ios_backgroundColor={t.outline}
+                />
+              </View>
+            );
+          })
+        )}
+      </View>
+
+      {/* ── App settings ──────────────────────────────────────────────────── */}
+      <Text style={[s.sectionLabel, { color: t.ink3 }]}>APP SETTINGS · ऐप</Text>
+      <View style={[s.card, { backgroundColor: t.surface, borderColor: t.outline }]}>
+        <TouchableOpacity
+          style={[s.menuRow, { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: t.outline }]}
+          onPress={() => nav.navigate('Settings')}
+          activeOpacity={0.7}
+        >
+          <View style={[s.menuIconWrap, { backgroundColor: t.primaryContainer }]}>
+            <Ionicons name="settings-outline" size={15} color={t.primary} />
+          </View>
+          <Text style={[s.menuLabel, { color: t.ink }]}>All settings</Text>
+          <Text style={[s.menuSub, { color: t.ink3 }]}>सभी सेटिंग्स</Text>
+          <Ionicons name="chevron-forward" size={14} color={t.ink4} />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={s.menuRow}
+          onPress={logout}
+          activeOpacity={0.7}
+        >
+          <View style={[s.menuIconWrap, { backgroundColor: 'rgba(239,68,68,0.12)' }]}>
+            <Ionicons name="log-out-outline" size={15} color="#ef4444" />
+          </View>
+          <Text style={[s.menuLabel, { color: '#ef4444' }]}>Sign out</Text>
+          <Text style={[s.menuSub, { color: 'rgba(239,68,68,0.6)' }]}>साइन आउट</Text>
         </TouchableOpacity>
       </View>
     </ScrollView>
   );
 }
 
-function StatCard({ label, value, color, t }: { label: string; value: number; color: string; t: any }) {
+// ── Sub-components ────────────────────────────────────────────────────────────
+function StatPill({ label, hindi, value, color }: { label: string; hindi: string; value: number; color: string }) {
   return (
-    <View style={[s.statCard, { backgroundColor: t.surface, borderColor: t.outline }]}>
+    <View style={s.statPill}>
       <Text style={[s.statValue, { color }]}>{value}</Text>
-      <Text style={[s.statLabel, { color: t.ink3 }]}>{label}</Text>
+      <Text style={s.statLabel}>{label}</Text>
+      <Text style={s.statHindi}>{hindi}</Text>
     </View>
   );
 }
 
+// ── Styles ────────────────────────────────────────────────────────────────────
 const s = StyleSheet.create({
-  root:         { flex: 1 },
-  header:       { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingBottom: 16, borderBottomWidth: 1 },
-  title:        { fontSize: 26, fontWeight: '900' },
-  profileCard:  { flexDirection: 'row', alignItems: 'center', gap: 14, margin: 16, borderRadius: 16, padding: 16, borderWidth: 1 },
-  avatar:       { width: 50, height: 50, borderRadius: 25, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-  avatarText:   { color: '#fff', fontSize: 17, fontWeight: '900' },
-  name:         { fontSize: 15, fontWeight: '800' },
-  email:        { fontSize: 11, marginTop: 2 },
-  job:          { fontSize: 11, marginTop: 1 },
-  roleBadge:    { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, alignSelf: 'flex-start' },
-  roleText:     { fontSize: 10, fontWeight: '800', textTransform: 'capitalize' },
-  statsRow:     { flexDirection: 'row', gap: 10, paddingHorizontal: 16, marginBottom: 6 },
-  statCard:     { flex: 1, borderRadius: 14, padding: 14, alignItems: 'center', borderWidth: 1, gap: 2 },
-  statValue:    { fontSize: 26, fontWeight: '900' },
-  statLabel:    { fontSize: 10, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
-  sectionLabel: { fontSize: 10, fontWeight: '800', letterSpacing: 1.5, paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8 },
-  section:      { marginHorizontal: 16, borderRadius: 14, borderWidth: 1, overflow: 'hidden' },
-  menuRow:      { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1 },
-  menuIcon:     { width: 30, height: 30, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  root: { flex: 1 },
+
+  // Hero
+  hero:         { paddingHorizontal: 20, paddingBottom: 24 },
+  kicker:       { color: 'rgba(255,255,255,0.7)', fontSize: 10, fontWeight: '800', letterSpacing: 1.5, marginBottom: 4 },
+  heroTitle:    { color: '#fff', fontSize: 28, fontWeight: '900', marginBottom: 20 },
+  profileRow:   { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 20 },
+  avatar:       { width: 52, height: 52, borderRadius: 26, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  avatarText:   { color: '#fff', fontSize: 18, fontWeight: '900' },
+  profileName:  { color: '#fff', fontSize: 16, fontWeight: '800' },
+  profileEmail: { color: 'rgba(255,255,255,0.7)', fontSize: 11, marginTop: 2 },
+  roleBadge:    { backgroundColor: 'rgba(255,255,255,0.2)', paddingHorizontal: 9, paddingVertical: 4, borderRadius: 8 },
+  roleText:     { color: '#fff', fontSize: 10, fontWeight: '800', textTransform: 'capitalize' },
+
+  // Stats
+  statsRow:     { flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 14, padding: 14, gap: 0 },
+  statPill:     { flex: 1, alignItems: 'center', gap: 2 },
+  statsDivider: { width: 1, backgroundColor: 'rgba(255,255,255,0.25)', marginVertical: 4 },
+  statValue:    { fontSize: 22, fontWeight: '900' },
+  statLabel:    { color: 'rgba(255,255,255,0.85)', fontSize: 10, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.4 },
+  statHindi:    { color: 'rgba(255,255,255,0.5)', fontSize: 9 },
+
+  // Sections
+  sectionLabel: { fontSize: 10, fontWeight: '800', letterSpacing: 1.5, paddingHorizontal: 20, paddingTop: 20, paddingBottom: 8, color: '#636366' },
+  card:         { marginHorizontal: 16, borderRadius: 16, borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden' },
+
+  // Notif rows
+  notifRow:     { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 12 },
+  notifIconWrap:{ width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  notifLabel:   { fontSize: 13, fontWeight: '600' },
+  notifHindi:   { fontSize: 10, marginTop: 1 },
+
+  // Menu rows
+  menuRow:      { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 14 },
+  menuIconWrap: { width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   menuLabel:    { flex: 1, fontSize: 14, fontWeight: '600' },
+  menuSub:      { fontSize: 11, marginRight: 4 },
 });
