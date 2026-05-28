@@ -137,10 +137,14 @@ export default function MeScreen() {
 
   function toggleKind(kind: NotifKind, on: boolean) {
     if (!prefs) return;
-    const kinds = on
-      ? [...(prefs.kinds ?? []), kind]
-      : (prefs.kinds ?? []).filter(k => k !== kind);
-    savePrefs({ ...prefs, kinds });
+    const updatedPrefs = { ...(prefs.prefs ?? {}) };
+    updatedPrefs[kind] = on ? 'always' : 'off';
+    savePrefs({ ...prefs, prefs: updatedPrefs });
+  }
+
+  function kindEnabled(kind: NotifKind): boolean {
+    const v = prefs?.prefs?.[kind];
+    return v !== undefined && v !== 'off';
   }
 
   const displayName = user?.name ?? user?.full_name ?? '—';
@@ -222,7 +226,7 @@ export default function MeScreen() {
           </View>
         ) : (
           NOTIF_KINDS.map((k, i) => {
-            const enabled = (prefs?.kinds ?? []).includes(k.kind);
+            const enabled = kindEnabled(k.kind);
             const isLast  = i === NOTIF_KINDS.length - 1;
             return (
               <View

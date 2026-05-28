@@ -270,6 +270,7 @@ export default function BoardScreen() {
   const [showPicker, setShowPicker] = useState(false);
   const [view, setView] = useState<ViewMode>('Board');
   const [adding, setAdding] = useState(false);
+  const [activeCol, setActiveCol] = useState<string | null>(null);
 
   // Initialise to first project when loaded (tab mode only)
   useEffect(() => {
@@ -318,47 +319,62 @@ export default function BoardScreen() {
   }, [qc, projectId]);
 
   // ── Views ────────────────────────────────────────────────────────────────────
-  const renderBoard = useCallback(() => (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flex: 1 }}>
-      {columns.map(col => (
-        <View key={col.column_id} style={[s.column]}>
-          {/* Column header */}
-          <View style={s.colHeader}>
-            <View style={[s.colDot, { backgroundColor: col.color }]} />
-            <Text style={[s.colName, { color: t.ink }]}>{col.name}</Text>
-            <View style={[s.colBadge, { backgroundColor: col.color + '22' }]}>
-              <Text style={{ color: col.color, fontSize: 11, fontWeight: '800' }}>
-                {grouped[col.column_id]?.length ?? 0}
-              </Text>
-            </View>
-          </View>
-          {/* Approval hint */}
-          {col.name?.toLowerCase().includes('approval') && (
-            <View style={[s.approvalHint, { backgroundColor: 'rgba(255,159,10,0.10)' }]}>
-              <Ionicons name="sparkles-outline" size={12} color="#B06A00" />
-              <Text style={s.approvalHintText}>Cards here notify the owner for sign-off.</Text>
-            </View>
-          )}
-          {/* Cards */}
-          {(grouped[col.column_id] ?? []).length === 0
-            ? <Text style={[s.emptyCol, { color: t.ink4 }]}>No tasks</Text>
-            : (grouped[col.column_id] ?? []).map(item => (
-                <BoardCard key={item.task_id} task={item} col={col} onPress={() => openTask(item.task_id)} />
-              ))
-          }
-          {/* Add card button */}
-          <TouchableOpacity
-            style={[s.addCardBtn, { borderColor: t.outline }]}
-            onPress={() => setAdding(true)}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="add" size={14} color={t.ink3} />
-            <Text style={[s.addCardText, { color: t.ink3 }]}>Add card to "{col.name}"</Text>
-          </TouchableOpacity>
+  const renderBoard = useCallback(() => {
+    // Show single active column (swipe-style, filtered by column tab)
+    const col = columns.find(c => c.column_id === activeColId) ?? columns[0];
+    if (!col) return null;
+    const colCards = grouped[col.column_id] ?? [];
+    const isApprovalCol = col.name?.toLowerCase().includes('approval');
+    return (
+      <ScrollView
+        contentContainerStyle={{ padding: 16, paddingBottom: 100 }}
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={isFetching && !isLoading} onRefresh={refetch} tintColor={t.primary} />}
+      >
+        {/* Column header kicker */}
+        <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8, paddingHorizontal: 4, paddingBottom: 10 }}>
+          <View style={{ width: 10, height: 10, borderRadius: 3, backgroundColor: col.color }} />
+          <Text style={{ fontSize: 11, fontWeight: '700', letterSpacing: 1.4, textTransform: 'uppercase', color: t.ink2 }}>
+            {col.name}
+          </Text>
+          <Text style={{ marginLeft: 'auto', fontSize: 11, fontFamily: 'SpaceMono', color: t.ink2 }}>
+            {colCards.length}
+          </Text>
         </View>
-      ))}
-    </ScrollView>
-  ), [columns, grouped, t, openTask]);
+
+        {/* Approval hint */}
+        {isApprovalCol && (
+          <View style={[s.approvalHint, {
+            backgroundColor: IS_ANDROID ? t.tertiaryContainer : 'rgba(255,159,10,0.10)',
+            marginBottom: 10,
+          }]}>
+            <Ionicons name="sparkles-outline" size={14} color={IS_ANDROID ? t.onTertiaryContainer : '#B06A00'} />
+            <Text style={[s.approvalHintText, { color: IS_ANDROID ? t.onTertiaryContainer : '#B06A00' }]}>
+              Cards here notify the project owner for sign-off.
+            </Text>
+          </View>
+        )}
+
+        {/* Cards */}
+        {colCards.length === 0
+          ? <Text style={[s.emptyCol, { color: t.ink4 }]}>No tasks in this column</Text>
+          : colCards.map(item => (
+              <BoardCard key={item.task_id} task={item} col={col} onPress={() => openTask(item.task_id)} />
+            ))
+        }
+
+        {/* Add card */}
+        <TouchableOpacity
+          style={[s.addCardBtn, { borderColor: t.outline }]}
+          onPress={() => setAdding(true)}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="add" size={14} color={t.ink3} />
+          <Text style={[s.addCardText, { color: t.ink3 }]}>Add card to "{col.name}"</Text>
+        </TouchableOpacity>
+      </ScrollView>
+    );
+  }, [columns, grouped, t, openTask, activeColId, isFetching, isLoading, refetch]);
 
   const renderList = useCallback(() => (
     <FlatList
@@ -444,8 +460,8 @@ export default function BoardScreen() {
   if (!isLoading && projects.length === 0) {
     return (
       <View style={[s.root, { backgroundColor: t.bg }]}>
-        <View style={[s.header, { backgroundColor: t.surface, borderBottomColor: t.outline, paddingTop: insets.top + 12 }]}>
-          <Text style={[s.headerTitle, { color: t.ink }]}>Boards</Text>
+        <View style={[s.header, { backgroundColor: IS_ANDROID ? t.surface : t.bg, paddingTop: insets.top + (IS_ANDROID ? 8 : 54) }]}>
+          <Text style={[s.kicker, { color: t.primary }]}>Boards · कार्यफलक</Text>
         </View>
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8 }}>
           <Ionicons name="grid-outline" size={40} color={t.ink3} />
@@ -455,68 +471,97 @@ export default function BoardScreen() {
     );
   }
 
+  const activeColId = activeCol ?? columns[0]?.column_id ?? null;
+
   return (
     <View style={[s.root, { backgroundColor: t.bg }]}>
       {/* ── Header ── */}
-      <View style={[s.header, { backgroundColor: t.surface, borderBottomColor: t.outline, paddingTop: insets.top + 12 }]}>
-        {/* Back button (stack mode only) */}
+      <View style={[s.header, {
+        backgroundColor: IS_ANDROID ? t.surface : t.bg,
+        paddingTop: insets.top + (IS_ANDROID ? 8 : 54),
+      }]}>
         {!isTabMode && (
           <TouchableOpacity onPress={() => nav.goBack()} style={s.backBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
             <Ionicons name="chevron-back" size={24} color={t.ink} />
           </TouchableOpacity>
         )}
+        <View style={s.kickerRow}>
+          <Text style={[s.kicker, { color: t.primary }]}>Board</Text>
+          <Text style={[s.kickerHi, { color: t.ink3 }]}>कार्यफलक</Text>
+        </View>
+        <Text style={[s.screenTitle, { color: t.ink }]} numberOfLines={1}>
+          {activeProject?.name ?? 'Select Project'}
+        </Text>
 
-        {/* Project selector */}
-        <TouchableOpacity style={s.projectBtn} onPress={() => setShowPicker(true)} activeOpacity={0.75}>
-          <View style={[s.projDot, { backgroundColor: colColor }]} />
+        {/* Project switcher row */}
+        <TouchableOpacity
+          style={[s.projectBtn, { backgroundColor: t.surface2, borderRadius: IS_ANDROID ? 20 : 14 }]}
+          onPress={() => setShowPicker(true)}
+          activeOpacity={0.75}
+        >
+          <View style={[s.projDot, { backgroundColor: colColor, borderRadius: 4 }]} />
           <View style={{ flex: 1, minWidth: 0 }}>
-            <Text style={[s.headerTitle, { color: t.ink }]} numberOfLines={1}>
-              {activeProject?.name ?? 'Select Project'}
-            </Text>
-            <Text style={[s.headerSub, { color: t.ink3 }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8 }}>
+              <Text style={[s.projName, { color: t.ink }]} numberOfLines={1}>
+                {activeProject?.name ?? 'Select Project'}
+              </Text>
+            </View>
+            <Text style={[s.projMeta, { color: t.ink2 }]}>
               {tasks.length} task{tasks.length !== 1 ? 's' : ''}
               {activeProject?.description ? ` · ${activeProject.description}` : ''}
             </Text>
           </View>
-          <Ionicons name="chevron-down" size={16} color={t.ink3} />
-        </TouchableOpacity>
-
-        {/* Add task button */}
-        <TouchableOpacity onPress={() => setAdding(true)} disabled={!projectId}>
-          <LinearGradient colors={['#0082c6','#05b7aa']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={s.addBtn}>
-            <Ionicons name="add" size={16} color="#fff" />
-            <Text style={s.addText}>Task</Text>
-          </LinearGradient>
+          <Ionicons name="chevron-down" size={16} color={t.ink2} />
         </TouchableOpacity>
       </View>
 
-      {/* ── View toggle ── */}
-      <View style={[s.viewBar, { backgroundColor: t.surface, borderBottomColor: t.outline }]}>
-        <View style={[s.segControl, { backgroundColor: t.surfaceLow ?? t.bg }]}>
-          {VIEWS.map((v, i) => (
+      {/* ── View switcher — M3 pill row ── */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false}
+        contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 8, gap: 6 }}>
+        {VIEWS.map(v => {
+          const active = view === v;
+          return (
             <TouchableOpacity
               key={v}
               onPress={() => setView(v)}
-              style={[s.segItem, view === v && { backgroundColor: t.surface, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.08, shadowRadius: 2, elevation: 2 }]}
+              activeOpacity={0.7}
+              style={[s.viewPill, {
+                backgroundColor: active ? t.secondaryContainer : 'transparent',
+                borderWidth: 1,
+                borderColor: active ? 'transparent' : t.outline,
+              }]}
             >
-              <Text style={[s.segText, { color: view === v ? t.ink : t.ink3, fontWeight: view === v ? '700' : '500' }]}>{v}</Text>
+              <Text style={[s.viewPillText, {
+                color: active ? t.onSecondaryContainer : t.ink2,
+              }]}>{v}</Text>
             </TouchableOpacity>
-          ))}
-        </View>
-      </View>
+          );
+        })}
+      </ScrollView>
 
-      {/* ── Column filter tabs (board view only) ── */}
+      {/* ── Column tabs (board view only) ── */}
       {view === 'Board' && columns.length > 0 && (
         <ScrollView horizontal showsHorizontalScrollIndicator={false}
-          style={[s.colTabs, { borderBottomColor: t.outline }]}
-          contentContainerStyle={{ paddingHorizontal: 16, gap: 6, paddingVertical: 8 }}>
-          {columns.map(col => (
-            <View key={col.column_id} style={[s.colTab, { borderColor: col.color + '44' }]}>
-              <View style={[s.colTabDot, { backgroundColor: col.color }]} />
-              <Text style={[s.colTabText, { color: t.ink2 }]}>{col.name}</Text>
-              <Text style={[s.colTabCount, { color: col.color }]}>{grouped[col.column_id]?.length ?? 0}</Text>
-            </View>
-          ))}
+          contentContainerStyle={{ paddingHorizontal: 16, gap: 6, paddingVertical: 6 }}>
+          {columns.map(col => {
+            const isActiveC = col.column_id === activeColId;
+            const count     = grouped[col.column_id]?.length ?? 0;
+            return (
+              <TouchableOpacity
+                key={col.column_id}
+                onPress={() => setActiveCol(col.column_id)}
+                activeOpacity={0.7}
+                style={[s.colTab, {
+                  backgroundColor: isActiveC ? t.surface3 : 'transparent',
+                  borderColor:     isActiveC ? 'transparent' : t.outline,
+                }]}
+              >
+                <View style={[s.colTabDot, { backgroundColor: col.color, borderRadius: 99 }]} />
+                <Text style={[s.colTabText, { color: isActiveC ? t.ink : t.ink2 }]}>{col.name}</Text>
+                <Text style={[s.colTabCount, { color: t.ink3 }]}>{count}</Text>
+              </TouchableOpacity>
+            );
+          })}
         </ScrollView>
       )}
 
@@ -576,50 +621,50 @@ const ps = StyleSheet.create({
 
 // ── Board card styles ─────────────────────────────────────────────────────────
 const bc = StyleSheet.create({
-  card:         { borderRadius: 14, padding: 14, marginBottom: 10, backgroundColor: '#fff', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.06, shadowRadius: 4, elevation: 2 },
-  topRow:       { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 },
-  priDot:       { width: 8, height: 8, borderRadius: 4, flexShrink: 0 },
-  priLabel:     { fontSize: 11, fontWeight: '600', textTransform: 'capitalize', flex: 1 },
-  ownerChip:    { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, backgroundColor: 'rgba(255,159,10,0.18)' },
-  ownerChipText:{ fontSize: 9, fontWeight: '700', color: '#B06A00', letterSpacing: 0.3 },
-  title:        { fontSize: 14, fontWeight: '600', lineHeight: 20, marginBottom: 10 },
-  footer:       { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  dueChip:      { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 6, paddingVertical: 3, borderRadius: 6 },
-  dueText:      { fontSize: 10, fontWeight: '600' },
-  metaItem:     { flexDirection: 'row', alignItems: 'center', gap: 2 },
-  metaCount:    { fontSize: 10, fontWeight: '600' },
-  avatar:       { width: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  avatarText:   { fontSize: 9, fontWeight: '800', color: '#fff' },
-  progressRow:  { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 10 },
-  progressTrack:{ flex: 1, height: 3, borderRadius: 2, overflow: 'hidden' },
-  progressBar:  { height: 3, borderRadius: 2 },
-  progressText: { fontSize: 9, fontWeight: '700', minWidth: 24, textAlign: 'right' },
+  card:         { padding: 14, paddingHorizontal: 16, marginBottom: 10 },
+  topRow:       { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
+  priDot:       { width: 8, height: 8, flexShrink: 0 },
+  priLabel:     { fontSize: 11.5, fontWeight: '600', textTransform: 'capitalize', flex: 1 },
+  taskId:       { fontSize: 11, fontFamily: 'SpaceMono' },
+  title:        { fontSize: IS_ANDROID ? 15.5 : 15, fontWeight: '500', lineHeight: IS_ANDROID ? 21 : 20, letterSpacing: IS_ANDROID ? 0 : -0.2, marginBottom: 10 },
+  footer:       { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
+  chip:         { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: IS_ANDROID ? 4 : 3, borderRadius: 99 },
+  chipText:     { fontSize: 11, fontWeight: '700', letterSpacing: 0.3, textTransform: 'uppercase' },
+  metaItem:     { flexDirection: 'row', alignItems: 'center', gap: 3 },
+  metaCount:    { fontSize: 11, fontFamily: 'SpaceMono' },
+  avatar:       { width: IS_ANDROID ? 22 : 20, height: IS_ANDROID ? 22 : 20, borderRadius: 99, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5 },
+  avatarText:   { fontSize: 8, fontWeight: '700', color: '#fff' },
 });
 
 // ── Screen styles ─────────────────────────────────────────────────────────────
 const s = StyleSheet.create({
   root:         { flex: 1 },
   // Header
-  header:       { flexDirection: 'row', alignItems: 'center', gap: 8, paddingBottom: 12, paddingHorizontal: 16, borderBottomWidth: 1 },
-  backBtn:      { width: 32, flexShrink: 0 },
-  projectBtn:   { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, minWidth: 0 },
-  projDot:      { width: 10, height: 10, borderRadius: 4, flexShrink: 0 },
-  headerTitle:  { fontSize: 16, fontWeight: '800' },
-  headerSub:    { fontSize: 11, fontWeight: '500', marginTop: 1 },
-  addBtn:       { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 99 },
-  addText:      { color: '#fff', fontSize: 12, fontWeight: '800' },
-  // View toggle (segmented control)
-  viewBar:      { borderBottomWidth: StyleSheet.hairlineWidth, paddingHorizontal: 16, paddingVertical: 8 },
-  segControl:   { flexDirection: 'row', borderRadius: 10, padding: 2, overflow: 'hidden' },
-  segItem:      { flex: 1, paddingVertical: 6, alignItems: 'center', borderRadius: 8 },
-  segText:      { fontSize: 12 },
+  header:       { paddingHorizontal: 16, paddingBottom: 8 },
+  backBtn:      { width: 32, flexShrink: 0, marginBottom: 4 },
+  kickerRow:    { flexDirection: 'row', alignItems: 'baseline', gap: 8, marginBottom: 4 },
+  kicker:       { fontSize: 11, fontWeight: '700', letterSpacing: 1.4, textTransform: 'uppercase' },
+  kickerHi:     { fontSize: 12, fontFamily: 'TiroDevanagariHindi' },
+  screenTitle:  { fontSize: IS_ANDROID ? 30 : 34, fontWeight: IS_ANDROID ? '500' : '400', lineHeight: IS_ANDROID ? 36 : 40, letterSpacing: -0.5, marginBottom: 10, fontFamily: IS_ANDROID ? undefined : 'Newsreader' },
+  projectBtn:   { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, paddingHorizontal: 14, marginBottom: 4 },
+  projDot:      { width: 12, height: 12, flexShrink: 0 },
+  projName:     { fontSize: 15, fontWeight: '600' },
+  projMeta:     { fontSize: 12, marginTop: 2 },
+  // View switcher pills
+  viewPill:     { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 99 },
+  viewPillText: { fontSize: 13, fontWeight: '600', letterSpacing: 0.1 },
   // Column tabs
-  colTabs:      { borderBottomWidth: StyleSheet.hairlineWidth },
-  colTab:       { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 99, borderWidth: 1 },
-  colTabDot:    { width: 6, height: 6, borderRadius: 3 },
-  colTabText:   { fontSize: 12, fontWeight: '600' },
-  colTabCount:  { fontSize: 10, fontWeight: '800' },
-  // Board columns
+  colTab:       { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 11, paddingVertical: 6, borderRadius: 99, borderWidth: 1, flexShrink: 0 },
+  colTabDot:    { width: 7, height: 7 },
+  colTabText:   { fontSize: 13, fontWeight: '600' },
+  colTabCount:  { fontSize: 11, fontFamily: 'SpaceMono' },
+  // Approval hint (board view)
+  approvalHint:     { flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: IS_ANDROID ? 20 : 10, paddingHorizontal: 14, paddingVertical: 12 },
+  approvalHintText: { fontSize: IS_ANDROID ? 13 : 12, lineHeight: 18, flex: 1 },
+  emptyCol:         { fontSize: 13, textAlign: 'center', paddingVertical: 32 },
+  addCardBtn:       { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 14, borderRadius: IS_ANDROID ? 14 : 12, borderWidth: 1.5, borderStyle: 'dashed', marginTop: 4 },
+  addCardText:      { fontSize: IS_ANDROID ? 13.5 : 13, fontWeight: '500' },
+  // Board columns (legacy horizontal mode — kept for non-board views)
   column:       { width: 270, paddingHorizontal: 10, paddingTop: 8 },
   colHeader:    { flexDirection: 'row', alignItems: 'center', gap: 8, paddingBottom: 10, paddingHorizontal: 2 },
   colDot:       { width: 8, height: 8, borderRadius: 4 },

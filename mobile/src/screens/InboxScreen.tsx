@@ -85,14 +85,15 @@ export default function InboxScreen() {
   });
 
   const { mutate: markRead } = useMutation({
-    mutationFn: (id: string) => notificationsApi.markRead(id),
+    mutationFn: (id: string) => notificationsApi.markRead([id]),
     onSuccess:  () => qc.invalidateQueries({ queryKey: ['notifications'] }),
   });
 
   const filtered = useMemo(() => {
     const chip = FILTER_CHIPS.find(c => c.id === filter);
     if (!chip?.kinds) return notifications;
-    return notifications.filter(n => chip.kinds!.includes(n.kind));
+    // API returns 'type' field (NotifKind)
+    return notifications.filter(n => chip.kinds!.includes(n.type as any));
   }, [notifications, filter]);
 
   // Group by day
@@ -110,7 +111,7 @@ export default function InboxScreen() {
     return Array.from(map.values());
   }, [filtered]);
 
-  const unreadCount = notifications.filter(n => !n.is_read).length;
+  const unreadCount = notifications.filter(n => !n.read_at).length;
 
   return (
     <View style={[s.root, { backgroundColor: t.bg }]}>
@@ -223,7 +224,7 @@ export default function InboxScreen() {
                 n={n}
                 t={t}
                 onPress={() => {
-                  if (!n.is_read) markRead(n.notification_id);
+                  if (!n.read_at) markRead(n.notification_id);
                   if (n.task_id) nav.navigate('TaskDetail', { taskId: n.task_id });
                 }}
               />
@@ -242,11 +243,12 @@ function InboxRow({
   t: any;
   onPress: () => void;
 }) {
-  const tone    = KIND_TONE[n.kind] ?? 'neutral';
+  const tone    = KIND_TONE[(n as any).kind ?? n.type] ?? 'neutral';
   const iconName = TONE_ICON[tone] ?? 'ellipse-outline';
-  const actorName = n.actor_name ?? 'Someone';
+  // Extract actor name: title is typically "Name did something"
+  const actorName = (n as any).actor_name ?? n.title?.split(' ')[0] ?? 'Someone';
   const initials  = userInitials(actorName);
-  const bgColor   = avatarColor(n.actor_id ?? actorName);
+  const bgColor   = avatarColor((n as any).actor_id ?? actorName);
 
   // Badge container colors per tone (Android M3 containers)
   const badgeColors: Record<string, { bg: string; fg: string }> = {
@@ -269,15 +271,15 @@ function InboxRow({
         s.row,
         IS_ANDROID
           ? {
-              backgroundColor: n.is_read ? 'transparent' : t.surfaceLow,
-              borderLeftColor: n.priority === 'urgent' ? t.error : 'transparent',
+              backgroundColor: !n.read_at ? t.surfaceLow : 'transparent',
+              borderLeftColor: (n as any).priority === 'urgent' ? t.error : 'transparent',
             }
           : {
               backgroundColor: t.surface,
               borderRadius: 14,
               marginHorizontal: 16,
               marginBottom: 6,
-              borderLeftColor: n.priority === 'urgent' ? '#FF453A' : 'transparent',
+              borderLeftColor: (n as any).priority === 'urgent' ? '#FF453A' : 'transparent',
               shadowColor: '#000',
               shadowOffset: { width: 0, height: 1 },
               shadowOpacity: 0.04,
@@ -286,7 +288,7 @@ function InboxRow({
       ]}
     >
       {/* Unread indicator */}
-      {!n.is_read && (
+      {!n.read_at && (
         <View style={[
           s.unreadDot,
           IS_ANDROID
@@ -313,12 +315,12 @@ function InboxRow({
       <View style={s.content}>
         <Text style={[s.rowText, { color: t.ink }]} numberOfLines={2}>
           <Text style={s.actorName}>{actorName}</Text>
-          <Text style={{ color: t.ink2 }}> {n.body ?? n.message ?? ''}</Text>
+          <Text style={{ color: t.ink2 }}> {n.message ?? ''}</Text>
         </Text>
-        {n.task_title ? (
+        {n.title ? (
           <View style={s.taskChip}>
             <View style={[s.taskDot, { backgroundColor: t.primary }]} />
-            <Text style={[s.taskChipText, { color: t.ink3 }]} numberOfLines={1}>{n.task_title}</Text>
+            <Text style={[s.taskChipText, { color: t.ink3 }]} numberOfLines={1}>{n.title}</Text>
           </View>
         ) : null}
       </View>
