@@ -33,13 +33,19 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
   const [categories,  setCategories] = useState([]);
 
   // ── UI state ──────────────────────────────────────────────────────────────
-  const [tab,          setTab]        = useState('details');
+  const [scrolled,     setScrolled]   = useState(false);
+  const bodyRef = useRef(null);
   const [saving,       setSaving]     = useState(false);
   const [deletingTask, setDeletingTask] = useState(false);
   const [confirmState, setConfirmState] = useState(null);
   const [assigneeOpen, setAssigneeOpen] = useState(false);
   const assigneeRef = useRef(null);
   const fileRef     = useRef(null);
+
+  // ── Collapse title on scroll ──────────────────────────────────────────────
+  const handleBodyScroll = useCallback(() => {
+    setScrolled((bodyRef.current?.scrollTop ?? 0) > 32);
+  }, []);
 
   // ── Comments ──────────────────────────────────────────────────────────────
   const [comments,       setComments]       = useState([]);
@@ -94,17 +100,23 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
 
   useEffect(() => {
     if (!open || !taskId) return;
-    setTab('details');
+    setScrolled(false);
+    if (bodyRef.current) bodyRef.current.scrollTop = 0;
     setTask(null); setFields([]); setFValues({});
     setComments([]); setActivity([]); setEntries([]); setTimer(null); setAttachments([]);
-    setMembers([]); setAssigneeOpen(false);
+    setMembers([]); setAssigneeOpen(false); setActLoad(false);
 
     api.get('/categories').then(r => setCategories(Array.isArray(r.data) ? r.data : [])).catch(() => {});
 
     Promise.all([
       api.get(`/tasks/${taskId}`),
       api.get(`/tasks/${taskId}/comments`),
-    ]).then(([tRes, cRes]) => {
+      api.get(`/activity/task/${taskId}`).catch(() => ({ data: [] })),
+      api.get(`/time/task/${taskId}`).catch(() => ({ data: { entries: [], active_entry: null } })),
+    ]).then(([tRes, cRes, actRes, timeRes]) => {
+      setActivity(Array.isArray(actRes.data) ? actRes.data : []);
+      setEntries(timeRes.data?.entries || []);
+      setTimer(timeRes.data?.active_entry || null);
       const t = tRes.data;
       setTask(t);
       setDraft({ title: t.title, description: t.description, priority: t.priority, due_at: t.due_at, status: t.status, category_id: t.category_id || '' });
@@ -129,23 +141,6 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
     }).catch(logger.error);
   }, [open, taskId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Activity tab load ─────────────────────────────────────────────────────
-  useEffect(() => {
-    if (tab !== 'activity' || !taskId) return;
-    setActLoad(true);
-    api.get(`/activity/task/${taskId}`)
-       .then(r => setActivity(Array.isArray(r.data) ? r.data : []))
-       .catch(logger.error)
-       .finally(() => setActLoad(false));
-  }, [tab, taskId]);
-
-  // ── Time tab load ─────────────────────────────────────────────────────────
-  useEffect(() => {
-    if (tab !== 'time' || !taskId) return;
-    api.get(`/time/task/${taskId}`)
-       .then(r => { setEntries(r.data.entries || []); setTimer(r.data.active_entry || null); })
-       .catch(logger.error);
-  }, [tab, taskId]);
 
   // ── Core task actions ─────────────────────────────────────────────────────
   const saveTask = useCallback(async patch => {
@@ -393,22 +388,16 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
 
   if (!open) return null;
 
-  const tabs = [
-    ['details',  'Details',  'विवरण'],
-    ['files',    'Files',    'फ़ाइलें'],
-    ['activity', 'Activity', 'क्रिया'],
-    ...(!isClient ? [['time', 'Time', 'काल']] : []),
-  ];
-
   return (
     <>
       <div className="k-dr-scrim" onClick={e => e.target === e.currentTarget && onClose()}>
-        <div className="k-dr">
+        <div className={`k-dr${scrolled ? ' is-scrolled' : ''}`}>
 
           <DrawerHeader
             task={task} draft={draft} setDraft={setDraft} saving={saving}
             canDeleteTask={canDeleteTask} deletingTask={deletingTask}
             onClose={onClose} onDeleteTask={handleDeleteTask} saveTask={saveTask}
+            scrolled={scrolled}
           />
 
           <DrawerMeta
@@ -419,26 +408,20 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
             assigneeRef={assigneeRef} toggleAssignee={toggleAssignee}
           />
 
-          {/* Tabs */}
-          <div className="k-dr__tabs">
-            {tabs.map(([id, label, sans]) => (
-              <button key={id} className={`k-dr__tab${tab === id ? ' is-active' : ''}`} onClick={() => setTab(id)}>
-                {label}
-                <span className="k-dr__tab-sans">{sans}</span>
-                {id === 'files' && attachments.length > 0 && (
-                  <span className="k-dr__tab-count">{attachments.length}</span>
-                )}
-              </button>
-            ))}
-          </div>
+          {/* Single scrollable body — all sections stacked */}
+          <div className="k-dr__body" ref={bodyRef} onScroll={handleBodyScroll}>
 
-          {/* Body */}
-          <div className="k-dr__body">
+            {!task && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                {[65, 40, 80, 40].map((w, i) => (
+                  <div key={i} style={{ height: 14, background: 'var(--rule-soft)', borderRadius: 4, width: `${w}%` }} />
+                ))}
+              </div>
+            )}
 
-            {/* ── Details ── */}
-            {tab === 'details' && task && (
+            {task && (
               <>
-                {/* Description */}
+                {/* ── Description ── */}
                 <div style={{ marginBottom: 20 }}>
                   <span style={lbl}>
                     Description{' '}
@@ -457,6 +440,7 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
                   />
                 </div>
 
+                {/* ── Subtasks ── */}
                 <DrawerSubtasks
                   task={task} members={members}
                   newSubtask={newSubtask} setNewSubtask={setNewSubtask}
@@ -465,7 +449,7 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
                   deleteSubtask={deleteSubtask} updateSubtaskAssignee={updateSubtaskAssignee}
                 />
 
-                {/* Custom fields */}
+                {/* ── Custom fields ── */}
                 {fields.length > 0 && (
                   <div style={{ marginBottom: 20 }}>
                     <span style={lbl}>Custom Fields</span>
@@ -480,7 +464,7 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
                   </div>
                 )}
 
-                {/* Approval */}
+                {/* ── Approval ── */}
                 {task.team_id && (
                   <DrawerApproval
                     task={task}
@@ -499,6 +483,7 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
                   />
                 )}
 
+                {/* ── Comments ── */}
                 <DrawerComments
                   comments={comments} comment={comment} setComment={setComment}
                   postComment={postComment} deleteComment={deleteComment}
@@ -506,38 +491,44 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
                   startEditComment={startEditComment} saveEditComment={saveEditComment}
                   me={me} isSystemAdmin={isSystemAdmin} mentionMembers={mentionMembers}
                 />
+
+                {/* ── Files ── */}
+                <div className="k-dr__section">
+                  <div className="k-dr__sec-hd">
+                    Files <span className="k-dr__sec-hi">फ़ाइलें</span>
+                    {attachments.length > 0 && <span className="k-dr__sec-count">{attachments.length}</span>}
+                  </div>
+                  <DrawerAttachments
+                    attachments={attachments} uploading={uploading}
+                    fileRef={fileRef} handleFileChange={handleFileChange}
+                    removeAttachment={removeAttachment}
+                  />
+                </div>
+
+                {/* ── Activity ── */}
+                <div className="k-dr__section">
+                  <div className="k-dr__sec-hd">
+                    Activity <span className="k-dr__sec-hi">क्रिया</span>
+                  </div>
+                  <ActivityList events={activity} loading={actLoad} />
+                </div>
+
+                {/* ── Time (non-client) ── */}
+                {!isClient && (
+                  <div className="k-dr__section">
+                    <div className="k-dr__sec-hd">
+                      Time <span className="k-dr__sec-hi">काल</span>
+                    </div>
+                    <DrawerTimeEntries
+                      timer={timer} entries={entries}
+                      manualMin={manualMin} setManualMin={setManualMin}
+                      manualDesc={manualDesc} setManualDesc={setManualDesc}
+                      startTimer={startTimer} stopTimer={stopTimer}
+                      addManual={addManual} deleteEntry={deleteEntry}
+                    />
+                  </div>
+                )}
               </>
-            )}
-
-            {tab === 'details' && !task && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                {[65, 40, 80, 40].map((w, i) => (
-                  <div key={i} style={{ height: 14, background: 'var(--rule-soft)', borderRadius: 4, width: `${w}%` }} />
-                ))}
-              </div>
-            )}
-
-            {/* ── Files ── */}
-            {tab === 'files' && (
-              <DrawerAttachments
-                attachments={attachments} uploading={uploading}
-                fileRef={fileRef} handleFileChange={handleFileChange}
-                removeAttachment={removeAttachment}
-              />
-            )}
-
-            {/* ── Activity ── */}
-            {tab === 'activity' && <ActivityList events={activity} loading={actLoad} />}
-
-            {/* ── Time ── */}
-            {tab === 'time' && (
-              <DrawerTimeEntries
-                timer={timer} entries={entries}
-                manualMin={manualMin} setManualMin={setManualMin}
-                manualDesc={manualDesc} setManualDesc={setManualDesc}
-                startTimer={startTimer} stopTimer={stopTimer}
-                addManual={addManual} deleteEntry={deleteEntry}
-              />
             )}
           </div>
         </div>

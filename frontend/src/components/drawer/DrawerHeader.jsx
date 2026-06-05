@@ -10,10 +10,11 @@ export default function DrawerHeader({
   task, draft, setDraft, saving,
   canDeleteTask, deletingTask,
   onClose, onDeleteTask, saveTask,
+  scrolled,
 }) {
   return (
     <>
-      {/* Breadcrumb / header */}
+      {/* Breadcrumb / header — always visible */}
       <div className="k-dr__head">
         <div className="k-dr__crumb">
           {task?.team_id && (
@@ -25,6 +26,17 @@ export default function DrawerHeader({
           <span style={{ padding: '2px 7px', borderRadius: 'var(--r-sm)', fontSize: 11, fontWeight: 600, background: STATUS_COLORS[draft.status] + '18', color: STATUS_COLORS[draft.status] }}>
             {STATUS_LABELS[draft.status] || draft.status}
           </span>
+          {/* Collapsed title shown in breadcrumb bar when scrolled */}
+          {scrolled && task && (
+            <span style={{
+              marginLeft: 4,
+              fontSize: 13, fontWeight: 600, color: 'var(--ink)',
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              maxWidth: 200,
+            }}>
+              {draft.title}
+            </span>
+          )}
         </div>
         <div className="k-dr__head-actions">
           {saving && (
@@ -52,7 +64,7 @@ export default function DrawerHeader({
         </div>
       </div>
 
-      {/* Title */}
+      {/* Title — collapses when scrolled */}
       <div className="k-dr__title">
         {task ? (
           <input

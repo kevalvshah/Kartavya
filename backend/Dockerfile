@@ -15,6 +15,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxslt1.1 \
     shared-mime-info \
     fonts-dejavu-core \
+    fonts-noto \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

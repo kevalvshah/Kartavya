@@ -40,7 +40,7 @@ _CHAMP_BD = "#93D9D5"   # mix(teal 30%, rule)
 
 _FONT_DISP  = 'Georgia, "Times New Roman", serif'
 _FONT_UI    = '"Helvetica Neue", Arial, sans-serif'
-_FONT_HINDI = '"Noto Serif Devanagari", serif'
+_FONT_HINDI = '"Noto Serif Devanagari", "Noto Sans Devanagari", "Lohit Devanagari", serif'
 _FONT_MONO  = '"Courier New", monospace'
 
 _MEMBER_COLORS = ["#0082c6","#f59e0b","#05b7aa","#8b5cf6","#10b981","#ec4899","#ef4444","#6366f1"]
