@@ -172,7 +172,7 @@ async def accept_invite(body: AcceptInviteBody):
 
     try:
         from email_service import send_welcome_email
-        send_welcome_email(invite["email"], body.name)
+        send_welcome_email(invite["email"], full_name or body.name)
     except Exception:
         pass
 

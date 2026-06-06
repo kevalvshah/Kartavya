@@ -722,12 +722,26 @@ async def _reject_task_approval(pool, task: dict, task_id: str, notes: str, user
         " approval_decided_at=NOW(), updated_at=NOW() WHERE task_id=$3",
         user["user_id"], notes, task_id,
     )
+    reviewer_name = user.get("full_name") or user.get("name") or user.get("email", "")
     if task["created_by_user_id"] and task["created_by_user_id"] != user["user_id"]:
         await create_notification(
             pool, task["created_by_user_id"], "rejected",
             f"Task rejected: {task['title']}", notes or "",
             task_id, task["team_id"], "/tasks",
         )
+        try:
+            from email_service import send_approval_decision_email
+            requester = await pool.fetchrow(
+                "SELECT email, COALESCE(full_name,name,email) AS name FROM users WHERE user_id=$1",
+                task["created_by_user_id"]
+            )
+            if requester:
+                send_approval_decision_email(
+                    requester["email"], requester["name"],
+                    reviewer_name, task["title"], task_id, "rejected", notes or ""
+                )
+        except Exception as _e:
+            logger.warning("reject decision email failed: %s", _e)
     return {"ok": True, "status": "rejected"}
 
 
@@ -788,12 +802,39 @@ async def _approve_task_mark_done(
         " completed_at=NOW(), completed_by_user_id=$1, updated_at=NOW() WHERE task_id=$4",
         user["user_id"], notes, new_col_id, task_id,
     )
+    approver_name = user.get("full_name") or user.get("name") or user.get("email", "")
+    # Notify task creator
     if task["created_by_user_id"] and task["created_by_user_id"] != user["user_id"]:
         await create_notification(
             pool, task["created_by_user_id"], "approved",
             f"Task approved: {task['title']}", notes or "",
             task_id, task["team_id"], "/tasks",
         )
+        try:
+            from email_service import send_approval_decision_email
+            requester = await pool.fetchrow(
+                "SELECT email, COALESCE(full_name,name,email) AS name FROM users WHERE user_id=$1",
+                task["created_by_user_id"]
+            )
+            if requester:
+                send_approval_decision_email(
+                    requester["email"], requester["name"],
+                    approver_name, task["title"], task_id, "approved", notes or ""
+                )
+        except Exception as _e:
+            logger.warning("approve decision email failed: %s", _e)
+    # Fan-out team sync email to all project members
+    try:
+        members = await pool.fetch("""
+            SELECT DISTINCT u.email, COALESCE(u.full_name, u.name, u.email) AS name
+            FROM project_assignments pa JOIN users u ON u.user_id=pa.user_id
+            WHERE pa.team_id=$1 AND pa.user_id != $2 AND pa.user_id != $3
+        """, task["team_id"], user["user_id"], task.get("created_by_user_id") or "")
+        from email_service import send_team_sync_email
+        for m in members:
+            send_team_sync_email(m["email"], m["name"], approver_name, task["title"], task_id)
+    except Exception as _e:
+        logger.warning("team sync fan-out failed: %s", _e)
     return {"ok": True, "status": "approved", "new_column_id": new_col_id}
 
 
