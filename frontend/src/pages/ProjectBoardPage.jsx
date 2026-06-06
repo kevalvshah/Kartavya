@@ -687,7 +687,12 @@ export default function ProjectBoardPage() {
 
       )}
 
+        </div>{/* end board content */}
 
+        {chatOpen && (
+          <ChatSidePanel channelId={chatChannel} onClose={() => setChatOpen(false)} />
+        )}
+      </div>{/* end flex layout */}
 
       {/* ── Task editor (new task from column button) ─────────────── */}
 
