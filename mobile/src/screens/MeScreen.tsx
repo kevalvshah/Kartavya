@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, Switch,
-  StyleSheet, Platform, ActivityIndicator,
+  StyleSheet, Platform, ActivityIndicator, TextInput,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -12,8 +12,9 @@ import { useTheme } from '../theme/ThemeProvider';
 import { useAuth } from '../hooks/useAuth';
 import { avatarColor, userInitials } from '../theme/tokens';
 import { notificationsApi } from '../api/notifications';
+import { apiClient } from '../api/client';
 import type { RootStackParamList } from '../nav/RootStack';
-import type { NotifKind, NotifPrefsResponse } from '../api/types';
+import type { NotifKind, NotifPrefsResponse, WhatsAppSettings } from '../api/types';
 
 type Nav = NativeStackNavigationProp<RootStackParamList, 'Main'>;
 
@@ -123,6 +124,57 @@ export default function MeScreen() {
   const nav              = useNavigation<Nav>();
   const insets           = useSafeAreaInsets();
   const qc               = useQueryClient();
+
+  // WhatsApp state
+  const [waPhone,    setWaPhone]    = useState('');
+  const [waOtp,      setWaOtp]      = useState('');
+  const [waStep,     setWaStep]     = useState<'idle' | 'otp' | 'done'>('idle');
+  const [waLoading,  setWaLoading]  = useState(false);
+  const [waError,    setWaError]    = useState('');
+
+  const { data: waSetting, refetch: refetchWa } = useQuery<WhatsAppSettings>({
+    queryKey: ['whatsapp-settings'],
+    queryFn:  () => apiClient.get('/whatsapp/settings').then(r => r.data),
+    staleTime: 60_000,
+    retry: false,
+  });
+
+  async function waOptIn() {
+    const phone = waPhone.trim();
+    if (!phone) return;
+    setWaLoading(true); setWaError('');
+    try {
+      await apiClient.post('/whatsapp/opt-in', { phone });
+      setWaStep('otp');
+    } catch (e: any) {
+      setWaError(e?.response?.data?.detail || 'Could not send OTP');
+    } finally { setWaLoading(false); }
+  }
+
+  async function waVerify() {
+    if (!waOtp.trim()) return;
+    setWaLoading(true); setWaError('');
+    try {
+      await apiClient.post('/whatsapp/verify', { otp: waOtp.trim() });
+      setWaStep('done');
+      refetchWa();
+    } catch (e: any) {
+      setWaError(e?.response?.data?.detail || 'Invalid OTP');
+    } finally { setWaLoading(false); }
+  }
+
+  async function waOptOut() {
+    setWaLoading(true);
+    try {
+      await apiClient.delete('/whatsapp/opt-out');
+      setWaStep('idle'); setWaPhone(''); setWaOtp('');
+      refetchWa();
+    } catch { /* ignore */ } finally { setWaLoading(false); }
+  }
+
+  async function waToggle(key: keyof Pick<WhatsAppSettings, 'notify_approvals' | 'notify_mentions' | 'notify_assignments' | 'notify_dms'>, val: boolean) {
+    try { await apiClient.patch('/whatsapp/settings', { [key]: val }); refetchWa(); } catch { /* ignore */ }
+  }
 
   const { data: prefs, isLoading: prefsLoading } = useQuery<NotifPrefsResponse>({
     queryKey: ['notif-prefs'],
@@ -258,6 +310,106 @@ export default function MeScreen() {
               </View>
             );
           })
+        )}
+      </Section>
+
+      {/* ── WhatsApp ─────────────────────────────────────────────── */}
+      <Section
+        label="WhatsApp" hi="व्हाट्सऐप"
+        caption="Get task alerts on WhatsApp in addition to push notifications."
+        t={t}
+      >
+        {waSetting?.verified ? (
+          // Connected — show toggles + disconnect
+          <View>
+            <View style={[wa.connectedBadge, { borderBottomColor: t.outline }]}>
+              <Ionicons name="checkmark-circle" size={18} color="#25D366" />
+              <Text style={[wa.connectedText, { color: t.ink }]}>
+                Connected · {waSetting.phone}
+              </Text>
+              <TouchableOpacity onPress={waOptOut} disabled={waLoading} style={{ marginLeft: 'auto' }}>
+                {waLoading
+                  ? <ActivityIndicator size="small" color={t.ink3} />
+                  : <Text style={{ fontSize: 12, color: t.error, fontWeight: '600' }}>Disconnect</Text>
+                }
+              </TouchableOpacity>
+            </View>
+            {([
+              { key: 'notify_approvals',   label: 'Approvals',   hi: 'अनुमोदन' },
+              { key: 'notify_mentions',    label: 'Mentions',    hi: 'उल्लेख' },
+              { key: 'notify_assignments', label: 'Assignments', hi: 'असाइनमेंट' },
+              { key: 'notify_dms',         label: 'Direct messages', hi: 'संदेश' },
+            ] as const).map((row, i, arr) => (
+              <View key={row.key} style={[s.notifRow, i < arr.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: t.outline }]}>
+                <View style={{ flex: 1 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 6 }}>
+                    <Text style={[s.notifLabel, { color: t.ink }]}>{row.label}</Text>
+                    <Text style={[s.notifHi, { color: t.ink3 }]}>{row.hi}</Text>
+                  </View>
+                </View>
+                <Switch
+                  value={!!(waSetting as any)[row.key]}
+                  onValueChange={v => waToggle(row.key, v)}
+                  trackColor={{ false: t.outline, true: IS_ANDROID ? t.primary : t.primary + 'aa' }}
+                  thumbColor={IS_ANDROID ? ((waSetting as any)[row.key] ? t.onPrimary : t.outline) : undefined}
+                  ios_backgroundColor={t.outline}
+                />
+              </View>
+            ))}
+          </View>
+        ) : waSetting?.opted_in && !waSetting.verified || waStep === 'otp' ? (
+          // OTP step
+          <View style={wa.form}>
+            <Text style={[wa.hint, { color: t.ink2 }]}>
+              Enter the 6-digit OTP sent to your WhatsApp number.
+            </Text>
+            <TextInput
+              value={waOtp}
+              onChangeText={v => { setWaOtp(v); setWaError(''); }}
+              placeholder="6-digit OTP"
+              placeholderTextColor={t.ink3}
+              keyboardType="number-pad"
+              maxLength={6}
+              style={[wa.input, { borderColor: waError ? '#dc2626' : t.outline, color: t.ink, backgroundColor: t.bg }]}
+            />
+            {waError ? <Text style={wa.err}>{waError}</Text> : null}
+            <View style={wa.actions}>
+              <TouchableOpacity onPress={() => apiClient.post('/whatsapp/resend-otp').catch(() => {})}
+                style={{ paddingVertical: 8 }}>
+                <Text style={{ fontSize: 13, color: t.primary }}>Resend OTP</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={waVerify} disabled={waLoading || waOtp.length < 6}
+                style={[wa.btn, { backgroundColor: waOtp.length < 6 ? t.outline : t.primary }]}>
+                {waLoading
+                  ? <ActivityIndicator size="small" color="#fff" />
+                  : <Text style={wa.btnText}>Verify</Text>
+                }
+              </TouchableOpacity>
+            </View>
+          </View>
+        ) : (
+          // Not connected — phone entry
+          <View style={wa.form}>
+            <Text style={[wa.hint, { color: t.ink2 }]}>
+              Enter your WhatsApp number in international format (+91…).
+            </Text>
+            <TextInput
+              value={waPhone}
+              onChangeText={v => { setWaPhone(v); setWaError(''); }}
+              placeholder="+91 98765 43210"
+              placeholderTextColor={t.ink3}
+              keyboardType="phone-pad"
+              style={[wa.input, { borderColor: waError ? '#dc2626' : t.outline, color: t.ink, backgroundColor: t.bg }]}
+            />
+            {waError ? <Text style={wa.err}>{waError}</Text> : null}
+            <TouchableOpacity onPress={waOptIn} disabled={waLoading || !waPhone.trim()}
+              style={[wa.btn, { backgroundColor: !waPhone.trim() ? t.outline : '#25D366', opacity: !waPhone.trim() ? 0.5 : 1 }]}>
+              {waLoading
+                ? <ActivityIndicator size="small" color="#fff" />
+                : <Text style={wa.btnText}>Connect WhatsApp</Text>
+              }
+            </TouchableOpacity>
+          </View>
         )}
       </Section>
 
@@ -431,4 +583,20 @@ const s = StyleSheet.create({
     fontWeight: '600',
     letterSpacing: 2,
   },
+});
+
+const wa = StyleSheet.create({
+  connectedBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    paddingHorizontal: 18, paddingVertical: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  connectedText: { fontSize: 14, fontWeight: '500' },
+  form:    { padding: 18, gap: 10 },
+  hint:    { fontSize: 13, lineHeight: 19 },
+  input:   { borderWidth: 1, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 11, fontSize: 15 },
+  err:     { fontSize: 12, color: '#dc2626' },
+  actions: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  btn:     { paddingHorizontal: 20, paddingVertical: 11, borderRadius: 10, alignItems: 'center' },
+  btnText: { color: '#fff', fontWeight: '700', fontSize: 14 },
 });

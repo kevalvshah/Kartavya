@@ -19,7 +19,8 @@ import { apiClient } from '../api/client';
 import AttachmentSourceSheet, { type PickedFile } from './AttachmentSourceSheet';
 import { enqueueMutation } from '../offline/mutationQueue';
 import NetInfo from '@react-native-community/netinfo';
-import type { TeamMember } from '../api/types';
+import { templatesApi } from '../api/templates';
+import type { TeamMember, TaskTemplate } from '../api/types';
 
 const MAX_ATTACHMENTS = 5;
 const MAX_MB = 5;
@@ -61,6 +62,8 @@ export default function NewTaskSheet({ visible, onClose }: Props) {
 
   const [projects,   setProjects]   = useState<{ team_id: string; name: string; color?: string }[]>([]);
   const [members,    setMembers]    = useState<TeamMember[]>([]);
+  const [templates,  setTemplates]  = useState<TaskTemplate[]>([]);
+  const [showTemplates, setShowTemplates] = useState(false);
 
   // Reset on open
   useEffect(() => {
@@ -68,17 +71,28 @@ export default function NewTaskSheet({ visible, onClose }: Props) {
     setTitle(''); setProjectId(null); setStatus('todo'); setPriority('medium');
     setDueAt(null); setShowDatePicker(false); setDescription(''); setAssignees([]);
     setAttachments([]); setShowAttachPicker(false); setUploadingFiles(false);
-    setTitleError(false); setError(null);
+    setTitleError(false); setError(null); setTemplates([]); setShowTemplates(false);
     apiClient.get('/teams').then(r => setProjects(Array.isArray(r.data) ? r.data : [])).catch(() => {});
   }, [visible]);
 
-  // Fetch members when project changes
+  // Fetch members + templates when project changes
   useEffect(() => {
-    if (!projectId) { setMembers([]); return; }
+    if (!projectId) { setMembers([]); setTemplates([]); return; }
     apiClient.get(`/teams/${projectId}`)
       .then(r => setMembers(Array.isArray(r.data?.members) ? r.data.members : []))
       .catch(() => setMembers([]));
+    templatesApi.list(projectId)
+      .then(setTemplates)
+      .catch(() => setTemplates([]));
   }, [projectId]);
+
+  function applyTemplate(tmpl: TaskTemplate) {
+    const cfg = tmpl.config ?? {};
+    if (cfg.title)       setTitle(cfg.title);
+    if (cfg.description) setDescription(cfg.description);
+    if (cfg.priority)    setPriority(cfg.priority as Priority);
+    setShowTemplates(false);
+  }
 
   const toggleAssignee = (uid: string) => {
     setAssignees(prev => prev.includes(uid) ? prev.filter(x => x !== uid) : [...prev, uid]);
@@ -206,6 +220,35 @@ export default function NewTaskSheet({ visible, onClose }: Props) {
                 </TouchableOpacity>
               ))}
             </ScrollView>
+
+            {/* Templates — shown when a project is selected and has templates */}
+            {projectId && templates.length > 0 && (
+              <>
+                <TouchableOpacity
+                  onPress={() => setShowTemplates(v => !v)}
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10, marginBottom: showTemplates ? 8 : 0 }}
+                >
+                  <Ionicons name={showTemplates ? 'chevron-down' : 'copy-outline'} size={14} color={t.primary} />
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: t.primary, letterSpacing: 0.5 }}>
+                    USE A TEMPLATE · टेम्पलेट
+                  </Text>
+                </TouchableOpacity>
+                {showTemplates && (
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles(t).chipRow}>
+                    {templates.map(tmpl => (
+                      <TouchableOpacity
+                        key={tmpl.template_id}
+                        onPress={() => applyTemplate(tmpl)}
+                        style={[styles(t).chip, { borderColor: t.primary, backgroundColor: t.primary + '12' }]}
+                      >
+                        {tmpl.icon ? <Text style={{ fontSize: 14 }}>{tmpl.icon}</Text> : null}
+                        <Text style={[styles(t).chipText, { color: t.primary }]}>{tmpl.name}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                )}
+              </>
+            )}
 
             {/* Status — hidden for clients */}
             {!isClient && (

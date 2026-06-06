@@ -3,8 +3,8 @@
   "configurations": [
     {
       "name": "frontend",
-      "runtimeExecutable": "npx",
-      "runtimeArgs": ["--prefix", "frontend", "vite", "--port", "3000"],
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": ["/c", "cd frontend && node_modules\\.bin\\vite.cmd --port 3000 --host 0.0.0.0"],
       "port": 3000
     }
   ]

@@ -44,7 +44,8 @@ const NAV_FULL = [
       { to: '/automations', icon: 'automations', en: 'Automations', hi: 'स्वचालन' },
       { to: '/time',        icon: 'time',        en: 'Time Report', hi: 'काल' },
       { to: '/reports',     icon: 'reports',     en: 'Reports',     hi: 'प्रतिवेदन', ownerOnly: true },
-      { to: '/templates',   icon: 'templates',   en: 'Templates',   hi: 'साँचा' },
+      { to: '/templates',          icon: 'templates',   en: 'Templates',   hi: 'साँचा' },
+      { to: '/whatsapp-templates', icon: 'messages',    en: 'WA Templates', hi: 'व्हाट्सऐप' },
     ],
   },
   {

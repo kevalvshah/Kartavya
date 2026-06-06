@@ -46,8 +46,9 @@ from routers.time_entries import router as time_router
 from routers.uploads     import router as uploads_router   # R2-backed upload
 from routers.reports     import router as reports_router
 from routers.messaging          import router as messaging_router
-from routers.whatsapp_settings  import router as whatsapp_router
-from routers.whatsapp_webhook   import router as whatsapp_webhook_router
+from routers.whatsapp_settings   import router as whatsapp_router
+from routers.whatsapp_webhook    import router as whatsapp_webhook_router
+from routers.whatsapp_templates  import router as whatsapp_templates_router
 from services.gita            import get_verse_of_the_day
 from services.web_push_service import (
     is_configured as wp_is_configured,
@@ -1738,6 +1739,7 @@ app.include_router(uploads_router)   # R2-backed file upload (replaces old base6
 app.include_router(reports_router)
 app.include_router(messaging_router)
 app.include_router(whatsapp_router)
+app.include_router(whatsapp_templates_router)
 app.include_router(whatsapp_webhook_router)  # public — no auth, HMAC verified internally
 
 
