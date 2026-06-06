@@ -240,8 +240,10 @@ export default function TemplatesPage() {
                         {!t.is_default && (
                           <button className="k-btn k-btn--ghost k-btn--sm"
                             onClick={async () => {
-                              await api.post(`/templates/tasks/${t.template_id}/set-default`).catch(() => {});
-                              load(); pushToast({ type: 'success', title: 'Set as default' });
+                              try {
+                                await api.post(`/templates/tasks/${t.template_id}/set-default`);
+                                load(); pushToast({ type: 'success', title: 'Set as default' });
+                              } catch { pushToast({ type: 'error', title: 'Could not set default' }); }
                             }}>
                             Set default
                           </button>
@@ -250,8 +252,10 @@ export default function TemplatesPage() {
                           onClick={() => setConfirmState({
                             message: `Delete template "${t.name}"?`, confirmLabel: 'Delete',
                             onConfirm: async () => {
-                              await api.delete(`/templates/tasks/${t.template_id}`).catch(() => {});
-                              load();
+                              try {
+                                await api.delete(`/templates/tasks/${t.template_id}`);
+                                load();
+                              } catch { pushToast({ type: 'error', title: 'Could not delete template' }); }
                             },
                           })}>
                           <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4"><path d="M3 4h10M5 4V3h6v1M6 7v5M10 7v5M4 4l1 9h6l1-9"/></svg>
@@ -417,8 +421,8 @@ export default function TemplatesPage() {
                       </select>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'flex-end', paddingBottom: 2 }}>
-                      <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', userSelect: 'none', fontSize: 13, color: 'var(--ink-2)' }}>
-                        <div onClick={() => setTaskTmplForm(f => ({ ...f, is_default: !f.is_default }))}
+                      <label onClick={() => setTaskTmplForm(f => ({ ...f, is_default: !f.is_default }))} style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', userSelect: 'none', fontSize: 13, color: 'var(--ink-2)' }}>
+                        <div
                           style={{ width: 38, height: 20, borderRadius: 10, background: taskTmplForm.is_default ? 'var(--k-primary)' : 'var(--rule-soft)', position: 'relative', transition: 'background .2s', flexShrink: 0, cursor: 'pointer' }}>
                           <div style={{ position: 'absolute', top: 2, left: taskTmplForm.is_default ? 20 : 2, width: 16, height: 16, borderRadius: '50%', background: '#fff', transition: 'left .2s', boxShadow: '0 1px 3px rgba(0,0,0,.2)' }} />
                         </div>

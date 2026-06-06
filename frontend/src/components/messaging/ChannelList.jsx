@@ -44,7 +44,7 @@ export default function ChannelList({ channels, activeId, onSelect, onReload }) 
       });
       setNewDmEmail(''); setShowDmInput(false);
       onReload?.();
-      onSelect?.(r.data.channel_id || r.data.channel_id);
+      onSelect?.(r.data.channel_id);
     } catch (e) {
       pushToast({ type: 'error', title: 'Could not start DM' });
     }

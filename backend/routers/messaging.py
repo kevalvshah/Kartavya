@@ -131,6 +131,15 @@ async def create_channel(body: ChannelCreate, pool=Depends(get_pool), user=Depen
         """, user["user_id"], other_id)
         if existing:
             return {"channel_id": existing["channel_id"], "existing": True}
+        # New DM — create anchored to any org the user belongs to
+        if not body.project_id:
+            org_row = await pool.fetchrow(
+                "SELECT team_id FROM team_members WHERE user_id=$1 AND status='active' LIMIT 1",
+                user["user_id"]
+            )
+            if not org_row:
+                raise HTTPException(400, "User belongs to no projects — cannot create DM")
+            body = body.model_copy(update={"project_id": org_row["team_id"]})
 
     if not body.project_id:
         raise HTTPException(400, "project_id (org_id) required for non-DM channels")
@@ -285,7 +294,7 @@ async def send_message(
                     """,
                         f"notif_{uuid.uuid4().hex[:12]}",
                         mentioned["user_id"],
-                        f"You were mentioned in a message",
+                        "You were mentioned in a message",
                         f"{user.get('name','Someone')} mentioned you: {body.body[:80]}",
                         f"/messages/{channel_id}"
                     )
@@ -474,8 +483,32 @@ def _detect_brand(url: str) -> dict | None:
     return None
 
 
+def _is_safe_url(url: str) -> bool:
+    """Block internal/private IPs and non-HTTP schemes to prevent SSRF."""
+    from urllib.parse import urlparse
+    import ipaddress
+    try:
+        p = urlparse(url)
+        if p.scheme not in ("http", "https"):
+            return False
+        host = p.hostname or ""
+        if host in ("localhost", "127.0.0.1", "::1", "0.0.0.0"):
+            return False
+        try:
+            addr = ipaddress.ip_address(host)
+            if addr.is_private or addr.is_loopback or addr.is_link_local or addr.is_reserved:
+                return False
+        except ValueError:
+            pass  # hostname, not IP — allow
+        return True
+    except Exception:
+        return False
+
+
 async def _fetch_og(url: str) -> dict:
     """Fetch OG title and description from a URL. Silently returns {} on failure."""
+    if not _is_safe_url(url):
+        return {}
     try:
         import httpx, re as _re
         async with httpx.AsyncClient(timeout=5, follow_redirects=True,

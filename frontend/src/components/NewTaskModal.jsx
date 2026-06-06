@@ -100,12 +100,25 @@ export default function NewTaskModal({ open, onClose, onCreated }) {
     if (!projectId) { setMembers([]); setTemplates([]); return; }
 
     api.get(`/teams/${projectId}`)
-
       .then(r => setMembers(Array.isArray(r.data?.members) ? r.data.members : []))
-
       .catch(() => setMembers([]));
-
+    api.get('/templates/tasks', { params: { team_id: projectId } })
+      .then(r => setTemplates(Array.isArray(r.data) ? r.data : []))
+      .catch(() => setTemplates([]));
   }, [projectId]);
+
+  const applyTemplate = (tmpl) => {
+    const cfg = typeof tmpl.config === 'string' ? JSON.parse(tmpl.config) : (tmpl.config || {});
+    if (cfg.title)       setTitle(cfg.title);
+    if (cfg.description) setDescription(cfg.description);
+    if (cfg.priority)    setPriority(cfg.priority);
+    if (cfg.subtasks?.length)    setSubtasks(cfg.subtasks.map(s => ({ ...s, is_done: false })));
+    if (cfg.attachments?.length) setFiles(prev => [
+      ...prev, ...cfg.attachments.map(a => ({ name: a.name, url: a.url, key: a.key || null }))
+    ]);
+    setShowTemplatePicker(false);
+    setTimeout(() => titleRef.current?.focus(), 50);
+  };
 
 
 

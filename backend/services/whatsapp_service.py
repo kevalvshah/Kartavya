@@ -17,7 +17,7 @@ Template names (submit all to Meta for approval before going live):
 import hashlib
 import logging
 import os
-import random
+import secrets
 import uuid
 from typing import Optional
 
@@ -116,7 +116,7 @@ def _hash_otp(otp: str) -> str:
 
 
 def generate_otp() -> str:
-    return str(random.randint(100000, 999999))
+    return str(secrets.randbelow(900000) + 100000)  # cryptographically secure
 
 
 async def send_otp(phone: str, otp: str) -> Optional[str]:
@@ -186,7 +186,7 @@ async def send_approval_decision(
     user = await pool.fetchrow(
         "SELECT COALESCE(full_name, name, email) AS name FROM users WHERE user_id=$1", recipient_id
     )
-    first = (user["name"] if user else "there").split()[0]
+    name_str = user["name"] if user else "there"; first = name_str.split()[0] if name_str and name_str.strip() else "there"
     template = "kartavya_task_approved" if decision == "approved" else "kartavya_task_rejected"
     params = [first, task_title, reviewer_name] + ([reason or "No reason given"] if decision == "rejected" else [])
     wamid = await send_template(wa["phone"], template, params)
@@ -214,7 +214,7 @@ async def send_task_assigned(
     user = await pool.fetchrow(
         "SELECT COALESCE(full_name, name, email) AS name FROM users WHERE user_id=$1", recipient_id
     )
-    first = (user["name"] if user else "there").split()[0]
+    name_str = user["name"] if user else "there"; first = name_str.split()[0] if name_str and name_str.strip() else "there"
     wamid = await send_template(
         wa["phone"], "kartavya_task_assigned",
         [first, task_title, due_date or "—"]
@@ -243,7 +243,7 @@ async def send_mention_alert(
     user = await pool.fetchrow(
         "SELECT COALESCE(full_name, name, email) AS name FROM users WHERE user_id=$1", recipient_id
     )
-    first = (user["name"] if user else "there").split()[0]
+    name_str = user["name"] if user else "there"; first = name_str.split()[0] if name_str and name_str.strip() else "there"
     wamid = await send_template(
         wa["phone"], "kartavya_mention",
         [first, actor_name, context_name, snippet[:100]]

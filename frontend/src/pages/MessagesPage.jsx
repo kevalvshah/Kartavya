@@ -31,7 +31,7 @@ export default function MessagesPage() {
 
   // Sync URL → state
   useEffect(() => {
-    if (paramChannelId) setActiveChannelId(paramChannelId);
+    setActiveChannelId(paramChannelId || null);
   }, [paramChannelId]);
 
   const selectChannel = (id) => {
