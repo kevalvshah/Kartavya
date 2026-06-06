@@ -332,7 +332,7 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
 
   const approveTask = async () => {
     setApprovalLoading(true);
-    const approvalId = `task_approval::${taskId}`;
+    const approvalId = `task_approval--${taskId}`;
     const selected   = clientList.find(c => c.user_id === clientUserId);
     try {
       const res = await api.post(`/approvals/${approvalId}/review`, {
@@ -350,7 +350,7 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
   const rejectTask = async () => {
     if (!rejectNote.trim()) return;
     setApprovalLoading(true);
-    const approvalId = `task_approval::${taskId}`;
+    const approvalId = `task_approval--${taskId}`;
     try {
       await api.post(`/approvals/${approvalId}/review`, { status: 'rejected', notes: rejectNote });
       setTask(t => ({ ...t, approval_status: 'rejected' }));

@@ -60,7 +60,7 @@ export default function ApprovalsPage() {
 
   const openApproveFlow = (approvalId, teamId) => {
     // Only task-level approvals get the client-send choice
-    if (approvalId.startsWith('task_approval::')) {
+    if (approvalId.startsWith('task_approval--')) {
       setClientUserId(''); setSendNotes(''); setClientList([]);
       setClientModal({ approvalId, teamId });
       if (teamId) {
@@ -92,7 +92,7 @@ export default function ApprovalsPage() {
   const confirmReject = async () => {
     const { approvalId } = rejectModal;
     setRejectModal(null);
-    if (isClient && approvalId?.startsWith('task_approval::')) {
+    if (isClient && approvalId?.startsWith('task_approval--')) {
       await clientDecideTask(approvalId, 'rejected', rejectNote);
     } else {
       await decide(approvalId, 'rejected', { notes: rejectNote });
@@ -100,7 +100,7 @@ export default function ApprovalsPage() {
   };
 
   const clientDecideTask = async (approvalId, status, notes = '') => {
-    const taskId = approvalId.replace('task_approval::', '');
+    const taskId = approvalId.replace('task_approval--', '');
     setDeciding(d => ({ ...d, [approvalId]: true }));
     try {
       const endpoint = status === 'approved'
@@ -121,8 +121,8 @@ export default function ApprovalsPage() {
   const rejected = history.filter(h => h.status === 'rejected' && new Date(h.updated_at) >= today).length;
 
   // Split admin requests into task-creation requests vs work approvals
-  const taskRequestRows = requests.filter(r => !r.approval_id?.startsWith('task_approval::'));
-  const workApprovalRows = requests.filter(r => r.approval_id?.startsWith('task_approval::'));
+  const taskRequestRows = requests.filter(r => !r.approval_id?.startsWith('task_approval--'));
+  const workApprovalRows = requests.filter(r => r.approval_id?.startsWith('task_approval--'));
   const activeTab = adminTab === 'requests' ? taskRequestRows : workApprovalRows;
 
   return (
@@ -243,7 +243,7 @@ export default function ApprovalsPage() {
                       </button>
                     </div>
                   )}
-                  {isClient && r.approval_id?.startsWith('task_approval::') && r.approval_status === 'pending_client' && (
+                  {isClient && r.approval_id?.startsWith('task_approval--') && r.approval_status === 'pending_client' && (
                     <div className="k-approval-row__actions">
                       <button
                         className="k-btn k-btn--primary k-btn--sm"
@@ -262,7 +262,7 @@ export default function ApprovalsPage() {
                       </button>
                     </div>
                   )}
-                  {isClient && !r.approval_id?.startsWith('task_approval::') && (
+                  {isClient && !r.approval_id?.startsWith('task_approval--') && (
                     <span className="k-statuschip" style={{ '--c': '#f59e0b' }}>
                       <span className="k-statuschip__dot" />
                       Pending admin review

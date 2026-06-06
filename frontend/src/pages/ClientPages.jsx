@@ -46,7 +46,7 @@ export function ClientProjectsPage() {
 
   const myRequests     = allTasks.filter(t => t.status === 'requested' || t.status === 'rejected');
   const activeTasks    = allTasks.filter(t => ['todo','in_progress','in_review'].includes(t.status));
-  const pendingApprovals = clientApprovals.filter(a => a.approval_id?.startsWith('task_approval::') && a.approval_status === 'pending_client');
+  const pendingApprovals = clientApprovals.filter(a => a.approval_id?.startsWith('task_approval--') && a.approval_status === 'pending_client');
   const doneThisWeek   = allTasks.filter(t => {
     if (t.status !== 'done' || !t.updated_at) return false;
     return (Date.now() - new Date(t.updated_at)) < 7 * 86400000;

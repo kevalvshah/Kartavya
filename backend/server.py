@@ -545,7 +545,7 @@ async def client_approvals(pool=Depends(get_db), user=Depends(require_user)):
     """, uid),
       pool.fetch("""
         SELECT
-            CONCAT('task_approval::', t.task_id)              AS approval_id,
+            CONCAT('task_approval--', t.task_id)              AS approval_id,
             t.task_id,
             t.title                                            AS task_title,
             t.approval_status,
@@ -661,7 +661,7 @@ async def list_pending_approvals(pool=Depends(get_db),user=Depends(require_user)
     # Task-level approvals (approval_status='pending')
     task_rows = await pool.fetch("""
         SELECT
-            CONCAT('task_approval::', t.task_id) AS approval_id,
+            CONCAT('task_approval--', t.task_id) AS approval_id,
             t.task_id,
             t.title AS task_title,
             t.approval_notes AS notes,
@@ -690,7 +690,7 @@ async def approval_history(pool=Depends(get_db), user=Depends(require_user)):
     uid = user["user_id"]
     task_rows = await pool.fetch("""
         SELECT
-            CONCAT('task_approval::', t.task_id) AS approval_id,
+            CONCAT('task_approval--', t.task_id) AS approval_id,
             t.task_id,
             t.title AS task_title,
             t.approval_status AS status,
@@ -801,7 +801,7 @@ async def review_approval(approval_id:str,body:dict,pool=Depends(get_db),user=De
     send_to_client = body.get("send_to_client", False)
     client_email   = body.get("client_email", "")
     if status not in ("approved","rejected"): raise HTTPException(400,"status must be approved or rejected")
-    if approval_id.startswith("task_approval::"):
+    if approval_id.startswith("task_approval--"):
         task_id = approval_id.split("::", 1)[1]
         # Must be owner/admin of the project
         task = await pool.fetchrow("SELECT * FROM tasks WHERE task_id=$1", task_id)
