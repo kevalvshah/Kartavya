@@ -175,8 +175,15 @@ async def is_project_member(pool, team_id: str, user: dict) -> dict | None:
     """Return membership record (or a synthetic one for admins) or None."""
     if user.get("role") in ("admin", "owner"):
         return {"role": "admin"}
-    return await pool.fetchrow(
+    row = await pool.fetchrow(
         "SELECT role FROM project_assignments WHERE team_id=$1 AND user_id=$2",
+        team_id, user["user_id"]
+    )
+    if row:
+        return row
+    # Fallback: team_members covers users added after their invite acceptance
+    return await pool.fetchrow(
+        "SELECT role FROM team_members WHERE team_id=$1 AND user_id=$2 AND status='active'",
         team_id, user["user_id"]
     )
 
@@ -821,11 +828,15 @@ async def review_approval(approval_id:str,body:dict,pool=Depends(get_db),user=De
     approval=await pool.fetchrow("SELECT * FROM approvals WHERE approval_id=$1",approval_id)
     if not approval: raise HTTPException(404)
     mem=await pool.fetchrow("SELECT role FROM project_assignments WHERE team_id=$1 AND user_id=$2",approval["team_id"],user["user_id"])
+    if not mem:
+        mem = await pool.fetchrow(
+            "SELECT role FROM team_members WHERE team_id=$1 AND user_id=$2 AND status='active'",
+            approval["team_id"], user["user_id"]
+        )
     user_data=await pool.fetchrow(_SQL_USER_ROLE,user["user_id"])
     is_owner_admin = mem and mem["role"] in ("owner","admin")
     is_system_admin = user_data and user_data["role"] == "admin"
-    is_client_member = bool(mem and mem["role"] in ("owner", "admin"))
-    if not (is_owner_admin or is_system_admin or is_client_member):
+    if not (is_owner_admin or is_system_admin):
         raise HTTPException(403, "Not authorised to review this approval")
     await pool.execute("UPDATE approvals SET status=$1,reviewed_by=$2,reviewed_at=NOW(),review_notes=$3 WHERE approval_id=$4",status,user["user_id"],notes,approval_id)
     if approval["request_type"]=="create":

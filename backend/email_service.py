@@ -12,12 +12,24 @@ logger = logging.getLogger(__name__)
 FROM_EMAIL   = os.environ.get("FROM_EMAIL",   "Kartavya <hello@kartavya.app>")
 FRONTEND_URL = os.environ.get("FRONTEND_URL", "https://kartavya-aekam.vercel.app")
 
+# ── Email provider: Resend (primary) or AWS SES (fallback) ────────────────────
+RESEND_API_KEY        = os.environ.get("RESEND_API_KEY")
 AWS_ACCESS_KEY_ID     = os.environ.get("AWS_ACCESS_KEY_ID")
 AWS_SECRET_ACCESS_KEY = os.environ.get("AWS_SECRET_ACCESS_KEY")
 AWS_REGION            = os.environ.get("AWS_REGION", "us-east-1")
 
+_resend_client = None
 ses_client = None
-if AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY:
+
+if RESEND_API_KEY:
+    try:
+        import resend as _resend_lib
+        _resend_lib.api_key = RESEND_API_KEY
+        _resend_client = _resend_lib
+        logger.info("✅ Resend email configured")
+    except ImportError:
+        logger.error("❌ resend not installed — pip install resend")
+elif AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY:
     try:
         import boto3
         ses_client = boto3.client(
@@ -32,7 +44,7 @@ if AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY:
     except Exception as e:
         logger.error("❌ AWS SES init failed: %s", e)
 else:
-    logger.warning("⚠️  AWS SES not configured — emails logged to console only")
+    logger.warning("⚠️  No email provider configured (set RESEND_API_KEY or AWS_ACCESS_KEY_ID) — emails logged to console only")
 
 
 # ── Design tokens (baked hex — no CSS vars, no color-mix) ─────────────────────
@@ -248,27 +260,41 @@ def _body_text(text: str) -> str:
 # ── Core send (threaded) ───────────────────────────────────────────────────────
 def send_email(to_email: str, subject: str, html_content: str,
                reply_to: str = None) -> bool:
-    """Send an HTML email via AWS SES in a background thread, logging in dev mode."""
+    """Send an HTML email via Resend or AWS SES in a background thread, logging in dev mode."""
     def _send():
-        if not ses_client:
+        if _resend_client:
+            try:
+                params = {
+                    "from": FROM_EMAIL,
+                    "to": [to_email],
+                    "subject": subject,
+                    "html": html_content,
+                }
+                if reply_to:
+                    params["reply_to"] = [reply_to]
+                r = _resend_client.Emails.send(params)
+                logger.info("✅ Email sent via Resend → %s [%s]", to_email, r.get("id"))
+            except Exception as exc:
+                logger.error("❌ Resend email failed → %s: %s", to_email, exc)
+        elif ses_client:
+            try:
+                msg = {
+                    "Subject": {"Data": subject, "Charset": "UTF-8"},
+                    "Body":    {"Html":  {"Data": html_content, "Charset": "UTF-8"}},
+                }
+                kwargs = dict(
+                    Source=FROM_EMAIL,
+                    Destination={"ToAddresses": [to_email]},
+                    Message=msg,
+                )
+                if reply_to:
+                    kwargs["ReplyToAddresses"] = [reply_to]
+                r = ses_client.send_email(**kwargs)
+                logger.info("✅ Email sent via SES → %s [%s]", to_email, r['MessageId'])
+            except Exception as exc:
+                logger.error("❌ SES email failed → %s: %s", to_email, exc)
+        else:
             logger.info("[EMAIL-DEV] To:%s | Subject:%s", to_email, subject)
-            return
-        try:
-            msg = {
-                "Subject": {"Data": subject, "Charset": "UTF-8"},
-                "Body":    {"Html":  {"Data": html_content, "Charset": "UTF-8"}},
-            }
-            kwargs = dict(
-                Source=FROM_EMAIL,
-                Destination={"ToAddresses": [to_email]},
-                Message=msg,
-            )
-            if reply_to:
-                kwargs["ReplyToAddresses"] = [reply_to]
-            r = ses_client.send_email(**kwargs)
-            logger.info("✅ Email sent → %s [%s]", to_email, r['MessageId'])
-        except Exception as exc:
-            logger.error("❌ Email failed → %s: %s", to_email, exc)
 
     threading.Thread(target=_send, daemon=True).start()
     return True

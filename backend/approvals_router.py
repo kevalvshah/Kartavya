@@ -325,7 +325,17 @@ async def client_approve_task(task_id: str, payload: ApprovalRequest,
             task["team_id"], user["user_id"]
         )
         if not access:
-            raise HTTPException(403, "You are not a member of this project")
+            access = await pool.fetchrow(
+                "SELECT 1 FROM team_members WHERE team_id=$1 AND user_id=$2 AND status='active'",
+                task["team_id"], user["user_id"]
+            )
+        if not access:
+            access = await pool.fetchrow(
+                "SELECT 1 FROM task_clients WHERE task_id=$1 AND user_id=$2",
+                task_id, user["user_id"]
+            )
+        if not access:
+            raise HTTPException(403, "You are not authorized to approve this task")
 
     done_col = await pool.fetchrow(
         "SELECT column_id FROM project_columns WHERE team_id=$1 AND is_done=TRUE ORDER BY sort_order DESC LIMIT 1",
@@ -533,7 +543,17 @@ async def client_reject_task(task_id: str, payload: ApprovalRequest,
             task["team_id"], user["user_id"]
         )
         if not access:
-            raise HTTPException(403, "You are not a member of this project")
+            access = await pool.fetchrow(
+                "SELECT 1 FROM team_members WHERE team_id=$1 AND user_id=$2 AND status='active'",
+                task["team_id"], user["user_id"]
+            )
+        if not access:
+            access = await pool.fetchrow(
+                "SELECT 1 FROM task_clients WHERE task_id=$1 AND user_id=$2",
+                task_id, user["user_id"]
+            )
+        if not access:
+            raise HTTPException(403, "You are not authorized to reject this task")
 
     if not payload.notes or not payload.notes.strip():
         raise HTTPException(400, _REJECTION_REQUIRED)
