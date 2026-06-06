@@ -17,9 +17,17 @@ export default function ChannelList({ channels, activeId, onSelect, onReload }) 
   const { pushToast } = useToast();
   const [newDmEmail, setNewDmEmail] = useState('');
   const [showDmInput, setShowDmInput] = useState(false);
+  const [search, setSearch] = useState('');
 
-  const projectChannels = channels.filter(c => c.type === 'project');
-  const dmChannels      = channels.filter(c => c.type === 'dm');
+  const filtered = search.trim()
+    ? channels.filter(c => {
+        const label = c.name || c.project_name || '';
+        return label.toLowerCase().includes(search.toLowerCase());
+      })
+    : channels;
+
+  const projectChannels = filtered.filter(c => c.type === 'project');
+  const dmChannels      = filtered.filter(c => c.type === 'dm');
 
   const startDm = async () => {
     const email = newDmEmail.trim();
@@ -81,9 +89,17 @@ export default function ChannelList({ channels, activeId, onSelect, onReload }) 
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflowY: 'auto' }}>
-      <div style={{ padding: '16px 12px 4px' }}>
+      <div style={{ padding: '16px 12px 8px' }}>
         <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 500, color: 'var(--ink)' }}>Messages</div>
-        <div style={{ fontFamily: 'var(--font-hindi)', fontSize: 13, color: 'var(--k-primary)' }}>संवाद</div>
+        <div style={{ fontFamily: 'var(--font-hindi)', fontSize: 13, color: 'var(--k-primary)', marginBottom: 10 }}>संवाद</div>
+        <input
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="Search channels…"
+          style={{ width: '100%', fontSize: 12, padding: '6px 10px', borderRadius: 'var(--r-md)',
+            border: '1px solid var(--rule)', background: 'var(--bg-soft)', outline: 'none',
+            color: 'var(--ink)', boxSizing: 'border-box' }}
+        />
       </div>
 
       <SectionHead label="Channels" sans="चैनल" />

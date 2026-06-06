@@ -35,14 +35,32 @@ function TaskUnfurl({ taskData }) {
     <a href={`/tasks/${taskData.task_id}`} style={{ display: 'block', marginTop: 6, padding: '8px 12px',
       borderRadius: 'var(--r-md)', border: '1px solid var(--rule)', background: 'var(--bg-soft)',
       textDecoration: 'none', borderLeft: `3px solid ${color}` }}>
-      <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color, marginBottom: 2 }}>
-        TASK
-      </div>
+      <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color, marginBottom: 2 }}>TASK</div>
       <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink)' }}>{taskData.title}</div>
       <div style={{ fontSize: 11, color: 'var(--ink-3)', marginTop: 2 }}>
-        {taskData.status?.replace('_', ' ')}
-        {taskData.assignee_name && ` · ${taskData.assignee_name}`}
+        {taskData.status?.replace('_', ' ')}{taskData.assignee_name && ` · ${taskData.assignee_name}`}
       </div>
+    </a>
+  );
+}
+
+function LinkUnfurl({ data }) {
+  return (
+    <a href={data.url} target="_blank" rel="noreferrer"
+      style={{ display: 'block', marginTop: 6, padding: '8px 12px', borderRadius: 'var(--r-md)',
+        border: '1px solid var(--rule)', background: 'var(--bg-soft)', textDecoration: 'none',
+        borderLeft: `3px solid ${data.color || 'var(--rule)'}` }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
+        <span style={{ fontSize: 14 }}>{data.icon}</span>
+        <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: data.color || 'var(--ink-3)' }}>
+          {data.brand}
+        </span>
+      </div>
+      {data.title && <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink)', marginBottom: 2 }}>{data.title}</div>}
+      {data.description && (
+        <div style={{ fontSize: 11, color: 'var(--ink-3)', overflow: 'hidden', display: '-webkit-box',
+          WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{data.description}</div>
+      )}
     </a>
   );
 }
@@ -80,14 +98,17 @@ export default function MessageItem({ msg, onReact, onDelete, onReplyClick, show
   const meta = msg.metadata || {};
   const msgAttachments = meta.attachments || [];
 
-  // Task link unfurl: detect /tasks/ URLs in body
+  // Link unfurl: Kartavya task links + branded services (Figma, Loom, GitHub, Docs…)
   const [unfurled, setUnfurled] = useState(null);
   useEffect(() => {
     if (!msg.body) return;
-    const match = msg.body.match(/\/tasks?\/([a-zA-Z0-9_-]+)/);
-    if (!match) return;
-    api.get(`/messages/unfurl?url=${encodeURIComponent(match[0])}`)
-      .then(r => { if (r.data.type === 'task') setUnfurled(r.data); })
+    // Find first URL in message
+    const urlMatch = msg.body.match(/https?:\/\/[^\s]+/);
+    const taskMatch = msg.body.match(/\/tasks?\/([a-zA-Z0-9_-]+)/);
+    const target = urlMatch?.[0] || (taskMatch ? taskMatch[0] : null);
+    if (!target) return;
+    api.get(`/messages/unfurl?url=${encodeURIComponent(target)}`)
+      .then(r => { if (r.data.type === 'task' || r.data.brand) setUnfurled(r.data); })
       .catch(() => {});
   }, [msg.body]);
 
@@ -126,8 +147,9 @@ export default function MessageItem({ msg, onReact, onDelete, onReplyClick, show
         </div>
         {/* Attachments */}
         <AttachmentList attachments={msgAttachments} />
-        {/* Task unfurl */}
-        {unfurled && <TaskUnfurl taskData={unfurled} />}
+        {/* Task / link unfurl */}
+        {unfurled && unfurled.type === 'task' && <TaskUnfurl taskData={unfurled} />}
+        {unfurled && unfurled.type === 'link' && unfurled.brand && <LinkUnfurl data={unfurled} />}
         {/* Reactions */}
         {Object.keys(rxnGroups).length > 0 && (
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 4 }}>

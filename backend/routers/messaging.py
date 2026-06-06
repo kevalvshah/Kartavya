@@ -417,8 +417,10 @@ async def total_unread(pool=Depends(get_pool), user=Depends(require_user)):
 
 @router.get("/messages/unfurl")
 async def unfurl(url: str, pool=Depends(get_pool), user=Depends(require_user)):
-    """Return task card data if URL is a Kartavya task link, else OG metadata."""
+    """Return structured preview data for a URL (task card or branded OG metadata)."""
     import re
+
+    # ── Kartavya task link ─────────────────────────────────────────────────
     task_match = re.search(r'/tasks?/([a-zA-Z0-9_-]+)', url)
     if task_match:
         task_id = task_match.group(1)
@@ -433,7 +435,87 @@ async def unfurl(url: str, pool=Depends(get_pool), user=Depends(require_user)):
             return {"type": "task", "task_id": task["task_id"], "title": task["title"],
                     "status": task["status"], "priority": task["priority"],
                     "due_at": task["due_at"], "assignee_name": task["assignee_name"]}
+
+    # ── Branded services ───────────────────────────────────────────────────
+    brand = _detect_brand(url)
+    if brand:
+        # Fetch OG title/description from the URL
+        og = await _fetch_og(url)
+        return {
+            "type": "link",
+            "brand": brand["name"],
+            "color": brand["color"],
+            "icon": brand["icon"],
+            "url": url,
+            "title": og.get("title") or brand["name"],
+            "description": og.get("description"),
+        }
+
     return {"type": "link", "url": url}
+
+
+def _detect_brand(url: str) -> dict | None:
+    """Return brand metadata if the URL belongs to a known service."""
+    brands = [
+        {"match": "figma.com",       "name": "Figma",        "color": "#F24E1E", "icon": "🎨"},
+        {"match": "loom.com",        "name": "Loom",         "color": "#625DF5", "icon": "🎬"},
+        {"match": "github.com",      "name": "GitHub",       "color": "#24292e", "icon": "🐙"},
+        {"match": "docs.google.com", "name": "Google Docs",  "color": "#4285F4", "icon": "📄"},
+        {"match": "drive.google.com","name": "Google Drive", "color": "#4285F4", "icon": "📁"},
+        {"match": "sheets.google.com","name": "Google Sheets","color": "#0F9D58","icon": "📊"},
+        {"match": "notion.so",       "name": "Notion",       "color": "#000000", "icon": "📝"},
+        {"match": "miro.com",        "name": "Miro",         "color": "#FFDD33", "icon": "🖼"},
+        {"match": "youtube.com",     "name": "YouTube",      "color": "#FF0000", "icon": "▶️"},
+        {"match": "youtu.be",        "name": "YouTube",      "color": "#FF0000", "icon": "▶️"},
+    ]
+    for b in brands:
+        if b["match"] in url:
+            return b
+    return None
+
+
+async def _fetch_og(url: str) -> dict:
+    """Fetch OG title and description from a URL. Silently returns {} on failure."""
+    try:
+        import httpx, re as _re
+        async with httpx.AsyncClient(timeout=5, follow_redirects=True,
+                                      headers={"User-Agent": "Kartavya/1.0 (link preview)"}) as client:
+            r = await client.get(url)
+            html = r.text[:40_000]  # read only first 40 KB
+        title = (_re.search(r'<meta[^>]+property=["\']og:title["\'][^>]+content=["\']([^"\']+)', html) or
+                 _re.search(r'<title>([^<]+)</title>', html))
+        desc  = _re.search(r'<meta[^>]+property=["\']og:description["\'][^>]+content=["\']([^"\']+)', html)
+        return {
+            "title":       title.group(1).strip() if title else None,
+            "description": desc.group(1).strip()  if desc  else None,
+        }
+    except Exception:
+        return {}
+
+
+@router.get("/channels/{channel_id}/search")
+async def search_messages(
+    channel_id: str, q: str,
+    pool=Depends(get_pool), user=Depends(require_user)
+):
+    """Full-text search within a channel. Returns up to 30 matching messages."""
+    await _assert_channel_member(pool, channel_id, user["user_id"], user.get("role", ""))
+    if not q or len(q.strip()) < 2:
+        return []
+    rows = await pool.fetch("""
+        SELECT m.*, COALESCE(u.full_name, u.name, u.email) AS sender_name, u.avatar AS sender_avatar
+        FROM messages m
+        LEFT JOIN users u ON u.user_id = m.sender_id
+        WHERE m.channel_id = $1
+          AND m.deleted_at IS NULL
+          AND m.body ILIKE $2
+        ORDER BY m.created_at DESC
+        LIMIT 30
+    """, channel_id, f"%{q.strip()}%")
+    result = []
+    for r in rows:
+        result.append(await _fmt_message(dict(r), [], 0))
+    return result
 
 
 @router.get("/channels/{channel_id}/members")
