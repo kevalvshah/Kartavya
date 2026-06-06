@@ -18,6 +18,7 @@ const ICONS = {
   reports:     <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4"><rect x="2" y="3" width="12" height="10" rx="1.5"/><path d="M5 9.5l2-2 2 2 2-3"/><path d="M5 6h2"/></svg>,
   teams:       <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4"><circle cx="6" cy="6" r="2.4"/><path d="M1.5 13c0-2.6 2-4.2 4.5-4.2S10.5 10.4 10.5 13"/><circle cx="12" cy="6" r="1.6"/><path d="M11.5 9.2c1.7 0 3 1.1 3 2.6"/></svg>,
   categories:  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4"><path d="M2 2h5.5l6.5 6.5-5.5 5.5L2 7.5V2z"/><circle cx="5.5" cy="5.5" r="1"/></svg>,
+  messages:    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4"><path d="M2 3h12a1 1 0 011 1v7a1 1 0 01-1 1H5l-3 2V4a1 1 0 011-1z"/><path d="M5 7h6M5 9.5h3.5"/></svg>,
   notifications:<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4"><path d="M13 11l-2-2H5L3 11V4a1 1 0 011-1h8a1 1 0 011 1v7z"/><path d="M6.5 13.5a1.5 1.5 0 003 0"/></svg>,
   inbox:       <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4"><path d="M2 11h3l1 2h4l1-2h3V4a1 1 0 00-1-1H3a1 1 0 00-1 1v7z"/><path d="M5.5 7.5h5"/><path d="M5.5 5.5h3"/></svg>,
   admin:       <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4"><path d="M8 2l5 2v4.5c0 3-2.2 5.2-5 5.8C5.2 13.7 3 11.5 3 8.5V4l5-2z"/><path d="M6 8.2l1.3 1.3L10 6.8"/></svg>,
@@ -49,8 +50,9 @@ const NAV_FULL = [
   {
     section: 'team', sans: 'दल',
     items: [
-      { to: '/teams',  icon: 'teams', en: 'Team',  hi: 'सहयोगी' },
-      { to: '/inbox',  icon: 'inbox', en: 'Inbox', hi: 'सन्देश', badge: 'unread' },
+      { to: '/teams',    icon: 'teams',    en: 'Team',     hi: 'सहयोगी' },
+      { to: '/messages', icon: 'messages', en: 'Messages', hi: 'संवाद', badge: 'messages' },
+      { to: '/inbox',    icon: 'inbox',    en: 'Inbox',    hi: 'सन्देश', badge: 'unread' },
     ],
   },
   {

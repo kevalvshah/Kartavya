@@ -1,0 +1,289 @@
+- generic [active] [ref=e1]:
+  - link "Skip to content" [ref=e2] [cursor=pointer]:
+    - /url: "#content"
+  - generic [ref=e4]:
+    - banner [ref=e6]:
+      - generic [ref=e7]:
+        - link "Aekam-Logo-Web" [ref=e12] [cursor=pointer]:
+          - /url: https://www.aekaminc.com/
+          - img "Aekam-Logo-Web" [ref=e13]
+        - navigation "Aekam Inc Main Menu" [ref=e16]:
+          - button "Menu  " [ref=e17] [cursor=pointer]:
+            - generic [ref=e18]:
+              - generic [ref=e19]: Menu
+              - generic [ref=e20]:
+                - generic [ref=e21]: 
+                - generic [ref=e22]: 
+          - list:
+            - listitem:
+              - link "Home":
+                - /url: https://www.aekaminc.com/
+                - generic: Home
+            - listitem:
+              - link "About":
+                - /url: https://www.aekaminc.com/about/
+                - generic: About
+            - listitem:
+              - link "Services":
+                - /url: https://www.aekaminc.com/services/
+                - generic: Services
+                - text: 
+              - button "Open submenu of Services": 
+            - listitem:
+              - link "CRM":
+                - /url: https://www.aekaminc.com/crm-leadspark/
+                - generic: CRM
+            - listitem:
+              - link "Work":
+                - /url: https://www.aekaminc.com/work/
+                - generic: Work
+            - listitem:
+              - link "Insights":
+                - /url: https://www.aekaminc.com/insights/
+                - generic: Insights
+            - listitem:
+              - link "Industries":
+                - /url: https://www.aekaminc.com/industries/
+                - generic: Industries
+            - listitem:
+              - link "Career":
+                - /url: https://www.aekaminc.com/career/
+                - generic: Career
+            - listitem:
+              - link "Contact us":
+                - /url: https://www.aekaminc.com/contact-us/
+                - generic: Contact us
+    - main [ref=e23]:
+      - generic [ref=e27]:
+        - generic [ref=e29]:
+          - generic [ref=e31]:
+            - heading "Best Digital Marketing Agency In Ahmedabad" [level=1] [ref=e33]
+            - paragraph [ref=e35]:
+              - generic [ref=e36]: "Google Ads: Turn click into customers"
+              - generic [ref=e37]: "LinkedIn: Click build client connection"
+              - generic [ref=e38]: "Instagram: Click generate to new client"
+              - text: "Facebook: Transform click into loyal client"
+            - link "Our Services" [ref=e40] [cursor=pointer]:
+              - /url: https://www.aekaminc.com/services/
+              - generic [ref=e41]: Our Services
+              - generic [ref=e42]: 
+          - generic [ref=e44]:
+            - img "Founder of Aekam - Bhoomi Shah" [ref=e47]
+            - generic [ref=e49]: Bhoomi Shah
+            - generic [ref=e51]: Marketing Consultant Expert
+            - link "94294 17092" [ref=e53] [cursor=pointer]:
+              - /url: "tel: 9429417092"
+              - generic [ref=e54]: 
+              - generic [ref=e55]: 94294 17092
+            - generic [ref=e59]:
+              - generic [ref=e61]:
+                - generic:  
+              - generic [ref=e63]:
+                - textbox "Your Name *" [ref=e65]
+                - textbox "Your Email *" [ref=e67]
+                - textbox "Your Phone Number *" [ref=e69]
+                - button "Get a Callback" [disabled] [ref=e72] [cursor=pointer]:
+                  - generic [ref=e73]: Get a Callback
+            - paragraph [ref=e75]: By submitting my data I agree to be contacted
+        - generic [ref=e84]: Sorry, your browser doesn't support embedded videos.
+        - generic [ref=e88]:
+          - heading "Our Expertise" [level=2] [ref=e92]
+          - generic [ref=e94]:
+            - link "Branding companies in ahmedabad" [ref=e97] [cursor=pointer]:
+              - /url: https://www.aekaminc.com/services/branding-design/
+              - img "Branding companies in ahmedabad" [ref=e98]
+            - heading "Branding & Design" [level=3] [ref=e100]:
+              - link "Branding & Design" [ref=e101] [cursor=pointer]:
+                - /url: https://www.aekaminc.com/best-branding-and-designing-agency/
+          - generic [ref=e103]:
+            - link "Content Creation Company" [ref=e106] [cursor=pointer]:
+              - /url: https://www.aekaminc.com/services/content-creation/
+              - img "Content Creation Company" [ref=e107]
+            - heading "Content Creation" [level=3] [ref=e109]:
+              - link "Content Creation" [ref=e110] [cursor=pointer]:
+                - /url: https://www.aekaminc.com/services/content-creation/
+          - generic [ref=e112]:
+            - link "Website design & development" [ref=e115] [cursor=pointer]:
+              - /url: https://www.aekaminc.com/services/web-development-design/
+              - img "Web Design & Development" [ref=e116]
+            - heading "Web Design & Development" [level=3] [ref=e118]:
+              - link "Web Design & Development" [ref=e119] [cursor=pointer]:
+                - /url: https://www.aekaminc.com/services/web-development-design/
+          - generic [ref=e121]:
+            - link "Social media agency in ahmedabad" [ref=e124] [cursor=pointer]:
+              - /url: https://www.aekaminc.com/services/social-media-management/
+              - img "Social Media Management" [ref=e125]
+            - heading "Social Media Management" [level=3] [ref=e127]:
+              - link "Social Media Management" [ref=e128] [cursor=pointer]:
+                - /url: https://www.aekaminc.com/services/social-media-management/
+          - generic [ref=e130]:
+            - link "Online lead generation real estate" [ref=e133] [cursor=pointer]:
+              - /url: https://www.aekaminc.com/services/lead-generation/
+              - img "Lead Generation" [ref=e134]
+            - heading "Lead Generation" [level=3] [ref=e136]:
+              - link "Lead Generation" [ref=e137] [cursor=pointer]:
+                - /url: https://www.aekaminc.com/services/lead-generation/
+          - generic [ref=e139]:
+            - link "Seo agencies in india" [ref=e142] [cursor=pointer]:
+              - /url: https://www.aekaminc.com/services/seo/
+              - img "Search Engine Optimization" [ref=e143]
+            - heading "SEO" [level=3] [ref=e145]:
+              - link "SEO" [ref=e146] [cursor=pointer]:
+                - /url: https://www.aekaminc.com/services/seo/
+        - generic [ref=e150]:
+          - img "Branding agency ahmedabad" [ref=e155]
+          - img "Packaging Design" [ref=e160]
+          - img "Branding agency ahmedabad" [ref=e165]
+          - img "Logo Design service" [ref=e170]
+        - generic [ref=e172]:
+          - generic [ref=e175]:
+            - img "Real estate digital marketing agency in Ahmedabad" [ref=e180]
+            - heading "Real Estate" [level=5] [ref=e184]
+          - generic [ref=e187]:
+            - img "Interiors Ad agency in Ahmedabad" [ref=e192]
+            - heading "Interiors" [level=5] [ref=e196]
+          - generic [ref=e199]:
+            - img "Industrial Social media agency in ahmedabad" [ref=e204]
+            - heading "Industrial" [level=5] [ref=e208]
+          - generic [ref=e211]:
+            - img "IT Services Digital advertising companies in india" [ref=e216]
+            - heading "IT Services" [level=5] [ref=e220]
+          - generic [ref=e223]:
+            - img "Ecommerce web development services" [ref=e228]
+            - heading "eCommerce" [level=5] [ref=e232]
+          - generic [ref=e235]:
+            - img "Healthcare Social media agency in ahmedabad" [ref=e240]
+            - heading "Healthcare" [level=5] [ref=e244]
+          - generic [ref=e247]:
+            - img "FMCG Branding agency ahmedabad" [ref=e252]
+            - heading "FMCG" [level=5] [ref=e256]
+          - generic [ref=e259]:
+            - img "Financial branding agency" [ref=e264]
+            - heading "Financial" [level=5] [ref=e268]
+          - generic [ref=e271]:
+            - img "CRM / ERP" [ref=e276]
+            - heading "CRM / ERP" [level=5] [ref=e280]
+          - generic [ref=e283]:
+            - img "Education ad company" [ref=e288]
+            - heading "Education" [level=5] [ref=e292]
+          - generic [ref=e295]:
+            - img "Cybersecurity Ad agency in Ahmedabad" [ref=e300]
+            - heading "Cybersecurity" [level=5] [ref=e304]
+          - generic [ref=e307]:
+            - img "Logistics branding" [ref=e312]
+            - heading "Logistics" [level=5] [ref=e316]
+          - generic [ref=e319]:
+            - img "Media marketing company" [ref=e324]
+            - heading "Media" [level=5] [ref=e328]
+          - generic [ref=e331]:
+            - img "Transportation ad company" [ref=e336]
+            - heading "Transportation" [level=5] [ref=e340]
+          - generic [ref=e343]:
+            - img "Pharma Seo agencies in india" [ref=e348]
+            - heading "Pharma" [level=5] [ref=e352]
+          - generic [ref=e355]:
+            - img "Cloud Service provide" [ref=e360]
+            - heading "Cloud Service" [level=5] [ref=e364]
+          - generic [ref=e367]:
+            - img "Visa Consultancy branding" [ref=e372]
+            - heading "Visa Consultancy" [level=5] [ref=e376]
+          - generic [ref=e379]:
+            - img "Events & Staging management" [ref=e384]
+            - heading "Events & Staging" [level=5] [ref=e388]
+          - generic [ref=e391]:
+            - img "Fitness Club branding agency" [ref=e396]
+            - heading "Fitness Club" [level=5] [ref=e400]
+          - generic [ref=e403]:
+            - img "Life Sciences" [ref=e408]
+            - heading "Life Sciences" [level=5] [ref=e412]
+        - heading "Some Brands We Work With" [level=5] [ref=e418]
+    - generic [ref=e420]:
+      - generic [ref=e422]:
+        - generic [ref=e424]:
+          - link "Aekam-Logo-Web" [ref=e427] [cursor=pointer]:
+            - /url: https://www.aekaminc.com/
+            - img "Aekam-Logo-Web" [ref=e428]
+          - heading "Grow Your Online Business Strategically, and Improve Customer Retention." [level=3] [ref=e430]
+          - text:      
+        - generic [ref=e432]:
+          - heading "Services" [level=4] [ref=e434]
+          - navigation "Global Footer - Services" [ref=e435]:
+            - text:  
+            - list [ref=e436]:
+              - listitem [ref=e437]:
+                - link "Branding & Design" [ref=e438] [cursor=pointer]:
+                  - /url: https://www.aekaminc.com/best-branding-and-designing-agency/
+                  - generic [ref=e439]: Branding & Design
+              - listitem [ref=e440]:
+                - link "Social Media Management" [ref=e441] [cursor=pointer]:
+                  - /url: https://www.aekaminc.com/social-media-management/
+                  - generic [ref=e442]: Social Media Management
+              - listitem [ref=e443]:
+                - link "Lead Generation" [ref=e444] [cursor=pointer]:
+                  - /url: https://www.aekaminc.com/lead-generation/
+                  - generic [ref=e445]: Lead Generation
+              - listitem [ref=e446]:
+                - link "Content Creation" [ref=e447] [cursor=pointer]:
+                  - /url: https://www.aekaminc.com/content-creation/
+                  - generic [ref=e448]: Content Creation
+              - listitem [ref=e449]:
+                - link "SEO" [ref=e450] [cursor=pointer]:
+                  - /url: https://www.aekaminc.com/seo/
+                  - generic [ref=e451]: SEO
+              - listitem [ref=e452]:
+                - link "Web Development & Design" [ref=e453] [cursor=pointer]:
+                  - /url: https://www.aekaminc.com/web-development-design/
+                  - generic [ref=e454]: Web Development & Design
+              - listitem [ref=e455]:
+                - link "CRM LeadSpark" [ref=e456] [cursor=pointer]:
+                  - /url: https://www.aekaminc.com/crm-leadspark/
+                  - generic [ref=e457]: CRM LeadSpark
+              - listitem [ref=e458]:
+                - link "Printing" [ref=e459] [cursor=pointer]:
+                  - /url: https://www.aekaminc.com/printing/
+                  - generic [ref=e460]: Printing
+        - generic [ref=e462]:
+          - heading "Company" [level=4] [ref=e464]
+          - navigation "Global Footer - Company" [ref=e465]:
+            - text:  
+            - list [ref=e466]:
+              - listitem [ref=e467]:
+                - link "About" [ref=e468] [cursor=pointer]:
+                  - /url: https://www.aekaminc.com/about/
+                  - generic [ref=e469]: About
+              - listitem [ref=e470]:
+                - link "Work" [ref=e471] [cursor=pointer]:
+                  - /url: https://www.aekaminc.com/work/
+                  - generic [ref=e472]: Work
+              - listitem [ref=e473]:
+                - link "Insights" [ref=e474] [cursor=pointer]:
+                  - /url: https://www.aekaminc.com/insights/
+                  - generic [ref=e475]: Insights
+              - listitem [ref=e476]:
+                - link "Industries" [ref=e477] [cursor=pointer]:
+                  - /url: https://www.aekaminc.com/industries/
+                  - generic [ref=e478]: Industries
+              - listitem [ref=e479]:
+                - link "FAQs" [ref=e480] [cursor=pointer]:
+                  - /url: https://www.aekaminc.com/faqs/
+                  - generic [ref=e481]: FAQs
+              - listitem [ref=e482]:
+                - link "Career" [ref=e483] [cursor=pointer]:
+                  - /url: https://www.aekaminc.com/career/
+                  - generic [ref=e484]: Career
+              - listitem [ref=e485]:
+                - link "Contact us" [ref=e486] [cursor=pointer]:
+                  - /url: https://www.aekaminc.com/contact-us/
+                  - generic [ref=e487]: Contact us
+      - generic [ref=e491]:
+        - paragraph [ref=e495]: © 2012 - 2026 • Aekam INC • All Rights Reserved
+        - paragraph [ref=e499]:
+          - text: Call Us
+          - link "94294 17092" [ref=e500] [cursor=pointer]:
+            - /url: tel:9429417092
+        - paragraph [ref=e504]:
+          - link "hello@aekaminc.com" [ref=e505] [cursor=pointer]:
+            - /url: mailto:hello@aekaminc.com
+  - generic [ref=e508] [cursor=pointer]:
+    - text: Need Help?
+    - strong [ref=e509]: Chat with us

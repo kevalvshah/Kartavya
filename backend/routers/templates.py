@@ -122,37 +122,101 @@ async def apply_project_template(
 
 # ── Task templates ───────────────────────────────────────────────────────────────
 
+class TaskTemplateBody(BaseModel):
+    name: str
+    team_id: Optional[str] = None
+    icon: str = "📋"
+    is_default: bool = False
+    config: dict  # title, description, priority, subtasks[], attachments[], tags[], category_id, custom_fields{}
+
+
 @router.get("/tasks")
 async def list_task_templates(team_id: Optional[str] = None, pool=Depends(get_pool), user=Depends(require_user)):
-    """Return all task templates, optionally filtered to include team-specific ones."""
+    """Return task templates for a team (includes global ones with no team_id)."""
     if team_id:
-        rows = await pool.fetch(
-            "SELECT * FROM task_templates WHERE team_id=$1 OR team_id IS NULL ORDER BY created_at",
-            team_id
-        )
+        rows = await pool.fetch("""
+            SELECT * FROM task_templates
+            WHERE team_id=$1 OR team_id IS NULL
+            ORDER BY is_default DESC, created_at ASC
+        """, team_id)
     else:
-        rows = await pool.fetch("SELECT * FROM task_templates ORDER BY created_at")
+        rows = await pool.fetch("SELECT * FROM task_templates ORDER BY is_default DESC, created_at ASC")
     return [dict(r) for r in rows]
 
 
+@router.get("/tasks/{template_id}")
+async def get_task_template(template_id: str, pool=Depends(get_pool), user=Depends(require_user)):
+    row = await pool.fetchrow("SELECT * FROM task_templates WHERE template_id=$1", template_id)
+    if not row:
+        raise HTTPException(404, _TEMPLATE_NOT_FOUND)
+    return dict(row)
+
+
 @router.post("/tasks")
-async def create_task_template(body: TaskTemplateCreate, pool=Depends(get_pool), user=Depends(require_user)):
+async def create_task_template(body: TaskTemplateBody, pool=Depends(get_pool), user=Depends(require_user)):
     """Create a new task template."""
     import json
     tid = f"ttmpl_{uuid.uuid4().hex[:10]}"
+    if body.is_default and body.team_id:
+        await pool.execute(
+            "UPDATE task_templates SET is_default=FALSE WHERE team_id=$1", body.team_id
+        )
     await pool.execute(
-        "INSERT INTO task_templates (template_id, team_id, name, config) VALUES ($1,$2,$3,$4::jsonb)",
-        tid, body.team_id, body.name, json.dumps(body.config)
+        """INSERT INTO task_templates (template_id, team_id, name, icon, is_default, config, created_by)
+           VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7)""",
+        tid, body.team_id, body.name, body.icon, body.is_default,
+        json.dumps(body.config), user["user_id"]
     )
     row = await pool.fetchrow("SELECT * FROM task_templates WHERE template_id=$1", tid)
     return dict(row)
 
 
-@router.delete("/tasks/{template_id}")
-async def delete_task_template(template_id: str, pool=Depends(get_pool), user=Depends(require_user)):
-    """Delete a task template by ID."""
-    tmpl = await pool.fetchrow("SELECT template_id FROM task_templates WHERE template_id=$1", template_id)
+@router.patch("/tasks/{template_id}")
+async def update_task_template(template_id: str, body: TaskTemplateBody, pool=Depends(get_pool), user=Depends(require_user)):
+    """Update an existing task template."""
+    import json
+    tmpl = await pool.fetchrow("SELECT created_by, team_id FROM task_templates WHERE template_id=$1", template_id)
     if not tmpl:
         raise HTTPException(404, _TEMPLATE_NOT_FOUND)
+    if tmpl["created_by"] != user["user_id"] and user.get("role") != "admin":
+        raise HTTPException(403, "Not authorised")
+    if body.is_default and tmpl["team_id"]:
+        await pool.execute(
+            "UPDATE task_templates SET is_default=FALSE WHERE team_id=$1 AND template_id!=$2",
+            tmpl["team_id"], template_id
+        )
+    await pool.execute("""
+        UPDATE task_templates
+        SET name=$1, icon=$2, is_default=$3, config=$4::jsonb, updated_at=NOW()
+        WHERE template_id=$5
+    """, body.name, body.icon, body.is_default, json.dumps(body.config), template_id)
+    row = await pool.fetchrow("SELECT * FROM task_templates WHERE template_id=$1", template_id)
+    return dict(row)
+
+
+@router.post("/tasks/{template_id}/set-default")
+async def set_default_template(template_id: str, pool=Depends(get_pool), user=Depends(require_user)):
+    """Set this template as the default for its team."""
+    tmpl = await pool.fetchrow("SELECT team_id FROM task_templates WHERE template_id=$1", template_id)
+    if not tmpl:
+        raise HTTPException(404, _TEMPLATE_NOT_FOUND)
+    if tmpl["team_id"]:
+        await pool.execute(
+            "UPDATE task_templates SET is_default=FALSE WHERE team_id=$1", tmpl["team_id"]
+        )
+    await pool.execute(
+        "UPDATE task_templates SET is_default=TRUE WHERE template_id=$1", template_id
+    )
+    return {"ok": True}
+
+
+@router.delete("/tasks/{template_id}")
+async def delete_task_template(template_id: str, pool=Depends(get_pool), user=Depends(require_user)):
+    """Delete a task template."""
+    tmpl = await pool.fetchrow("SELECT created_by FROM task_templates WHERE template_id=$1", template_id)
+    if not tmpl:
+        raise HTTPException(404, _TEMPLATE_NOT_FOUND)
+    if tmpl["created_by"] != user["user_id"] and user.get("role") != "admin":
+        raise HTTPException(403, "Not authorised")
     await pool.execute("DELETE FROM task_templates WHERE template_id=$1", template_id)
     return {"ok": True}

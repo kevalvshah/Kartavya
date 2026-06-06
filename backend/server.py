@@ -45,6 +45,7 @@ from routers.templates   import router as templates_router
 from routers.time_entries import router as time_router
 from routers.uploads     import router as uploads_router   # R2-backed upload
 from routers.reports     import router as reports_router
+from routers.messaging   import router as messaging_router
 from services.gita            import get_verse_of_the_day
 from services.web_push_service import (
     is_configured as wp_is_configured,
@@ -1076,6 +1077,20 @@ async def create_team(payload:TeamCreate,pool=Depends(get_db),user=Depends(requi
     await pool.execute("INSERT INTO team_members (member_id,team_id,email,user_id,role,status) VALUES ($1,$2,$3,$4,'owner','active')",f"mem_{uuid.uuid4().hex[:12]}",team_id,user["email"],user["user_id"])
     await pool.execute("INSERT INTO project_assignments (assignment_id,team_id,user_id,role,assigned_by) VALUES ($1,$2,$3,'owner',$4)",f"assign_{uuid.uuid4().hex[:12]}",team_id,user["user_id"],user["user_id"])
     await ensure_default_columns(pool,team_id)
+    # Auto-create a project channel for this team
+    try:
+        ch_id = f"ch_{uuid.uuid4().hex[:12]}"
+        await pool.execute("""
+            INSERT INTO channels (channel_id, org_id, type, project_id, name, created_by)
+            VALUES ($1, $2, 'project', $2, $3, $4)
+            ON CONFLICT DO NOTHING
+        """, ch_id, team_id, payload.name, user["user_id"])
+        await pool.execute(
+            "INSERT INTO channel_members (channel_id, user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING",
+            ch_id, user["user_id"]
+        )
+    except Exception:
+        pass
     return TeamOut(**dict(row))
 
 @api_router.get("/users")
@@ -1672,6 +1687,7 @@ app.include_router(templates_router)
 app.include_router(time_router)
 app.include_router(uploads_router)   # R2-backed file upload (replaces old base64 /api/upload)
 app.include_router(reports_router)
+app.include_router(messaging_router)
 
 
 # ── Verse of the day (public) ────────────────────────────────────────────────

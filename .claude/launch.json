@@ -2,9 +2,9 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "kartavya-frontend",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": ["start", "--prefix", "frontend"],
+      "name": "frontend",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["--prefix", "frontend", "vite", "--port", "3000"],
       "port": 3000
     }
   ]
