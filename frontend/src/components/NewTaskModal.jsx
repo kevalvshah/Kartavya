@@ -108,7 +108,12 @@ export default function NewTaskModal({ open, onClose, onCreated }) {
   }, [projectId]);
 
   const applyTemplate = (tmpl) => {
-    const cfg = typeof tmpl.config === 'string' ? JSON.parse(tmpl.config) : (tmpl.config || {});
+    let cfg;
+    try {
+      cfg = typeof tmpl.config === 'string' ? JSON.parse(tmpl.config) : (tmpl.config || {});
+    } catch {
+      cfg = {};
+    }
     if (cfg.title)       setTitle(cfg.title);
     if (cfg.description) setDescription(cfg.description);
     if (cfg.priority)    setPriority(cfg.priority);

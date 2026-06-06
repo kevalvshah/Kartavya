@@ -173,11 +173,19 @@ async def create_dm_by_email(body: dict, pool=Depends(get_pool), user=Depends(re
     email = (body.get("email") or "").strip().lower()
     if not email:
         raise HTTPException(400, "email required")
-    other = await pool.fetchrow(
-        "SELECT user_id FROM users WHERE LOWER(email)=$1", email
-    )
+    # Resolve recipient only within shared teams to prevent cross-tenant user discovery
+    other = await pool.fetchrow("""
+        SELECT u.user_id
+        FROM users u
+        JOIN team_members theirs ON theirs.user_id = u.user_id AND theirs.status = 'active'
+        JOIN team_members mine   ON mine.team_id   = theirs.team_id
+                                AND mine.user_id   = $2
+                                AND mine.status    = 'active'
+        WHERE LOWER(u.email) = $1
+        LIMIT 1
+    """, email, user["user_id"])
     if not other:
-        raise HTTPException(404, "No user found with that email address")
+        raise HTTPException(404, "No user found with that email address in your organisation")
     other_id = other["user_id"]
     if other_id == user["user_id"]:
         raise HTTPException(400, "Cannot DM yourself")
@@ -190,11 +198,13 @@ async def create_dm_by_email(body: dict, pool=Depends(get_pool), user=Depends(re
     """, user["user_id"], other_id)
     if existing:
         return {"channel_id": existing["channel_id"], "existing": True}
-    # Create new DM anchored to any shared team
-    org_row = await pool.fetchrow(
-        "SELECT team_id FROM team_members WHERE user_id=$1 AND status='active' LIMIT 1",
-        user["user_id"]
-    )
+    # Create new DM anchored to a shared team
+    org_row = await pool.fetchrow("""
+        SELECT mine.team_id FROM team_members mine
+        JOIN team_members theirs ON theirs.team_id = mine.team_id AND theirs.user_id = $2 AND theirs.status = 'active'
+        WHERE mine.user_id = $1 AND mine.status = 'active'
+        LIMIT 1
+    """, user["user_id"], other_id)
     if not org_row:
         raise HTTPException(400, "You must belong to at least one project to start DMs")
     channel_id = f"ch_{uuid.uuid4().hex[:12]}"

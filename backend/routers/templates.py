@@ -132,15 +132,44 @@ class TaskTemplateBody(BaseModel):
 
 @router.get("/tasks")
 async def list_task_templates(team_id: Optional[str] = None, pool=Depends(get_pool), user=Depends(require_user)):
-    """Return task templates for a team (includes global ones with no team_id)."""
+    """Return task templates visible to the caller.
+
+    - Admin: any team's templates (or all global ones when no team_id given).
+    - Others: must supply team_id and must be a member of that team.
+      Global (team_id IS NULL) templates are always included.
+    """
+    is_admin = user.get("role") == "admin"
+
     if team_id:
+        # Non-admins must be a member of the requested team
+        if not is_admin:
+            member = await pool.fetchrow("""
+                SELECT 1 FROM team_members WHERE team_id=$1 AND user_id=$2 AND status='active'
+                UNION
+                SELECT 1 FROM project_assignments WHERE team_id=$1 AND user_id=$2
+            """, team_id, user["user_id"])
+            if not member:
+                raise HTTPException(403, "Not a member of this team")
         rows = await pool.fetch("""
             SELECT * FROM task_templates
             WHERE team_id=$1 OR team_id IS NULL
             ORDER BY is_default DESC, created_at ASC
         """, team_id)
     else:
-        rows = await pool.fetch("SELECT * FROM task_templates ORDER BY is_default DESC, created_at ASC")
+        if not is_admin:
+            # Return only global templates + templates for teams the user belongs to
+            rows = await pool.fetch("""
+                SELECT DISTINCT tt.* FROM task_templates tt
+                LEFT JOIN (
+                    SELECT team_id FROM team_members WHERE user_id=$1 AND status='active'
+                    UNION
+                    SELECT team_id FROM project_assignments WHERE user_id=$1
+                ) my_teams ON my_teams.team_id = tt.team_id
+                WHERE tt.team_id IS NULL OR my_teams.team_id IS NOT NULL
+                ORDER BY tt.is_default DESC, tt.created_at ASC
+            """, user["user_id"])
+        else:
+            rows = await pool.fetch("SELECT * FROM task_templates ORDER BY is_default DESC, created_at ASC")
     return [dict(r) for r in rows]
 
 

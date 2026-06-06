@@ -1385,7 +1385,7 @@ async def create_task(payload:TaskCreate,pool=Depends(get_db),user=Depends(requi
         try:
             from services.whatsapp_service import send_task_assigned
             due_str = str(due_dt.date()) if due_dt else ""
-            asyncio.create_task(send_task_assigned(pool, uid, task_id, payload.title, actor_name, due_str))
+            _bg(send_task_assigned(pool, uid, task_id, payload.title, actor_name, due_str), label="wa_task_assigned")
         except Exception as e:
             logger.warning("wa assignment failed: %s", e)
     from services.activity_logger import log_event

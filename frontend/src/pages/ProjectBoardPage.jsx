@@ -380,6 +380,16 @@ export default function ProjectBoardPage() {
 
             </button>
 
+            {chatChannel && (
+              <button
+                className={'k-btn k-btn--ghost k-btn--sm' + (chatOpen ? ' is-active' : '')}
+                onClick={() => setChatOpen(v => !v)}
+                style={chatOpen ? { background: 'var(--bg-soft)', color: 'var(--ink)' } : {}}
+              >
+                💬 Chat
+              </button>
+            )}
+
             <button className="k-link" onClick={() => navigate('/projects')}>
 
               ← Projects

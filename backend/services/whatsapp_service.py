@@ -112,10 +112,15 @@ async def send_text(to_phone: str, body: str) -> Optional[str]:
 
 # ── OTP ────────────────────────────────────────────────────────────────────────
 
-_OTP_SECRET = os.environ.get("OTP_SECRET", os.environ.get("JWT_SECRET", "default-otp-secret"))
+_OTP_SECRET = os.environ.get("OTP_SECRET") or os.environ.get("JWT_SECRET")
+if not _OTP_SECRET:
+    logger.warning("⚠️  OTP_SECRET not set — WhatsApp OTP verification is disabled until a secret is configured")
+    _OTP_SECRET = None
 
 def _hash_otp(otp: str) -> str:
     """HMAC-SHA256 with server secret — prevents offline brute-force from leaked DB rows."""
+    if not _OTP_SECRET:
+        raise RuntimeError("OTP_SECRET is not configured — cannot hash OTP")
     return hmac.new(_OTP_SECRET.encode(), otp.encode(), hashlib.sha256).hexdigest()
 
 
