@@ -802,7 +802,7 @@ async def review_approval(approval_id:str,body:dict,pool=Depends(get_db),user=De
     client_email   = body.get("client_email", "")
     if status not in ("approved","rejected"): raise HTTPException(400,"status must be approved or rejected")
     if approval_id.startswith("task_approval--"):
-        task_id = approval_id.split("::", 1)[1]
+        task_id = approval_id.split("--", 1)[1]
         # Must be owner/admin of the project
         task = await pool.fetchrow("SELECT * FROM tasks WHERE task_id=$1", task_id)
         if not task: raise HTTPException(404, "Task not found")

@@ -9,6 +9,7 @@ import { currentUser } from '../lib/auth';
 import { useToast } from '../components/ui/toast';
 import { PageHeader, StatTile, DueChip, PriorityDot } from '../components/editorial';
 import { relTime } from '../lib/utils';
+import TaskDrawer from '../components/TaskDrawer';
 
 export default function ApprovalsPage() {
   const { pushToast } = useToast();
@@ -24,6 +25,7 @@ export default function ApprovalsPage() {
   const [sendNotes,     setSendNotes]     = useState('');
   const [rejectModal, setRejectModal] = useState(null); // { approvalId } | null
   const [rejectNote,  setRejectNote]  = useState('');
+  const [drawerTaskId, setDrawerTaskId] = useState(null);
   const user     = currentUser();
   const isClient = user?.role === 'client';
 
@@ -209,7 +211,11 @@ export default function ApprovalsPage() {
                   <div className="k-approval-row__main">
                     <PriorityDot priority={priority} />
                     <div className="k-approval-row__body">
-                      <div className="k-approval-row__title">{title}</div>
+                      <div
+                        className="k-approval-row__title"
+                        style={{ cursor: r.task_id ? 'pointer' : 'default', textDecoration: r.task_id ? 'underline' : 'none', textDecorationColor: 'var(--rule)' }}
+                        onClick={() => r.task_id && setDrawerTaskId(r.task_id)}
+                      >{title}</div>
                       {desc && <div className="k-approval-row__desc">{desc}</div>}
                       <div className="k-approval-row__meta">
                         <span className="k-mute">
@@ -364,6 +370,15 @@ export default function ApprovalsPage() {
           </div>
         </div>
       )}
+
+      {/* Task drawer */}
+      <TaskDrawer
+        taskId={drawerTaskId}
+        open={!!drawerTaskId}
+        onClose={() => setDrawerTaskId(null)}
+        onSaved={() => { setDrawerTaskId(null); load(); }}
+        onDeleted={() => { setDrawerTaskId(null); load(); }}
+      />
 
       {/* Reject modal */}
       {rejectModal && (
