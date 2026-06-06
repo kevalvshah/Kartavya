@@ -31,11 +31,12 @@ export function useMessages(channelId) {
     try {
       const r = await api.get(`/channels/${channelId}/messages`, { params: { limit: 20 } });
       const msgs = Array.isArray(r.data) ? r.data : [];
-      if (!msgs.length) return;
+      // Always run the merge — even when no new messages arrive, edits/deletes
+      // on already-loaded messages must still be applied.
       setMessages(prev => {
+        if (!msgs.length) return prev;
         const existingIds = new Set(prev.map(m => m.message_id));
         const newMsgs = msgs.filter(m => !existingIds.has(m.message_id));
-        // Always apply edits/deletes to existing messages
         const updated = prev.map(m => {
           const fresh = msgs.find(x => x.message_id === m.message_id);
           return fresh || m;

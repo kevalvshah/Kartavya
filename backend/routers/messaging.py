@@ -614,7 +614,7 @@ async def channel_members(
     channel_id: str,
     pool=Depends(get_pool), user=Depends(require_user)
 ):
-    """List members of a channel."""
+    """List members of a channel. Caller must be a member."""
     await _assert_channel_member(pool, channel_id, user["user_id"], user.get("role", ""))
     rows = await pool.fetch("""
         SELECT u.user_id, COALESCE(u.full_name, u.name, u.email) AS name,

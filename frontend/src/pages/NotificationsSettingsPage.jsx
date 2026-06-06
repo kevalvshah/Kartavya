@@ -246,10 +246,18 @@ export default function NotificationsSettingsPage() {
                       <div style={{ fontSize: 11, color: 'var(--ink-3)', marginTop: 2 }}>{sub}</div>
                     </div>
                     <div
+                      role="switch"
+                      aria-checked={!!wa?.[key]}
+                      aria-label={label}
+                      tabIndex={0}
                       onClick={() => togglePref(key)}
+                      onKeyDown={e => (e.key === 'Enter' || e.key === ' ') && togglePref(key)}
                       style={{ width: 40, height: 22, borderRadius: 11,
                         background: wa?.[key] ? '#25D366' : 'var(--rule-soft)',
-                        position: 'relative', transition: 'background .2s', flexShrink: 0, cursor: 'pointer' }}>
+                        position: 'relative', transition: 'background .2s', flexShrink: 0, cursor: 'pointer',
+                        outline: 'none' }}
+                      onFocus={e => e.currentTarget.style.boxShadow = '0 0 0 2px var(--k-primary)'}
+                      onBlur={e => e.currentTarget.style.boxShadow = 'none'}>
                       <div style={{ position: 'absolute', top: 3,
                         left: wa?.[key] ? 21 : 3, width: 16, height: 16,
                         borderRadius: '50%', background: '#fff',
