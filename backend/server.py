@@ -107,11 +107,15 @@ DEFAULT_ORIGINS = [
 _extra = [o.strip() for o in os.environ.get("CORS_ORIGINS", "").split(",") if o.strip()]
 ALLOWED_ORIGINS = list(dict.fromkeys(DEFAULT_ORIGINS + _extra))
 
+# Allow any Vercel preview URL for THIS project only.
+# Pattern is scoped to kevalvshah03-6145s-projects.vercel.app so no other
+# Vercel tenant can craft a matching origin.
+_VERCEL_PREVIEW_RE = r"https://kartavya-[a-z0-9]+-kevalvshah03-6145s-projects\.vercel\.app"
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
-    # No allow_origin_regex: a regex matching *.vercel.app is too broad because
-    # any Vercel user can register kartavya-*.vercel.app and make credentialed requests.
+    allow_origin_regex=_VERCEL_PREVIEW_RE,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
