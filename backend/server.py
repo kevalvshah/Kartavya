@@ -797,6 +797,15 @@ async def _approve_task_mark_done(
 @api_router.post("/approvals/{approval_id}/review")
 async def review_approval(approval_id:str,body:dict,pool=Depends(get_db),user=Depends(require_user)):
     """Approve or reject a task creation request or task-level approval."""
+    try:
+        return await _review_approval_inner(approval_id, body, pool, user)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error("review_approval 500: approval_id=%s error=%s", approval_id, exc, exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Approval error: {type(exc).__name__}: {exc}")
+
+async def _review_approval_inner(approval_id:str,body:dict,pool,user):
     status=body.get("status"); notes=body.get("notes","")
     send_to_client = body.get("send_to_client", False)
     client_email   = body.get("client_email", "")
