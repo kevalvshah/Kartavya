@@ -145,27 +145,46 @@ function DeleteUserModal({ user, otherUsers, onConfirm, onClose }) {
 
 // ── Reset link button (used inside EditSlideOver) ─────────────────────────────
 
-function ResetLinkButton({ userId, pushToast }) {
+function ResetLinkButton({ userId, pushToast, compact = false }) {
   const [sending, setSending] = useState(false);
   const [sent,    setSent]    = useState(false);
 
-  const send = async () => {
+  const send = async (e) => {
+    e.stopPropagation();
     setSending(true);
     try {
       await api.post(`/admin/users/${userId}/send-reset-link`);
       setSent(true);
-      pushToast({ type: 'success', title: 'Reset link sent', message: 'User will receive an email with a reset link.' });
+      pushToast({ type: 'success', title: 'Reset link sent', message: 'User will receive a password reset email.' });
+      setTimeout(() => setSent(false), 4000);
     } catch {
       pushToast({ type: 'error', title: 'Could not send reset link' });
     } finally { setSending(false); }
   };
+
+  if (compact) {
+    return (
+      <button
+        onClick={send}
+        disabled={sending || sent}
+        title={sent ? 'Reset link sent!' : 'Send password reset link'}
+        className="k-iconbtn"
+        style={{ color: sent ? '#10b981' : 'var(--ink-3)', opacity: sending ? 0.5 : 1 }}
+      >
+        {sent
+          ? <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          : <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+        }
+      </button>
+    );
+  }
 
   return (
     <button
       onClick={send}
       disabled={sending || sent}
       style={{ width: '100%', background: 'none', border: '1px solid var(--rule-soft)', borderRadius: 'var(--r-md)',
-        padding: '8px 14px', fontSize: 12, fontWeight: 600, color: sent ? 'var(--ink-3)' : 'var(--k-primary)',
+        padding: '8px 14px', fontSize: 12, fontWeight: 600, color: sent ? '#10b981' : 'var(--k-primary)',
         cursor: sending || sent ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
     >
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -580,6 +599,9 @@ export default function AdminPage() {
                   <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M11 2l3 3-9 9H2v-3L11 2z"/></svg>
                   Edit
                 </button>
+
+                {/* Reset password */}
+                <ResetLinkButton userId={u.user_id} pushToast={pushToast} compact />
 
                 {/* Remove button */}
                 <button className="k-iconbtn" style={{ color: 'var(--danger)', opacity: isSelf ? 0.3 : 1 }}

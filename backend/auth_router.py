@@ -137,10 +137,19 @@ async def accept_invite(body: AcceptInviteBody):
     salt = uuid.uuid4().hex
     user_id = f"user_{uuid.uuid4().hex[:12]}"
     role = invite["role"]  # "member" or "client"
+    # Carry invite metadata into the user record so admin-set fields aren't lost
+    full_name = invite.get("full_name") or body.name
+    member_role = invite.get("member_role")
+    receives_approval_emails = invite.get("receives_approval_emails", True)
 
     await pool.execute(
-        "INSERT INTO users (user_id, name, email, password_hash, salt, role) VALUES ($1,$2,$3,$4,$5,$6)",
-        user_id, body.name, invite["email"], _hash_password(body.password, salt), salt, role,
+        """INSERT INTO users
+               (user_id, name, full_name, email, password_hash, salt, role,
+                member_role, receives_approval_emails)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)""",
+        user_id, body.name, full_name, invite["email"],
+        _hash_password(body.password, salt), salt, role,
+        member_role, receives_approval_emails,
     )
     await pool.execute(
         "UPDATE invites SET accepted_at=NOW() WHERE token=$1", body.token
