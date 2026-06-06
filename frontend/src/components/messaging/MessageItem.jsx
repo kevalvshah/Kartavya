@@ -1,6 +1,51 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { currentUser } from '../../lib/auth';
 import { api } from '../../lib/api';
+
+const isImage = (name) => /\.(png|jpg|jpeg|gif|webp|svg)$/i.test(name || '');
+
+function AttachmentList({ attachments }) {
+  if (!attachments?.length) return null;
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 6 }}>
+      {attachments.map((a, i) => (
+        isImage(a.name) ? (
+          <a key={i} href={a.url} target="_blank" rel="noreferrer">
+            <img src={a.url} alt={a.name}
+              style={{ maxWidth: 200, maxHeight: 160, borderRadius: 'var(--r-md)', border: '1px solid var(--rule)', objectFit: 'cover', display: 'block' }} />
+          </a>
+        ) : (
+          <a key={i} href={a.url} target="_blank" rel="noreferrer"
+            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 10px',
+              borderRadius: 'var(--r-md)', border: '1px solid var(--rule)', background: 'var(--bg-soft)',
+              color: 'var(--ink-2)', textDecoration: 'none', fontSize: 12 }}>
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M9 2H4a1 1 0 00-1 1v10a1 1 0 001 1h8a1 1 0 001-1V6L9 2z"/><path d="M9 2v4h4"/></svg>
+            {a.name}
+          </a>
+        )
+      ))}
+    </div>
+  );
+}
+
+function TaskUnfurl({ taskData }) {
+  const STATUS_COLOR = { todo: '#6366f1', in_progress: '#f59e0b', done: '#10b981', blocked: '#ef4444', review: '#8b5cf6' };
+  const color = STATUS_COLOR[taskData.status] || '#6E7B91';
+  return (
+    <a href={`/tasks/${taskData.task_id}`} style={{ display: 'block', marginTop: 6, padding: '8px 12px',
+      borderRadius: 'var(--r-md)', border: '1px solid var(--rule)', background: 'var(--bg-soft)',
+      textDecoration: 'none', borderLeft: `3px solid ${color}` }}>
+      <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color, marginBottom: 2 }}>
+        TASK
+      </div>
+      <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink)' }}>{taskData.title}</div>
+      <div style={{ fontSize: 11, color: 'var(--ink-3)', marginTop: 2 }}>
+        {taskData.status?.replace('_', ' ')}
+        {taskData.assignee_name && ` · ${taskData.assignee_name}`}
+      </div>
+    </a>
+  );
+}
 
 const EMOJI_QUICK = ['👍','✅','👀','❤️','😂','🙏','🔥'];
 
@@ -32,6 +77,19 @@ export default function MessageItem({ msg, onReact, onDelete, onReplyClick, show
   }
 
   const time = new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const meta = msg.metadata || {};
+  const msgAttachments = meta.attachments || [];
+
+  // Task link unfurl: detect /tasks/ URLs in body
+  const [unfurled, setUnfurled] = useState(null);
+  useEffect(() => {
+    if (!msg.body) return;
+    const match = msg.body.match(/\/tasks?\/([a-zA-Z0-9_-]+)/);
+    if (!match) return;
+    api.get(`/messages/unfurl?url=${encodeURIComponent(match[0])}`)
+      .then(r => { if (r.data.type === 'task') setUnfurled(r.data); })
+      .catch(() => {});
+  }, [msg.body]);
 
   // Group reactions by emoji
   const rxnGroups = {};
@@ -66,6 +124,10 @@ export default function MessageItem({ msg, onReact, onDelete, onReplyClick, show
               : part
           )}
         </div>
+        {/* Attachments */}
+        <AttachmentList attachments={msgAttachments} />
+        {/* Task unfurl */}
+        {unfurled && <TaskUnfurl taskData={unfurled} />}
         {/* Reactions */}
         {Object.keys(rxnGroups).length > 0 && (
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 4 }}>

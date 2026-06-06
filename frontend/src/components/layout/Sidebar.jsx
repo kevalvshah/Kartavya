@@ -94,7 +94,7 @@ function KMark({ size = 30 }) {
   );
 }
 
-export default function Sidebar({ inboxCount = 0 }) {
+export default function Sidebar({ inboxCount = 0, messagesCount = 0 }) {
   const navigate  = useNavigate();
   const location  = useLocation();
   const user      = currentUser();
@@ -139,7 +139,7 @@ export default function Sidebar({ inboxCount = 0 }) {
               <span className="k-sidebar__section-hi">{sans}</span>
             </div>
             {items.filter(item => !item.ownerOnly || !isMember).map(({ to, icon, en, hi, adminOnly, badge }) => {
-              const badgeCount = badge === 'unread' ? inboxCount : 0;
+              const badgeCount = badge === 'unread' ? inboxCount : badge === 'messages' ? messagesCount : 0;
               return (
                 <button
                   key={en}

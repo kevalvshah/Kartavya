@@ -55,8 +55,10 @@ export function useMessages(channelId) {
     return () => clearInterval(pollingRef.current);
   }, [channelId, load, poll]);
 
-  const send = useCallback(async (body, parentId = null) => {
-    const r = await api.post(`/channels/${channelId}/messages`, { body, parent_id: parentId });
+  const send = useCallback(async (body, parentId = null, metadata = null) => {
+    const payload = { body, parent_id: parentId };
+    if (metadata) payload.metadata = metadata;
+    const r = await api.post(`/channels/${channelId}/messages`, payload);
     setMessages(prev => [...prev, r.data]);
     return r.data;
   }, [channelId]);

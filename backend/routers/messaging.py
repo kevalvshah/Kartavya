@@ -28,6 +28,7 @@ class ChannelCreate(BaseModel):
 class MessageCreate(BaseModel):
     body: str
     parent_id: Optional[str] = None
+    metadata: Optional[dict] = None
 
 
 class ReactionToggle(BaseModel):
@@ -251,11 +252,12 @@ async def send_message(
         raise HTTPException(400, "Message body cannot be empty")
 
     msg_id = f"msg_{uuid.uuid4().hex[:12]}"
+    meta_json = json.dumps(body.metadata or {})
     row = await pool.fetchrow("""
-        INSERT INTO messages (message_id, channel_id, sender_id, body, parent_id, source)
-        VALUES ($1, $2, $3, $4, $5, 'web')
+        INSERT INTO messages (message_id, channel_id, sender_id, body, parent_id, source, metadata)
+        VALUES ($1, $2, $3, $4, $5, 'web', $6::jsonb)
         RETURNING *
-    """, msg_id, channel_id, user["user_id"], body.body.strip(), body.parent_id)
+    """, msg_id, channel_id, user["user_id"], body.body.strip(), body.parent_id, meta_json)
 
     # Update last_read_at for sender
     await pool.execute(
@@ -287,6 +289,18 @@ async def send_message(
                         f"{user.get('name','Someone')} mentioned you: {body.body[:80]}",
                         f"/messages/{channel_id}"
                     )
+                    # Push notification
+                    import asyncio as _asyncio
+                    from services.push_service import send_push
+                    _asyncio.ensure_future(send_push(
+                        pool,
+                        recipient_id=mentioned["user_id"],
+                        kind="mention",
+                        title="You were mentioned",
+                        body=f"{user.get('name','Someone')}: {body.body[:80]}",
+                        task_id=None,
+                        is_mine=True,
+                    ))
                 except Exception:
                     pass
 
@@ -369,6 +383,41 @@ async def mark_read(
         channel_id, user["user_id"]
     )
     return {"ok": True}
+
+
+@router.get("/messages/unread-count")
+async def total_unread(pool=Depends(get_pool), user=Depends(require_user)):
+    """Return total unread message count across all the user's channels."""
+    uid = user["user_id"]
+    row = await pool.fetchrow("""
+        SELECT COUNT(*) AS total FROM messages m
+        JOIN channel_members cm ON cm.channel_id = m.channel_id AND cm.user_id = $1
+        WHERE m.created_at > COALESCE(cm.last_read_at, '1970-01-01')
+          AND m.deleted_at IS NULL
+          AND m.sender_id != $1
+    """, uid)
+    return {"count": int(row["total"]) if row else 0}
+
+
+@router.get("/messages/unfurl")
+async def unfurl(url: str, pool=Depends(get_pool), user=Depends(require_user)):
+    """Return task card data if URL is a Kartavya task link, else OG metadata."""
+    import re
+    task_match = re.search(r'/tasks?/([a-zA-Z0-9_-]+)', url)
+    if task_match:
+        task_id = task_match.group(1)
+        task = await pool.fetchrow("""
+            SELECT task_id, title, status, priority, due_at,
+                   COALESCE(u.full_name, u.name) AS assignee_name
+            FROM tasks t
+            LEFT JOIN users u ON u.user_id = ANY(t.assignee_user_ids)
+            WHERE t.task_id = $1
+        """, task_id)
+        if task:
+            return {"type": "task", "task_id": task["task_id"], "title": task["title"],
+                    "status": task["status"], "priority": task["priority"],
+                    "due_at": task["due_at"], "assignee_name": task["assignee_name"]}
+    return {"type": "link", "url": url}
 
 
 @router.get("/channels/{channel_id}/members")

@@ -67,7 +67,7 @@ export default function MessageThread({ channelId, messages, loading, hasMore, o
           )}
           <div ref={bottomRef} />
         </div>
-        <MessageComposer onSend={(body) => onSend(body)} placeholder="Message the channel… (Enter to send)" />
+        <MessageComposer onSend={(body, meta) => onSend(body, null, meta)} placeholder="Message the channel… (Enter to send)" />
       </div>
 
       {/* Thread drawer */}
