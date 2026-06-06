@@ -349,6 +349,28 @@ async def list_invites(pool=Depends(get_pool), admin=Depends(require_admin)):
     ]
 
 
+@router.post("/users/{user_id}/send-reset-link")
+async def admin_send_reset_link(user_id: str, pool=Depends(get_pool), admin=Depends(require_admin)):
+    """Admin action: generate a password-reset link and email it to the user."""
+    user = await pool.fetchrow("SELECT user_id, name, email FROM users WHERE user_id=$1", user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    reset_token = secrets.token_urlsafe(32)
+    await pool.execute(
+        """UPDATE users SET password_reset_token=$1,
+           password_reset_expires=NOW() + INTERVAL '1 hour'
+           WHERE user_id=$2""",
+        reset_token, user_id,
+    )
+    try:
+        from email_service import send_password_reset_email
+        send_password_reset_email(user["email"], user["name"] or user["email"], reset_token)
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).warning("reset email failed: %s", exc)
+    return {"ok": True}
+
+
 @router.delete("/invites/{invite_id}")
 async def revoke_invite(invite_id: str, pool=Depends(get_pool), admin=Depends(require_admin)):
     await pool.execute("DELETE FROM invites WHERE invite_id=$1", invite_id)

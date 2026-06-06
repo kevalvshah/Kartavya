@@ -17,6 +17,18 @@ export async function apiAcceptInvite(token, name, password) {
   return res.data;
 }
 
+export async function apiForgotPassword(email) {
+  const res = await api.post('/auth/forgot-password', { email });
+  return res.data;
+}
+
+export async function apiResetPassword(token, password) {
+  const res = await api.post('/auth/reset-password', { token, password });
+  sessionStorage.setItem('auth_token', res.data.token);
+  sessionStorage.setItem('kartavya_user', JSON.stringify(res.data.user));
+  return res.data;
+}
+
 export async function apiLogout() {
   try { await api.post('/auth/logout'); } catch (_) { /* fire-and-forget: logout always proceeds */ }
   sessionStorage.removeItem('auth_token');

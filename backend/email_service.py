@@ -1046,6 +1046,28 @@ def send_report_email(
     return True
 
 
+# ── Password reset email ──────────────────────────────────────────────────────
+def send_password_reset_email(user_email: str, user_name: str, reset_token: str):
+    """Send a password-reset link to the user."""
+    reset_url  = f"{FRONTEND_URL}/reset-password?token={reset_token}"
+    first_name = _h(user_name.split()[0] if user_name else "there")
+    preheader  = "Reset your Kartavya password — link expires in 1 hour."
+    body = (
+        _body_text(f'Hi <strong>{first_name}</strong>, we received a request to reset the password '
+                   f'for your Kartavya account. Click the button below to choose a new password.')
+        + _cta_row(reset_url, "Reset password", "primary")
+        + _body_text(f'<span style="font-size:12.5px;color:{_INK3};">This link expires in '
+                     f'<strong>1 hour</strong>. If you didn\'t request a password reset, '
+                     f'you can safely ignore this email — your password won\'t change.</span>')
+    )
+    return send_email(
+        user_email,
+        "Reset your Kartavya password",
+        _base(preheader, "PASSWORD RESET · पासवर्ड रीसेट",
+              "Reset your password.", "सुरक्षा", "", body),
+    )
+
+
 # ── Legacy aliases ─────────────────────────────────────────────────────────────
 def send_approval_notification_email(user_email: str, user_name: str, task_title: str,
                                      notification_type: str, notes: str = None,

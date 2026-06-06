@@ -6,6 +6,7 @@ Roles: admin | member | client
 import hashlib
 import hmac
 import os
+import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Optional
@@ -115,12 +116,19 @@ def _safe_user(u: dict) -> dict:
 async def accept_invite(body: AcceptInviteBody):
     """Called when a user clicks their invite link and sets their password."""
     pool = await get_pool()
-    invite = await pool.fetchrow(
-        "SELECT * FROM invites WHERE token=$1 AND accepted_at IS NULL AND expires_at > NOW()",
-        body.token,
-    )
+    invite = await pool.fetchrow("SELECT * FROM invites WHERE token=$1", body.token)
     if not invite:
         raise HTTPException(status_code=400, detail="Invite link is invalid or has expired")
+
+    # If the invite was already accepted (e.g. double-submit), try to log the user in
+    if invite["accepted_at"] is not None:
+        user = await pool.fetchrow("SELECT * FROM users WHERE email=$1", invite["email"])
+        if user and _verify_password(body.password, user["salt"], user["password_hash"]):
+            return {"token": _create_token(user["user_id"]), "user": _safe_user(dict(user))}
+        raise HTTPException(status_code=400, detail="Account already activated — please sign in.")
+
+    if invite["expires_at"].replace(tzinfo=timezone.utc) < datetime.now(timezone.utc):
+        raise HTTPException(status_code=400, detail="Invite link has expired. Ask your admin for a new one.")
 
     existing = await pool.fetchrow("SELECT user_id FROM users WHERE email=$1", invite["email"])
     if existing:
@@ -176,6 +184,56 @@ async def login(body: LoginBody):
 async def logout():
     """Invalidate the session (client-side token deletion)."""
     return {"ok": True}
+
+
+class ForgotPasswordBody(BaseModel):
+    email: EmailStr
+
+
+class ResetPasswordBody(BaseModel):
+    token: str
+    password: str = Field(..., min_length=8, max_length=128)
+
+
+@router.post("/forgot-password")
+async def forgot_password(body: ForgotPasswordBody):
+    """Generate a password-reset token and email it. Always returns 200 to avoid email enumeration."""
+    pool = await get_pool()
+    user = await pool.fetchrow("SELECT user_id, name, email FROM users WHERE email=$1", body.email.lower())
+    if user:
+        reset_token = secrets.token_urlsafe(32)
+        await pool.execute(
+            """UPDATE users SET password_reset_token=$1,
+               password_reset_expires=NOW() + INTERVAL '1 hour'
+               WHERE user_id=$2""",
+            reset_token, user["user_id"],
+        )
+        try:
+            from email_service import send_password_reset_email
+            send_password_reset_email(user["email"], user["name"] or user["email"], reset_token)
+        except Exception:
+            pass
+    return {"ok": True}
+
+
+@router.post("/reset-password")
+async def reset_password(body: ResetPasswordBody):
+    """Verify a password-reset token and update the user's password."""
+    pool = await get_pool()
+    user = await pool.fetchrow(
+        "SELECT * FROM users WHERE password_reset_token=$1 AND password_reset_expires > NOW()",
+        body.token,
+    )
+    if not user:
+        raise HTTPException(status_code=400, detail="Reset link is invalid or has expired.")
+    salt = uuid.uuid4().hex
+    await pool.execute(
+        """UPDATE users SET password_hash=$1, salt=$2,
+           password_reset_token=NULL, password_reset_expires=NULL
+           WHERE user_id=$3""",
+        _hash_password(body.password, salt), salt, user["user_id"],
+    )
+    return {"token": _create_token(user["user_id"]), "user": _safe_user(dict(user))}
 
 
 @router.get("/me")

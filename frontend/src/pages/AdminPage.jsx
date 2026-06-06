@@ -143,6 +143,39 @@ function DeleteUserModal({ user, otherUsers, onConfirm, onClose }) {
   );
 }
 
+// ── Reset link button (used inside EditSlideOver) ─────────────────────────────
+
+function ResetLinkButton({ userId, pushToast }) {
+  const [sending, setSending] = useState(false);
+  const [sent,    setSent]    = useState(false);
+
+  const send = async () => {
+    setSending(true);
+    try {
+      await api.post(`/admin/users/${userId}/send-reset-link`);
+      setSent(true);
+      pushToast({ type: 'success', title: 'Reset link sent', message: 'User will receive an email with a reset link.' });
+    } catch {
+      pushToast({ type: 'error', title: 'Could not send reset link' });
+    } finally { setSending(false); }
+  };
+
+  return (
+    <button
+      onClick={send}
+      disabled={sending || sent}
+      style={{ width: '100%', background: 'none', border: '1px solid var(--rule-soft)', borderRadius: 'var(--r-md)',
+        padding: '8px 14px', fontSize: 12, fontWeight: 600, color: sent ? 'var(--ink-3)' : 'var(--k-primary)',
+        cursor: sending || sent ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+    >
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/>
+      </svg>
+      {sent ? 'Reset link sent ✓' : sending ? 'Sending…' : 'Send password reset link'}
+    </button>
+  );
+}
+
 // ── Edit slide-over ───────────────────────────────────────────────────────────
 
 function EditSlideOver({ user, onClose, onSaved, pushToast }) {
@@ -244,11 +277,14 @@ function EditSlideOver({ user, onClose, onSaved, pushToast }) {
         </div>
 
         {/* Footer */}
-        <div style={{ padding: '16px 24px', borderTop: '1px solid var(--rule-soft)', display: 'flex', gap: 10 }}>
-          <button className="k-btn k-btn--primary" style={{ flex: 1 }} onClick={save} disabled={saving}>
-            {saving ? 'Saving…' : 'Save changes'}
-          </button>
-          <button className="k-btn k-btn--ghost" onClick={onClose}>Cancel</button>
+        <div style={{ padding: '16px 24px', borderTop: '1px solid var(--rule-soft)', display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button className="k-btn k-btn--primary" style={{ flex: 1 }} onClick={save} disabled={saving}>
+              {saving ? 'Saving…' : 'Save changes'}
+            </button>
+            <button className="k-btn k-btn--ghost" onClick={onClose}>Cancel</button>
+          </div>
+          <ResetLinkButton userId={user.user_id} pushToast={pushToast} />
         </div>
       </div>
     </div>
