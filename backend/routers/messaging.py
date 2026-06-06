@@ -289,6 +289,22 @@ async def send_message(
                         f"{user.get('name','Someone')} mentioned you: {body.body[:80]}",
                         f"/messages/{channel_id}"
                     )
+                    # WhatsApp mention
+                    try:
+                        from services.whatsapp_service import send_mention_alert
+                        import asyncio as _asyncio2
+                        ch_row = await pool.fetchrow("SELECT name, project_id FROM channels WHERE channel_id=$1", channel_id)
+                        ch_name = ch_row["name"] if ch_row else "a channel"
+                        _asyncio2.ensure_future(send_mention_alert(
+                            pool, mentioned["user_id"],
+                            actor_name=user.get("name", "Someone"),
+                            context_name=ch_name,
+                            snippet=body.body[:100],
+                            context_id=channel_id,
+                        ))
+                    except Exception:
+                        pass
+
                     # Push notification
                     import asyncio as _asyncio
                     from services.push_service import send_push

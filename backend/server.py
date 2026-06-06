@@ -45,7 +45,8 @@ from routers.templates   import router as templates_router
 from routers.time_entries import router as time_router
 from routers.uploads     import router as uploads_router   # R2-backed upload
 from routers.reports     import router as reports_router
-from routers.messaging   import router as messaging_router
+from routers.messaging          import router as messaging_router
+from routers.whatsapp_settings  import router as whatsapp_router
 from services.gita            import get_verse_of_the_day
 from services.web_push_service import (
     is_configured as wp_is_configured,
@@ -1334,6 +1335,12 @@ async def create_task(payload:TaskCreate,pool=Depends(get_db),user=Depends(requi
             if assignee: send_task_assignment_email(assignee["email"],assignee["name"] or assignee["email"],payload.title,task_id,team_name)
         except Exception as e:
             logger.warning("assignment email failed: %s", e)
+        try:
+            from services.whatsapp_service import send_task_assigned
+            due_str = str(due_dt.date()) if due_dt else ""
+            asyncio.create_task(send_task_assigned(pool, uid, task_id, payload.title, actor_name, due_str))
+        except Exception as e:
+            logger.warning("wa assignment failed: %s", e)
     from services.activity_logger import log_event
     await log_event(pool,task_id=task_id,team_id=payload.team_id,actor_id=user["user_id"],event_type="created",data={"title":payload.title})
     from services.automation_engine import fire_automations
@@ -1688,6 +1695,7 @@ app.include_router(time_router)
 app.include_router(uploads_router)   # R2-backed file upload (replaces old base64 /api/upload)
 app.include_router(reports_router)
 app.include_router(messaging_router)
+app.include_router(whatsapp_router)
 
 
 # ── Verse of the day (public) ────────────────────────────────────────────────

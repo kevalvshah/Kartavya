@@ -119,6 +119,22 @@ async def send_approval_notification(pool, task_id: str, task_title: str,
         except Exception as exc:
             import logging; logging.getLogger(__name__).warning("approval email failed: %s", exc)
 
+        # WhatsApp notification
+        try:
+            from services.whatsapp_service import send_approval_request, send_approval_decision
+            if notification_type == "request":
+                asyncio.ensure_future(send_approval_request(
+                    pool, recipient_id, task_id, task_title,
+                    requester_name="Team member", notes=notes or ""
+                ))
+            elif notification_type in ("approved", "rejected"):
+                asyncio.ensure_future(send_approval_decision(
+                    pool, recipient_id, task_id, task_title,
+                    reviewer_name="Reviewer", decision=notification_type, reason=notes or ""
+                ))
+        except Exception as exc:
+            import logging; logging.getLogger(__name__).warning("wa approval notif failed: %s", exc)
+
         try:
             from services.push_service import send_push
             import asyncio
