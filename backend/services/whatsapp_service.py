@@ -15,6 +15,7 @@ Template names (submit all to Meta for approval before going live):
   kartavya_mention           — @mention alert
 """
 import hashlib
+import hmac
 import logging
 import os
 import secrets
@@ -45,7 +46,7 @@ async def _send(payload: dict) -> Optional[str]:
     """POST to Meta Cloud API. Returns wamid on success, None on failure."""
     if not _configured:
         logger.info("[WA-DEV] Would send: %s", payload)
-        return f"dev_wamid_{uuid.uuid4().hex[:12]}"
+        return None  # Don't fake success — callers should treat None as not-sent
     url = f"https://graph.facebook.com/{API_VERSION}/{PHONE_NUMBER_ID}/messages"
     try:
         async with httpx.AsyncClient(timeout=10) as client:
@@ -111,8 +112,11 @@ async def send_text(to_phone: str, body: str) -> Optional[str]:
 
 # ── OTP ────────────────────────────────────────────────────────────────────────
 
+_OTP_SECRET = os.environ.get("OTP_SECRET", os.environ.get("JWT_SECRET", "default-otp-secret"))
+
 def _hash_otp(otp: str) -> str:
-    return hashlib.sha256(otp.encode()).hexdigest()
+    """HMAC-SHA256 with server secret — prevents offline brute-force from leaked DB rows."""
+    return hmac.new(_OTP_SECRET.encode(), otp.encode(), hashlib.sha256).hexdigest()
 
 
 def generate_otp() -> str:

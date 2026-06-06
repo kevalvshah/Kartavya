@@ -33,20 +33,14 @@ export default function ChannelList({ channels, activeId, onSelect, onReload }) 
     const email = newDmEmail.trim();
     if (!email) return;
     try {
-      const userR = await api.get('/users');
-      const found = userR.data.find(u => u.email?.toLowerCase() === email.toLowerCase());
-      if (!found) { pushToast({ type: 'error', title: 'User not found' }); return; }
-      const projectChs = channels.filter(c => c.type === 'project');
-      const orgId = projectChs[0]?.org_id;
-      if (!orgId) { pushToast({ type: 'error', title: 'No project found to anchor DM' }); return; }
-      const r = await api.post('/channels', {
-        type: 'dm', project_id: orgId, member_ids: [found.user_id]
-      });
+      // Backend resolves the user by email server-side (no admin-only endpoint needed)
+      const r = await api.post('/channels/dm-by-email', { email });
       setNewDmEmail(''); setShowDmInput(false);
       onReload?.();
       onSelect?.(r.data.channel_id);
     } catch (e) {
-      pushToast({ type: 'error', title: 'Could not start DM' });
+      const msg = e?.response?.data?.detail || 'User not found or could not start DM';
+      pushToast({ type: 'error', title: msg });
     }
   };
 

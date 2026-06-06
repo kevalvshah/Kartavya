@@ -146,8 +146,8 @@ export default function MessagesPage() {
               loading={msgLoading}
               hasMore={hasMore}
               onLoadMore={loadMore}
-              onSend={async (body, parentId) => {
-                await send(body, parentId);
+              onSend={async (body, parentId, meta) => {
+                await send(body, parentId, meta);
                 markRead(activeChannelId);
               }}
               onReact={react}

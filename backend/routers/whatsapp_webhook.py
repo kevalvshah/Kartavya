@@ -59,8 +59,15 @@ async def receive_webhook(request: Request, pool=Depends(get_pool)):
     """Receive and route inbound WhatsApp messages. Always returns 200 immediately."""
     raw_body = await request.body()
 
-    # HMAC-SHA256 signature verification
-    if APP_SECRET:
+    # HMAC-SHA256 signature verification — fail closed when secret not configured
+    if not APP_SECRET:
+        # In production this should never happen — log loudly and reject
+        is_dev = os.environ.get("RAILWAY_ENVIRONMENT") is None and os.environ.get("ENV") != "production"
+        if not is_dev:
+            logger.error("WHATSAPP_APP_SECRET not set — rejecting webhook to prevent forged requests")
+            raise HTTPException(status_code=403, detail="Webhook not configured")
+        logger.warning("⚠️ WHATSAPP_APP_SECRET unset — accepting webhook in dev mode only")
+    else:
         sig_header = request.headers.get("X-Hub-Signature-256", "")
         expected = "sha256=" + hmac.new(APP_SECRET.encode(), raw_body, hashlib.sha256).hexdigest()
         if not hmac.compare_digest(sig_header, expected):
@@ -358,6 +365,13 @@ async def _handle_reply_threading(context_wamid: str, text: str, from_phone: str
     if ctx_type == "mention" and ctx_id:
         if not user_id:
             await _send_text(from_phone, "Your number isn't linked to a Kartavya account.")
+            return
+        # Verify channel membership before posting
+        is_member = await pool.fetchrow(
+            "SELECT 1 FROM channel_members WHERE channel_id=$1 AND user_id=$2", ctx_id, user_id
+        )
+        if not is_member:
+            await _send_text(from_phone, "You are not a member of that channel.")
             return
         msg_id = f"msg_{uuid.uuid4().hex[:12]}"
         try:

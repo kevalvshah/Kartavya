@@ -31,19 +31,17 @@ export function useMessages(channelId) {
     try {
       const r = await api.get(`/channels/${channelId}/messages`, { params: { limit: 20 } });
       const msgs = Array.isArray(r.data) ? r.data : [];
-      if (msgs.length) {
-        setMessages(prev => {
-          const existingIds = new Set(prev.map(m => m.message_id));
-          const newMsgs = msgs.filter(m => !existingIds.has(m.message_id));
-          if (!newMsgs.length) return prev;
-          // Also update edits/deletes
-          const updated = prev.map(m => {
-            const fresh = msgs.find(x => x.message_id === m.message_id);
-            return fresh || m;
-          });
-          return [...updated, ...newMsgs];
+      if (!msgs.length) return;
+      setMessages(prev => {
+        const existingIds = new Set(prev.map(m => m.message_id));
+        const newMsgs = msgs.filter(m => !existingIds.has(m.message_id));
+        // Always apply edits/deletes to existing messages
+        const updated = prev.map(m => {
+          const fresh = msgs.find(x => x.message_id === m.message_id);
+          return fresh || m;
         });
-      }
+        return newMsgs.length ? [...updated, ...newMsgs] : updated;
+      });
     } catch (_) {}
   }, [channelId]);
 

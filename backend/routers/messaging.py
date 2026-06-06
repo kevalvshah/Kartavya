@@ -167,6 +167,49 @@ async def create_channel(body: ChannelCreate, pool=Depends(get_pool), user=Depen
     return dict(row)
 
 
+@router.post("/channels/dm-by-email")
+async def create_dm_by_email(body: dict, pool=Depends(get_pool), user=Depends(require_user)):
+    """Start a DM with a user identified by email. Available to all authenticated users."""
+    email = (body.get("email") or "").strip().lower()
+    if not email:
+        raise HTTPException(400, "email required")
+    other = await pool.fetchrow(
+        "SELECT user_id FROM users WHERE LOWER(email)=$1", email
+    )
+    if not other:
+        raise HTTPException(404, "No user found with that email address")
+    other_id = other["user_id"]
+    if other_id == user["user_id"]:
+        raise HTTPException(400, "Cannot DM yourself")
+    # Find existing DM
+    existing = await pool.fetchrow("""
+        SELECT c.channel_id FROM channels c
+        JOIN channel_members a ON a.channel_id = c.channel_id AND a.user_id = $1
+        JOIN channel_members b ON b.channel_id = c.channel_id AND b.user_id = $2
+        WHERE c.type = 'dm' LIMIT 1
+    """, user["user_id"], other_id)
+    if existing:
+        return {"channel_id": existing["channel_id"], "existing": True}
+    # Create new DM anchored to any shared team
+    org_row = await pool.fetchrow(
+        "SELECT team_id FROM team_members WHERE user_id=$1 AND status='active' LIMIT 1",
+        user["user_id"]
+    )
+    if not org_row:
+        raise HTTPException(400, "You must belong to at least one project to start DMs")
+    channel_id = f"ch_{uuid.uuid4().hex[:12]}"
+    await pool.execute("""
+        INSERT INTO channels (channel_id, org_id, type, name, created_by)
+        VALUES ($1, $2, 'dm', NULL, $3)
+    """, channel_id, org_row["team_id"], user["user_id"])
+    for uid in [user["user_id"], other_id]:
+        await pool.execute(
+            "INSERT INTO channel_members (channel_id, user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING",
+            channel_id, uid
+        )
+    return {"channel_id": channel_id, "existing": False}
+
+
 @router.get("/channels/{channel_id}/messages")
 async def get_messages(
     channel_id: str,
@@ -241,9 +284,9 @@ async def get_replies(
         SELECT m.*, COALESCE(u.full_name, u.name, u.email) AS sender_name, u.avatar AS sender_avatar
         FROM messages m
         LEFT JOIN users u ON u.user_id = m.sender_id
-        WHERE m.parent_id = $1 AND m.deleted_at IS NULL
+        WHERE m.parent_id = $1 AND m.channel_id = $2 AND m.deleted_at IS NULL
         ORDER BY m.created_at ASC
-    """, message_id)
+    """, message_id, channel_id)
     result = []
     for r in rows:
         result.append(await _fmt_message(dict(r), [], 0))
@@ -379,6 +422,11 @@ async def toggle_reaction(
     pool=Depends(get_pool), user=Depends(require_user)
 ):
     """Toggle an emoji reaction on a message."""
+    # Verify caller is a member of the message's channel
+    msg_row = await pool.fetchrow("SELECT channel_id FROM messages WHERE message_id=$1", message_id)
+    if not msg_row:
+        raise HTTPException(404, "Message not found")
+    await _assert_channel_member(pool, msg_row["channel_id"], user["user_id"], user.get("role", ""))
     existing = await pool.fetchrow(
         "SELECT 1 FROM message_reactions WHERE message_id=$1 AND user_id=$2 AND emoji=$3",
         message_id, user["user_id"], body.emoji
@@ -511,7 +559,7 @@ async def _fetch_og(url: str) -> dict:
         return {}
     try:
         import httpx, re as _re
-        async with httpx.AsyncClient(timeout=5, follow_redirects=True,
+        async with httpx.AsyncClient(timeout=5, follow_redirects=False,
                                       headers={"User-Agent": "Kartavya/1.0 (link preview)"}) as client:
             r = await client.get(url)
             html = r.text[:40_000]  # read only first 40 KB
@@ -557,6 +605,7 @@ async def channel_members(
     pool=Depends(get_pool), user=Depends(require_user)
 ):
     """List members of a channel."""
+    await _assert_channel_member(pool, channel_id, user["user_id"], user.get("role", ""))
     rows = await pool.fetch("""
         SELECT u.user_id, COALESCE(u.full_name, u.name, u.email) AS name,
                u.avatar, u.member_role, cm.joined_at
