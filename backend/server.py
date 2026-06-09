@@ -103,11 +103,15 @@ DEFAULT_ORIGINS = [
 _extra = [o.strip() for o in os.environ.get("CORS_ORIGINS", "").split(",") if o.strip()]
 ALLOWED_ORIGINS = list(dict.fromkeys(DEFAULT_ORIGINS + _extra))
 
+# Scoped regex for Vercel PR preview deployments — locked to this project's Vercel tenant.
+# Pattern covers both per-commit previews (kartavya-abc123-...) and branch-alias previews
+# (kartavya-git-feat-branch-name-...). [a-z0-9-] allows hyphens in branch-derived slugs.
+_VERCEL_PREVIEW_RE = r"https://kartavya-[a-z0-9-]+-kevalvshah03-6145s-projects\.vercel\.app"
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
-    # No allow_origin_regex: a regex matching *.vercel.app is too broad because
-    # any Vercel user can register kartavya-*.vercel.app and make credentialed requests.
+    allow_origin_regex=_VERCEL_PREVIEW_RE,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
