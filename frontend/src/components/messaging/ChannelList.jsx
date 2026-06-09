@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { api } from '../../lib/api';
 import { useToast } from '../ui/toast';
 
@@ -15,9 +15,12 @@ function UnreadDot({ count }) {
 
 export default function ChannelList({ channels, activeId, onSelect, onReload }) {
   const { pushToast } = useToast();
-  const [newDmEmail, setNewDmEmail] = useState('');
-  const [showDmInput, setShowDmInput] = useState(false);
-  const [search, setSearch] = useState('');
+  const [showDmInput, setShowDmInput]       = useState(false);
+  const [dmQuery, setDmQuery]               = useState('');
+  const [dmSuggestions, setDmSuggestions]   = useState([]);
+  const [dmLoading, setDmLoading]           = useState(false);
+  const [search, setSearch]                 = useState('');
+  const searchTimer = useRef(null);
 
   const filtered = search.trim()
     ? channels.filter(c => {
@@ -29,20 +32,40 @@ export default function ChannelList({ channels, activeId, onSelect, onReload }) 
   const projectChannels = filtered.filter(c => c.type === 'project');
   const dmChannels      = filtered.filter(c => c.type === 'dm');
 
-  const startDm = async () => {
-    const email = newDmEmail.trim();
-    if (!email) return;
+  // Debounced name search
+  const handleDmQueryChange = useCallback((e) => {
+    const q = e.target.value;
+    setDmQuery(q);
+    clearTimeout(searchTimer.current);
+    if (!q.trim()) { setDmSuggestions([]); return; }
+    searchTimer.current = setTimeout(async () => {
+      setDmLoading(true);
+      try {
+        const r = await api.get('/channels/dm/search-users', { params: { q } });
+        setDmSuggestions(Array.isArray(r.data) ? r.data : []);
+      } catch { setDmSuggestions([]); }
+      finally { setDmLoading(false); }
+    }, 250);
+  }, []);
+
+  const startDmWithUser = async (u) => {
     try {
-      // Backend resolves the user by email server-side (no admin-only endpoint needed)
-      const r = await api.post('/channels/dm-by-email', { email });
-      setNewDmEmail(''); setShowDmInput(false);
+      const r = await api.post('/channels/dm-by-email', { email: u.email });
+      setDmQuery(''); setDmSuggestions([]); setShowDmInput(false);
       onReload?.();
       onSelect?.(r.data.channel_id);
     } catch (e) {
-      const msg = e?.response?.data?.detail || 'User not found or could not start DM';
-      pushToast({ type: 'error', title: msg });
+      pushToast({ type: 'error', title: e?.response?.data?.detail || 'Could not start DM' });
     }
   };
+
+  // Close suggestions when clicking outside
+  const dmRef = useRef(null);
+  useEffect(() => {
+    const handler = (e) => { if (dmRef.current && !dmRef.current.contains(e.target)) setDmSuggestions([]); };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
 
   const ChannelItem = ({ ch, icon }) => {
     const isActive = ch.channel_id === activeId;
@@ -107,24 +130,59 @@ export default function ChannelList({ channels, activeId, onSelect, onReload }) 
       <SectionHead
         label="Direct Messages" sans="संदेश"
         action={
-          <button onClick={() => setShowDmInput(v => !v)}
+          <button onClick={() => { setShowDmInput(v => !v); setDmQuery(''); setDmSuggestions([]); }}
             style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: 'var(--ink-3)', lineHeight: 1, padding: 0 }}>
             +
           </button>
         }
       />
       {showDmInput && (
-        <div style={{ padding: '4px 12px 8px', display: 'flex', gap: 6 }}>
+        <div ref={dmRef} style={{ padding: '4px 12px 8px', position: 'relative' }}>
           <input
             className="k-input"
-            value={newDmEmail}
-            onChange={e => setNewDmEmail(e.target.value)}
-            placeholder="Email address…"
-            style={{ flex: 1, fontSize: 12 }}
-            onKeyDown={e => e.key === 'Enter' && startDm()}
+            value={dmQuery}
+            onChange={handleDmQueryChange}
+            placeholder="Search by name…"
+            style={{ width: '100%', fontSize: 12, boxSizing: 'border-box' }}
             autoFocus
           />
-          <button className="k-btn k-btn--primary k-btn--sm" onClick={startDm}>Go</button>
+          {(dmSuggestions.length > 0 || dmLoading) && (
+            <div style={{
+              position: 'absolute', top: '100%', left: 12, right: 12, zIndex: 100,
+              background: 'var(--surface)', border: '1px solid var(--rule)',
+              borderRadius: 'var(--r-md)', boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
+              overflow: 'hidden',
+            }}>
+              {dmLoading && (
+                <div style={{ padding: '8px 12px', fontSize: 12, color: 'var(--ink-3)' }}>Searching…</div>
+              )}
+              {dmSuggestions.map(u => (
+                <button
+                  key={u.user_id}
+                  onClick={() => startDmWithUser(u)}
+                  style={{
+                    width: '100%', display: 'flex', alignItems: 'center', gap: 8,
+                    padding: '8px 12px', border: 'none', background: 'transparent',
+                    cursor: 'pointer', textAlign: 'left', fontSize: 13, color: 'var(--ink)',
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-soft)'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                >
+                  <span style={{ width: 28, height: 28, borderRadius: '50%', background: 'var(--k-primary)',
+                    color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 11, fontWeight: 700, flexShrink: 0 }}>
+                    {u.name.charAt(0).toUpperCase()}
+                  </span>
+                  <span style={{ fontWeight: 600 }}>{u.name}</span>
+                </button>
+              ))}
+              {!dmLoading && dmSuggestions.length === 0 && dmQuery.trim() && (
+                <div style={{ padding: '8px 12px', fontSize: 12, color: 'var(--ink-faint)', fontStyle: 'italic' }}>
+                  No teammates found
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
       {dmChannels.map(ch => <ChannelItem key={ch.channel_id} ch={ch} icon="💬" />)}

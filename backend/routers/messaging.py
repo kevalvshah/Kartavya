@@ -167,6 +167,24 @@ async def create_channel(body: ChannelCreate, pool=Depends(get_pool), user=Depen
     return dict(row)
 
 
+@router.get("/channels/dm/search-users")
+async def search_dm_users(q: str = "", pool=Depends(get_pool), user=Depends(require_user)):
+    """Search teammates by name for DM creation. Only returns users sharing a team with the caller."""
+    rows = await pool.fetch("""
+        SELECT DISTINCT u.user_id, u.name, u.full_name, u.email
+        FROM users u
+        JOIN team_members theirs ON theirs.user_id = u.user_id AND theirs.status = 'active'
+        JOIN team_members mine   ON mine.team_id   = theirs.team_id
+                                AND mine.user_id   = $1
+                                AND mine.status    = 'active'
+        WHERE u.user_id != $1
+          AND ($2 = '' OR LOWER(COALESCE(u.full_name, u.name)) LIKE $3)
+        ORDER BY COALESCE(u.full_name, u.name)
+        LIMIT 10
+    """, user["user_id"], q.strip(), f"%{q.strip().lower()}%")
+    return [{"user_id": r["user_id"], "name": r["full_name"] or r["name"], "email": r["email"]} for r in rows]
+
+
 @router.post("/channels/dm-by-email")
 async def create_dm_by_email(body: dict, pool=Depends(get_pool), user=Depends(require_user)):
     """Start a DM with a user identified by email. Available to all authenticated users."""
