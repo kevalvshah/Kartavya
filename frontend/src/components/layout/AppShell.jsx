@@ -85,8 +85,16 @@ export default function AppShell() {
   }, []);
 
   useEffect(() => {
+    // Stale-while-revalidate: show cached teams instantly, then refresh in background.
+    const cached = localStorage.getItem('kv_teams_cache');
+    if (cached) {
+      try { setTeams(JSON.parse(cached)); setTeamsLoaded(true); } catch (_) {}
+    }
     api.get('/teams')
-      .then(r => setTeams(r.data))
+      .then(r => {
+        setTeams(r.data);
+        try { localStorage.setItem('kv_teams_cache', JSON.stringify(r.data)); } catch (_) {}
+      })
       .catch(() => {})
       .finally(() => setTeamsLoaded(true));
   }, []);

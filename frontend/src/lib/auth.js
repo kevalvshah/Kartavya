@@ -33,6 +33,7 @@ export async function apiLogout() {
   try { await api.post('/auth/logout'); } catch (_) { /* fire-and-forget: logout always proceeds */ }
   sessionStorage.removeItem('auth_token');
   sessionStorage.removeItem('kartavya_user');
+  localStorage.removeItem('kv_teams_cache');
 }
 
 export function currentUser() {

@@ -1681,20 +1681,8 @@ async def verse_of_the_day():
     return await get_verse_of_the_day()
 
 
-@app.on_event("startup")
-async def startup():
-    """Run startup migrations and log configuration on application boot."""
-    dsn=os.environ.get("DATABASE_URL","NOT SET")
-    if "@" in dsn:
-        parts=dsn.split("@"); user_part=parts[0].split("://")[-1].split(":")[0]; host_part=parts[1]
-        logger.info("DATABASE_URL: postgresql://%s:***@%s", user_part, host_part)
-    else:
-        logger.info("DATABASE_URL: %s", dsn)
-    r2_bucket = os.environ.get("R2_BUCKET_NAME", "NOT SET")
-    logger.info("R2_BUCKET: %s | R2_PUBLIC_URL: %s", r2_bucket, os.environ.get('R2_PUBLIC_URL', '<presigned>'))
-    logger.info("CORS origins: %s", ALLOWED_ORIGINS)
-    logger.info("Kartavya API v2 ready — custom fields, automations, activity, time tracking, R2 uploads")
-    # Ensure tables that may be missing in production exist
+async def _run_startup_migrations():
+    """Run idempotent schema migrations in the background so the server is ready immediately."""
     try:
         pool = await get_pool()
         await pool.execute("""
@@ -1860,6 +1848,25 @@ async def startup():
         logger.info("Startup migrations OK")
     except Exception as e:
         logger.warning("Startup migration warning (non-fatal): %s", e)
+
+
+@app.on_event("startup")
+async def startup():
+    """Log configuration and kick off background migrations so the server is ready immediately."""
+    dsn=os.environ.get("DATABASE_URL","NOT SET")
+    if "@" in dsn:
+        parts=dsn.split("@"); user_part=parts[0].split("://")[-1].split(":")[0]; host_part=parts[1]
+        logger.info("DATABASE_URL: postgresql://%s:***@%s", user_part, host_part)
+    else:
+        logger.info("DATABASE_URL: %s", dsn)
+    r2_bucket = os.environ.get("R2_BUCKET_NAME", "NOT SET")
+    logger.info("R2_BUCKET: %s | R2_PUBLIC_URL: %s", r2_bucket, os.environ.get('R2_PUBLIC_URL', '<presigned>'))
+    logger.info("CORS origins: %s", ALLOWED_ORIGINS)
+    logger.info("Kartavya API v2 ready — custom fields, automations, activity, time tracking, R2 uploads")
+    # Run schema migrations in the background so gunicorn workers are ready immediately.
+    # The healthcheck hits /api/health which also warms the pool, so the background task
+    # completes well before real user traffic arrives.
+    asyncio.create_task(_run_startup_migrations())
 
 @app.on_event("shutdown")
 async def shutdown():

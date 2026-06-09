@@ -28,4 +28,20 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+// Retry on network errors / 502-504 (Railway restart window) — up to 3 attempts
+api.interceptors.response.use(undefined, async (error) => {
+  const config = error.config;
+  if (!config) return Promise.reject(error);
+  config._retryCount = config._retryCount ?? 0;
+  const isRetryable =
+    !error.response ||                          // network error
+    [502, 503, 504].includes(error.response?.status);
+  if (isRetryable && config._retryCount < 3) {
+    config._retryCount += 1;
+    await new Promise(r => setTimeout(r, config._retryCount * 800));
+    return api(config);
+  }
+  return Promise.reject(error);
+});
+
 export { BACKEND_URL, API };
