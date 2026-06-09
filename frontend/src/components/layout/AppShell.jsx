@@ -62,8 +62,9 @@ function fireBrowserNotif(title, body) {
 export default function AppShell() {
   const [notifOpen,    setNotifOpen]    = useState(false);
   const [newTaskOpen,  setNewTaskOpen]  = useState(false);
-  const [unread,       setUnread]       = useState(0);
-  const [sidebarOpen,  setSidebarOpen]  = useState(false);
+  const [unread,         setUnread]         = useState(0);
+  const [msgUnread,      setMsgUnread]      = useState(0);
+  const [sidebarOpen,    setSidebarOpen]    = useState(false);
   const [teams,        setTeams]        = useState([]);
   const [teamsLoaded,  setTeamsLoaded]  = useState(false);
   const [notifPrompt,  setNotifPrompt]  = useState(false);
@@ -133,6 +134,20 @@ export default function AppShell() {
     return () => { live = false; clearInterval(id); };
   }, []);
 
+  // Poll message unread count every 30s
+  useEffect(() => {
+    let live = true;
+    const tick = async () => {
+      try {
+        const r = await api.get('/messages/unread-count');
+        if (live) setMsgUnread(r.data.count ?? 0);
+      } catch (_) {}
+    };
+    tick();
+    const id = setInterval(tick, 30_000);
+    return () => { live = false; clearInterval(id); };
+  }, []);
+
   useEffect(() => { setSidebarOpen(false); }, [location.pathname]);
 
   // FIX #3: null until loaded — child pages guard on null to avoid empty requests.
@@ -143,14 +158,14 @@ export default function AppShell() {
     <div data-testid="app-shell" className="k-app">
       {/* Sidebar — hidden on mobile via CSS */}
       <div className="k-app__sidebar">
-        <Sidebar inboxCount={unread} />
+        <Sidebar inboxCount={unread} messagesCount={msgUnread} />
       </div>
 
       {/* Mobile overlay drawer */}
       {sidebarOpen && (
         <div className="k-app__mob-overlay" onClick={() => setSidebarOpen(false)}>
           <div className="k-app__mob-drawer" onClick={e => e.stopPropagation()}>
-            <Sidebar inboxCount={unread} />
+            <Sidebar inboxCount={unread} messagesCount={msgUnread} />
           </div>
         </div>
       )}

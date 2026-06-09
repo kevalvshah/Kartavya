@@ -2,12 +2,18 @@
  * TemplatesPage.jsx — editorial Templates screen.
  * Layout: tabs (Project / Task) → template card grid → Save as template form
  */
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { api } from '../lib/api';
 import { useToast } from '../components/ui/toast';
 import { useNavigate } from 'react-router-dom';
 import { PageHeader } from '../components/editorial';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
+
+const ICONS = ['📋','✅','🎨','📹','📸','📊','💡','🔖','⚡','🚀','📝','🎯','🔧','📦','🌐'];
+const EMPTY_TASK_TMPL = {
+  name: '', icon: '📋', is_default: false, team_id: '',
+  config: { title: '', description: '', priority: 'medium', subtasks: [], attachments: [], tags: [], custom_fields: {} }
+};
 
 const KICKER_COLORS = ['#0082c6','#05b7aa','#8b5cf6','#ec4899','#f59e0b','#10b981','#6366f1'];
 const KICKER_SANS   = ['राज्यस्व', 'स्वागत', 'विपणन', 'कार्यालय', 'विधि', 'सेवा', 'परियोजना'];
@@ -38,7 +44,13 @@ export default function TemplatesPage() {
   const [applying,       setApplying]       = useState(false);
   const [confirmState,   setConfirmState]   = useState(null);
 
-  const [showSaveForm, setShowSaveForm] = useState(false);
+  const [showSaveForm,     setShowSaveForm]     = useState(false);
+  const [taskTmplForm,     setTaskTmplForm]     = useState(EMPTY_TASK_TMPL);
+  const [showTaskForm,     setShowTaskForm]     = useState(false);
+  const [editingTmplId,    setEditingTmplId]    = useState(null);
+  const [savingTask,       setSavingTask]       = useState(false);
+  const [newSubtask,       setNewSubtask]       = useState('');
+  const [showIconPicker,   setShowIconPicker]   = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -204,25 +216,49 @@ export default function TemplatesPage() {
                       </>
                     ) : (
                       <>
-                        <span style={{ fontSize: 12, color: 'var(--ink-3)' }}>
-                          {cfg?.priority || 'medium'}{' priority'}
+                        <span style={{ fontSize: 11, color: 'var(--ink-3)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span style={{ fontWeight: 600 }}>{t.icon || '📋'}</span>
+                          {cfg?.priority || 'medium'} priority
+                          {(cfg?.subtasks || []).length > 0 && <span>· {cfg.subtasks.length} subtasks</span>}
+                          {t.is_default && (
+                            <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--k-primary)', background: 'color-mix(in srgb, var(--k-primary) 12%, transparent)', padding: '1px 5px', borderRadius: 99 }}>DEFAULT</span>
+                          )}
                         </span>
-                        <button
-                          className="k-iconbtn"
-                          style={{ marginLeft: 'auto', color: 'var(--ink-faint)' }}
-                          title="Delete task template"
-                          aria-label="Delete task template"
+                        <button className="k-btn k-btn--ghost k-btn--sm"
+                          onClick={() => {
+                            setEditingTmplId(t.template_id);
+                            setTaskTmplForm({
+                              name: t.name, icon: t.icon || '📋',
+                              is_default: t.is_default || false,
+                              team_id: t.team_id || '',
+                              config: typeof t.config === 'string' ? JSON.parse(t.config) : (t.config || {}),
+                            });
+                            setShowTaskForm(true);
+                          }}>
+                          Edit
+                        </button>
+                        {!t.is_default && (
+                          <button className="k-btn k-btn--ghost k-btn--sm"
+                            onClick={async () => {
+                              try {
+                                await api.post(`/templates/tasks/${t.template_id}/set-default`);
+                                load(); pushToast({ type: 'success', title: 'Set as default' });
+                              } catch { pushToast({ type: 'error', title: 'Could not set default' }); }
+                            }}>
+                            Set default
+                          </button>
+                        )}
+                        <button className="k-iconbtn" style={{ marginLeft: 'auto', color: 'var(--ink-faint)' }}
                           onClick={() => setConfirmState({
-                            message: `Delete template "${t.name}"?`,
-                            confirmLabel: 'Delete',
+                            message: `Delete template "${t.name}"?`, confirmLabel: 'Delete',
                             onConfirm: async () => {
-                              try { await api.delete(`/templates/tasks/${t.template_id}`); load(); } catch (_) {}
+                              try {
+                                await api.delete(`/templates/tasks/${t.template_id}`);
+                                load();
+                              } catch { pushToast({ type: 'error', title: 'Could not delete template' }); }
                             },
-                          })}
-                        >
-                          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4">
-                            <path d="M3 4h10M5 4V3h6v1M6 7v5M10 7v5M4 4l1 9h6l1-9"/>
-                          </svg>
+                          })}>
+                          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4"><path d="M3 4h10M5 4V3h6v1M6 7v5M10 7v5M4 4l1 9h6l1-9"/></svg>
                         </button>
                       </>
                     )}
@@ -278,11 +314,187 @@ export default function TemplatesPage() {
             </section>
           )}
 
-          {currentTemplates.length === 0 && tab !== 'project' && (
+          {/* New task template card */}
+          {tab === 'task' && !showTaskForm && (
+            <button className="k-tmpl-card k-tmpl-card--new" onClick={() => { setEditingTmplId(null); setTaskTmplForm(EMPTY_TASK_TMPL); setShowTaskForm(true); }}>
+              <div className="k-tmpl-card__plus">+</div>
+              <div className="k-tmpl-card__new-title">New task template</div>
+              <div className="k-tmpl-card__new-sub">Pre-fill title, description, subtasks, priority, and attachments.</div>
+            </button>
+          )}
+
+          {/* Task template form */}
+          {tab === 'task' && showTaskForm && (() => {
+            const cfg = taskTmplForm.config || {};
+            const setcfg = (key, val) => setTaskTmplForm(f => ({ ...f, config: { ...f.config, [key]: val } }));
+
+            const saveTaskTemplate = async () => {
+              if (!taskTmplForm.name.trim()) { pushToast({ type: 'error', title: 'Template name required' }); return; }
+              setSavingTask(true);
+              try {
+                if (editingTmplId) {
+                  await api.patch(`/templates/tasks/${editingTmplId}`, taskTmplForm);
+                } else {
+                  await api.post('/templates/tasks', taskTmplForm);
+                }
+                pushToast({ type: 'success', title: editingTmplId ? 'Template updated' : 'Template created' });
+                setShowTaskForm(false); setEditingTmplId(null); load();
+              } catch (_) { pushToast({ type: 'error', title: 'Could not save template' }); }
+              finally { setSavingTask(false); }
+            };
+
+            return (
+              <section className="k-card">
+                <div className="k-card__head">
+                  <div className="k-card__titles">
+                    <h3 className="k-card__title">{editingTmplId ? 'Edit template' : 'New task template'}</h3>
+                    <span className="k-card__sans">साँचा</span>
+                  </div>
+                </div>
+                <div className="k-card__body" style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+
+                  {/* Name + Icon */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr 1fr', gap: 12, alignItems: 'end' }}>
+                    <div>
+                      <label className="k-label">Icon</label>
+                      <div style={{ position: 'relative' }}>
+                        <button onClick={() => setShowIconPicker(v => !v)}
+                          style={{ width: 42, height: 42, fontSize: 22, borderRadius: 'var(--r-md)', border: '1px solid var(--rule)', background: 'var(--bg-soft)', cursor: 'pointer' }}>
+                          {taskTmplForm.icon}
+                        </button>
+                        {showIconPicker && (
+                          <div style={{ position: 'absolute', top: 48, left: 0, zIndex: 50, background: 'var(--surface)', border: '1px solid var(--rule)', borderRadius: 'var(--r-md)', padding: 10, display: 'flex', flexWrap: 'wrap', gap: 6, width: 220 }}>
+                            {ICONS.map(ic => (
+                              <button key={ic} onClick={() => { setTaskTmplForm(f => ({ ...f, icon: ic })); setShowIconPicker(false); }}
+                                style={{ fontSize: 20, background: 'none', border: 'none', cursor: 'pointer', borderRadius: 6, padding: '2px 4px' }}>
+                                {ic}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <div>
+                      <label className="k-label">Template name *</label>
+                      <input className="k-input" value={taskTmplForm.name}
+                        onChange={e => setTaskTmplForm(f => ({ ...f, name: e.target.value }))}
+                        placeholder="e.g. Instagram Post, Brand Video…" autoFocus />
+                    </div>
+                    <div>
+                      <label className="k-label">Project (scope)</label>
+                      <select className="k-input" style={{ width: '100%' }} value={taskTmplForm.team_id}
+                        onChange={e => setTaskTmplForm(f => ({ ...f, team_id: e.target.value }))}>
+                        <option value="">All projects (global)</option>
+                        {projects.map(p => <option key={p.team_id} value={p.team_id}>{p.name}</option>)}
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Pre-filled title */}
+                  <div>
+                    <label className="k-label">Pre-filled title</label>
+                    <input className="k-input" value={cfg.title || ''}
+                      onChange={e => setcfg('title', e.target.value)}
+                      placeholder="e.g. Instagram Post — {client name}" />
+                    <div style={{ fontSize: 11, color: 'var(--ink-faint)', marginTop: 4 }}>Use {'{'}placeholders{'}'} — team members fill them in when creating the task.</div>
+                  </div>
+
+                  {/* Description */}
+                  <div>
+                    <label className="k-label">Description / Brand guidelines</label>
+                    <textarea className="k-input" rows={4} value={cfg.description || ''}
+                      onChange={e => setcfg('description', e.target.value)}
+                      style={{ width: '100%', resize: 'vertical', minHeight: 100 }}
+                      placeholder="Include brand guidelines, tone of voice, size specs, platform rules…" />
+                  </div>
+
+                  {/* Priority + Default */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                    <div>
+                      <label className="k-label">Default priority</label>
+                      <select className="k-input" style={{ width: '100%' }} value={cfg.priority || 'medium'}
+                        onChange={e => setcfg('priority', e.target.value)}>
+                        <option value="low">Low</option>
+                        <option value="medium">Medium</option>
+                        <option value="high">High</option>
+                        <option value="urgent">Urgent</option>
+                      </select>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'flex-end', paddingBottom: 2 }}>
+                      <label onClick={() => setTaskTmplForm(f => ({ ...f, is_default: !f.is_default }))} style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', userSelect: 'none', fontSize: 13, color: 'var(--ink-2)' }}>
+                        <div
+                          style={{ width: 38, height: 20, borderRadius: 10, background: taskTmplForm.is_default ? 'var(--k-primary)' : 'var(--rule-soft)', position: 'relative', transition: 'background .2s', flexShrink: 0, cursor: 'pointer' }}>
+                          <div style={{ position: 'absolute', top: 2, left: taskTmplForm.is_default ? 20 : 2, width: 16, height: 16, borderRadius: '50%', background: '#fff', transition: 'left .2s', boxShadow: '0 1px 3px rgba(0,0,0,.2)' }} />
+                        </div>
+                        Set as default for this project
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* Subtasks */}
+                  <div>
+                    <label className="k-label">Subtasks · उप-कार्य</label>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 8 }}>
+                      {(cfg.subtasks || []).map((s, i) => (
+                        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', background: 'var(--bg-soft)', borderRadius: 'var(--r-md)', border: '1px solid var(--rule-soft)' }}>
+                          <span style={{ fontSize: 13, flex: 1, color: 'var(--ink)' }}>{s.title}</span>
+                          <button onClick={() => setcfg('subtasks', cfg.subtasks.filter((_, j) => j !== i))}
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-faint)', fontSize: 16 }}>×</button>
+                        </div>
+                      ))}
+                    </div>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <input className="k-input" value={newSubtask} onChange={e => setNewSubtask(e.target.value)}
+                        placeholder="Add subtask…"
+                        onKeyDown={e => {
+                          if (e.key === 'Enter' && newSubtask.trim()) {
+                            setcfg('subtasks', [...(cfg.subtasks || []), { title: newSubtask.trim(), is_done: false }]);
+                            setNewSubtask('');
+                          }
+                        }} />
+                      <button className="k-btn k-btn--ghost k-btn--sm"
+                        onClick={() => {
+                          if (!newSubtask.trim()) return;
+                          setcfg('subtasks', [...(cfg.subtasks || []), { title: newSubtask.trim(), is_done: false }]);
+                          setNewSubtask('');
+                        }}>
+                        + Add
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Attached files */}
+                  <div>
+                    <label className="k-label">Pre-attached files · संलग्न</label>
+                    <div style={{ fontSize: 12, color: 'var(--ink-faint)', marginBottom: 8 }}>
+                      Paste public file URLs (Google Drive, Figma, brand kit) — they auto-attach when this template is used.
+                    </div>
+                    {(cfg.attachments || []).map((a, i) => (
+                      <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, padding: '6px 10px', background: 'var(--bg-soft)', borderRadius: 'var(--r-md)', border: '1px solid var(--rule-soft)' }}>
+                        <span style={{ fontSize: 12, flex: 1, color: 'var(--k-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.name}</span>
+                        <button onClick={() => setcfg('attachments', cfg.attachments.filter((_, j) => j !== i))}
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-faint)', fontSize: 16 }}>×</button>
+                      </div>
+                    ))}
+                    <AttachFileRow onAdd={(item) => setcfg('attachments', [...(cfg.attachments || []), item])} />
+                  </div>
+
+                  <div style={{ display: 'flex', gap: 10, paddingTop: 4, borderTop: '1px solid var(--rule-soft)' }}>
+                    <button className="k-btn k-btn--primary" onClick={saveTaskTemplate} disabled={savingTask}>
+                      {savingTask ? 'Saving…' : (editingTmplId ? 'Save changes' : 'Create template')}
+                    </button>
+                    <button className="k-btn k-btn--ghost" onClick={() => { setShowTaskForm(false); setEditingTmplId(null); }}>Cancel</button>
+                  </div>
+                </div>
+              </section>
+            );
+          })()}
+
+          {taskTemplates.length === 0 && tab === 'task' && !showTaskForm && (
             <div className="k-empty">
               <div className="k-empty__icon">📋</div>
               <div className="k-empty__title">No task templates yet</div>
-              <div className="k-empty__sub">Create task templates from the API or TaskEditor.</div>
+              <div className="k-empty__sub">Create reusable templates for Instagram posts, brand videos, client briefs, and more.</div>
             </div>
           )}
         </>
@@ -363,6 +575,28 @@ export default function TemplatesPage() {
         </div>
       )}
       <ConfirmDialog state={confirmState} onClose={() => setConfirmState(null)} />
+    </div>
+  );
+}
+
+function AttachFileRow({ onAdd }) {
+  const [name, setName] = useState('');
+  const [url,  setUrl]  = useState('');
+  const add = () => {
+    if (!name.trim() || !url.trim()) return;
+    onAdd({ name: name.trim(), url: url.trim(), key: null });
+    setName(''); setUrl('');
+  };
+  return (
+    <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+      <div style={{ flex: 1 }}>
+        <input className="k-input" value={name} onChange={e => setName(e.target.value)}
+          placeholder="File name (e.g. Brand Kit.pdf)" style={{ marginBottom: 6 }} />
+        <input className="k-input" value={url} onChange={e => setUrl(e.target.value)}
+          placeholder="URL (Google Drive, Figma, etc.)"
+          onKeyDown={e => e.key === 'Enter' && add()} />
+      </div>
+      <button className="k-btn k-btn--ghost k-btn--sm" onClick={add} style={{ marginBottom: 0 }}>+ Attach</button>
     </div>
   );
 }

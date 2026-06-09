@@ -45,6 +45,10 @@ from routers.templates   import router as templates_router
 from routers.time_entries import router as time_router
 from routers.uploads     import router as uploads_router   # R2-backed upload
 from routers.reports     import router as reports_router
+from routers.messaging          import router as messaging_router
+from routers.whatsapp_settings   import router as whatsapp_router
+from routers.whatsapp_webhook    import router as whatsapp_webhook_router
+from routers.whatsapp_templates  import router as whatsapp_templates_router
 from services.gita            import get_verse_of_the_day
 from services.web_push_service import (
     is_configured as wp_is_configured,
@@ -103,11 +107,15 @@ DEFAULT_ORIGINS = [
 _extra = [o.strip() for o in os.environ.get("CORS_ORIGINS", "").split(",") if o.strip()]
 ALLOWED_ORIGINS = list(dict.fromkeys(DEFAULT_ORIGINS + _extra))
 
+# Allow any Vercel preview URL for THIS project only.
+# Pattern is scoped to kevalvshah03-6145s-projects.vercel.app so no other
+# Vercel tenant can craft a matching origin.
+_VERCEL_PREVIEW_RE = r"https://kartavya-[a-z0-9]+-kevalvshah03-6145s-projects\.vercel\.app"
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
-    # No allow_origin_regex: a regex matching *.vercel.app is too broad because
-    # any Vercel user can register kartavya-*.vercel.app and make credentialed requests.
+    allow_origin_regex=_VERCEL_PREVIEW_RE,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -719,12 +727,26 @@ async def _reject_task_approval(pool, task: dict, task_id: str, notes: str, user
         " approval_decided_at=NOW(), updated_at=NOW() WHERE task_id=$3",
         user["user_id"], notes, task_id,
     )
+    reviewer_name = user.get("full_name") or user.get("name") or user.get("email", "")
     if task["created_by_user_id"] and task["created_by_user_id"] != user["user_id"]:
         await create_notification(
             pool, task["created_by_user_id"], "rejected",
             f"Task rejected: {task['title']}", notes or "",
             task_id, task["team_id"], "/tasks",
         )
+        try:
+            from email_service import send_approval_decision_email
+            requester = await pool.fetchrow(
+                "SELECT email, COALESCE(full_name,name,email) AS name FROM users WHERE user_id=$1",
+                task["created_by_user_id"]
+            )
+            if requester:
+                send_approval_decision_email(
+                    requester["email"], requester["name"],
+                    reviewer_name, task["title"], task_id, "rejected", notes or ""
+                )
+        except Exception as _e:
+            logger.warning("reject decision email failed: %s", _e)
     return {"ok": True, "status": "rejected"}
 
 
@@ -785,12 +807,39 @@ async def _approve_task_mark_done(
         " completed_at=NOW(), completed_by_user_id=$1, updated_at=NOW() WHERE task_id=$4",
         user["user_id"], notes, new_col_id, task_id,
     )
+    approver_name = user.get("full_name") or user.get("name") or user.get("email", "")
+    # Notify task creator
     if task["created_by_user_id"] and task["created_by_user_id"] != user["user_id"]:
         await create_notification(
             pool, task["created_by_user_id"], "approved",
             f"Task approved: {task['title']}", notes or "",
             task_id, task["team_id"], "/tasks",
         )
+        try:
+            from email_service import send_approval_decision_email
+            requester = await pool.fetchrow(
+                "SELECT email, COALESCE(full_name,name,email) AS name FROM users WHERE user_id=$1",
+                task["created_by_user_id"]
+            )
+            if requester:
+                send_approval_decision_email(
+                    requester["email"], requester["name"],
+                    approver_name, task["title"], task_id, "approved", notes or ""
+                )
+        except Exception as _e:
+            logger.warning("approve decision email failed: %s", _e)
+    # Fan-out team sync email to all project members
+    try:
+        members = await pool.fetch("""
+            SELECT DISTINCT u.email, COALESCE(u.full_name, u.name, u.email) AS name
+            FROM project_assignments pa JOIN users u ON u.user_id=pa.user_id
+            WHERE pa.team_id=$1 AND pa.user_id != $2 AND pa.user_id != $3
+        """, task["team_id"], user["user_id"], task.get("created_by_user_id") or "")
+        from email_service import send_team_sync_email
+        for m in members:
+            send_team_sync_email(m["email"], m["name"], approver_name, task["title"], task_id)
+    except Exception as _e:
+        logger.warning("team sync fan-out failed: %s", _e)
     return {"ok": True, "status": "approved", "new_column_id": new_col_id}
 
 
@@ -1076,6 +1125,20 @@ async def create_team(payload:TeamCreate,pool=Depends(get_db),user=Depends(requi
     await pool.execute("INSERT INTO team_members (member_id,team_id,email,user_id,role,status) VALUES ($1,$2,$3,$4,'owner','active')",f"mem_{uuid.uuid4().hex[:12]}",team_id,user["email"],user["user_id"])
     await pool.execute("INSERT INTO project_assignments (assignment_id,team_id,user_id,role,assigned_by) VALUES ($1,$2,$3,'owner',$4)",f"assign_{uuid.uuid4().hex[:12]}",team_id,user["user_id"],user["user_id"])
     await ensure_default_columns(pool,team_id)
+    # Auto-create a project channel for this team
+    try:
+        ch_id = f"ch_{uuid.uuid4().hex[:12]}"
+        await pool.execute("""
+            INSERT INTO channels (channel_id, org_id, type, project_id, name, created_by)
+            VALUES ($1, $2, 'project', $2, $3, $4)
+            ON CONFLICT DO NOTHING
+        """, ch_id, team_id, payload.name, user["user_id"])
+        await pool.execute(
+            "INSERT INTO channel_members (channel_id, user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING",
+            ch_id, user["user_id"]
+        )
+    except Exception:
+        pass
     return TeamOut(**dict(row))
 
 @api_router.get("/users")
@@ -1319,6 +1382,12 @@ async def create_task(payload:TaskCreate,pool=Depends(get_db),user=Depends(requi
             if assignee: send_task_assignment_email(assignee["email"],assignee["name"] or assignee["email"],payload.title,task_id,team_name)
         except Exception as e:
             logger.warning("assignment email failed: %s", e)
+        try:
+            from services.whatsapp_service import send_task_assigned
+            due_str = str(due_dt.date()) if due_dt else ""
+            _bg(send_task_assigned(pool, uid, task_id, payload.title, actor_name, due_str), label="wa_task_assigned")
+        except Exception as e:
+            logger.warning("wa assignment failed: %s", e)
     from services.activity_logger import log_event
     await log_event(pool,task_id=task_id,team_id=payload.team_id,actor_id=user["user_id"],event_type="created",data={"title":payload.title})
     from services.automation_engine import fire_automations
@@ -1672,6 +1741,10 @@ app.include_router(templates_router)
 app.include_router(time_router)
 app.include_router(uploads_router)   # R2-backed file upload (replaces old base64 /api/upload)
 app.include_router(reports_router)
+app.include_router(messaging_router)
+app.include_router(whatsapp_router)
+app.include_router(whatsapp_templates_router)
+app.include_router(whatsapp_webhook_router)  # public — no auth, HMAC verified internally
 
 
 # ── Verse of the day (public) ────────────────────────────────────────────────

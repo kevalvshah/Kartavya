@@ -26,23 +26,27 @@ import { useAuth } from '../hooks/useAuth';
 import { useNotifications } from '../context/NotificationContext';
 import { Splash } from '../App';
 import NewTaskSheet from '../components/NewTaskSheet';
+import MessagesScreen    from '../screens/MessagesScreen';
+import MessageThreadScreen from '../screens/MessageThreadScreen';
 
 // ── Param lists ───────────────────────────────────────────────────────────────
 export type RootStackParamList = {
-  Main:         undefined;
-  TaskDetail:   { taskId: string };
-  Board:        { projectId?: string; projectName?: string } | undefined;
-  Settings:     undefined;
-  Login:        undefined;
-  Client:       undefined;
+  Main:          undefined;
+  TaskDetail:    { taskId: string };
+  Board:         { projectId?: string; projectName?: string } | undefined;
+  Settings:      undefined;
+  Login:         undefined;
+  Client:        undefined;
+  MessageThread: { channelId: string; channelName?: string; channelType?: string };
 };
 
 export type MainTabParamList = {
-  Today:  undefined;
-  Boards: undefined;
-  Add:    undefined;   // centre pill — no screen, triggers sheet
-  Inbox:  undefined;
-  Me:     undefined;
+  Today:    undefined;
+  Boards:   undefined;
+  Add:      undefined;   // centre pill — no screen, triggers sheet
+  Messages: undefined;
+  Inbox:    undefined;
+  Me:       undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -107,18 +111,19 @@ function MainTabs() {
         tabBarIcon: ({ focused, color }) => {
           if (route.name === 'Add') return null; // custom button handles this
           const map: Record<string, [string, string]> = {
-            Today:  ['today',               'today-outline'],
-            Boards: ['grid',                'grid-outline'],
-            Inbox:  ['notifications',       'notifications-outline'],
-            Me:     ['person-circle',       'person-circle-outline'],
+            Today:    ['today',               'today-outline'],
+            Boards:   ['grid',                'grid-outline'],
+            Messages: ['chatbubbles',         'chatbubbles-outline'],
+            Inbox:    ['notifications',       'notifications-outline'],
+            Me:       ['person-circle',       'person-circle-outline'],
           };
           const [active, inactive] = map[route.name] || ['circle', 'circle-outline'];
           return <Ionicons name={(focused ? active : inactive) as any} size={22} color={color} />;
         },
       })}
     >
-      <Tab.Screen name="Today"  component={TodayScreen}  options={{ title: 'Today' }} />
-      <Tab.Screen name="Boards" component={BoardScreen} options={{ title: 'Boards' }} />
+      <Tab.Screen name="Today"    component={TodayScreen}    options={{ title: 'Today' }} />
+      <Tab.Screen name="Boards"   component={BoardScreen}    options={{ title: 'Boards' }} />
       <Tab.Screen
         name="Add"
         component={TodayScreen}   // never actually rendered
@@ -129,8 +134,9 @@ function MainTabs() {
           ),
         }}
       />
-      <Tab.Screen name="Inbox" component={InboxScreen} options={{ title: 'Inbox', tabBarBadge: unread > 0 ? (unread > 99 ? '99+' : unread) : undefined }} />
-      <Tab.Screen name="Me"    component={MeScreen}    options={{ title: 'Me' }} />
+      <Tab.Screen name="Messages" component={MessagesScreen} options={{ title: 'Messages' }} />
+      <Tab.Screen name="Inbox"    component={InboxScreen}    options={{ title: 'Inbox', tabBarBadge: unread > 0 ? (unread > 99 ? '99+' : unread) : undefined }} />
+      <Tab.Screen name="Me"       component={MeScreen}       options={{ title: 'Me' }} />
     </Tab.Navigator>
     <NewTaskSheet visible={showNewTask} onClose={() => setShowNewTask(false)} />
     </>
@@ -167,11 +173,13 @@ export default function RootStack() {
           <Stack.Screen name="Client">{() => <ClientPortalScreen onLogout={logout} />}</Stack.Screen>
         ) : (
           <>
-            <Stack.Screen name="Main"       component={MainTabs} />
-            <Stack.Screen name="TaskDetail" component={TaskDetailScreen}
+            <Stack.Screen name="Main"          component={MainTabs} />
+            <Stack.Screen name="TaskDetail"    component={TaskDetailScreen}
               options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
-            <Stack.Screen name="Board"     component={BoardScreen} />
-            <Stack.Screen name="Settings"  component={SettingsScreen} />
+            <Stack.Screen name="Board"         component={BoardScreen} />
+            <Stack.Screen name="Settings"      component={SettingsScreen} />
+            <Stack.Screen name="MessageThread" component={MessageThreadScreen}
+              options={{ headerShown: false }} />
           </>
         )}
       </Stack.Navigator>

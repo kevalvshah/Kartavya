@@ -52,6 +52,8 @@ const ClientProjectsPage    = lazy(() => import('./pages/ClientProjectsPage'));
 const ClientBoardPage       = lazy(() => import('./pages/ClientBoardPage'));
 const ClientPortal          = lazy(() => import('./pages/ClientPortal'));
 const InboxPage             = lazy(() => import('./pages/InboxPage'));
+const MessagesPage              = lazy(() => import('./pages/MessagesPage'));
+const WhatsAppTemplatesPage     = lazy(() => import('./pages/WhatsAppTemplatesPage'));
 
 // ── Outlet context wrappers ────────────────────────────────────────────────────
 // Pages that need teamId or teams from AppShell's outlet context.
@@ -94,8 +96,11 @@ function AppRouter() {
           <Route path="tasks"                  element={<TasksListPage />} />
           <Route path="teams"                  element={<TeamsPage />} />
           <Route path="inbox"                  element={<InboxPage />} />
+          <Route path="messages"               element={<MessagesPage />} />
+          <Route path="messages/:channelId"    element={<MessagesPage />} />
           <Route path="approvals"              element={<ApprovalsPage />} />
           <Route path="templates"              element={<TemplatesPage />} />
+          <Route path="whatsapp-templates"     element={<WhatsAppTemplatesPage />} />
 
           {/* Context-dependent */}
           <Route path="activity"               element={<ActivityWithContext />} />

@@ -2,9 +2,9 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "kartavya-frontend",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": ["start", "--prefix", "frontend"],
+      "name": "frontend",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": ["/c", "cd frontend && node_modules\\.bin\\vite.cmd --port 3000 --host 0.0.0.0"],
       "port": 3000
     }
   ]

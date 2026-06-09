@@ -110,14 +110,36 @@ async def send_approval_notification(pool, task_id: str, task_title: str,
     if user:
         await _notify(pool, task_id, task_title, recipient_id, notification_type, notes, team_id=team_id)
         try:
-            from email_service import send_approval_notification_email
-            send_approval_notification_email(
-                user["email"], user["name"] or user["email"],
-                task_title, notification_type, notes,
-                task_id=task_id,  # ← deep-link fix
-            )
+            from email_service import send_approval_request_email, send_approval_decision_email
+            if notification_type == "request":
+                send_approval_request_email(
+                    user["email"], user["name"] or user["email"],
+                    "Your team",           # requester placeholder — caller should use send_approval_request_email directly for full context
+                    task_title, notes=notes,
+                )
+            elif notification_type in ("approved", "rejected"):
+                send_approval_decision_email(
+                    user["email"], user["name"] or user["email"],
+                    "The reviewer", task_title, task_id or "", notification_type, notes
+                )
         except Exception as exc:
             import logging; logging.getLogger(__name__).warning("approval email failed: %s", exc)
+
+        # WhatsApp notification
+        try:
+            from services.whatsapp_service import send_approval_request, send_approval_decision
+            if notification_type == "request":
+                asyncio.ensure_future(send_approval_request(
+                    pool, recipient_id, task_id, task_title,
+                    requester_name="Team member", notes=notes or ""
+                ))
+            elif notification_type in ("approved", "rejected"):
+                asyncio.ensure_future(send_approval_decision(
+                    pool, recipient_id, task_id, task_title,
+                    reviewer_name="Reviewer", decision=notification_type, reason=notes or ""
+                ))
+        except Exception as exc:
+            import logging; logging.getLogger(__name__).warning("wa approval notif failed: %s", exc)
 
         try:
             from services.push_service import send_push
@@ -155,12 +177,23 @@ async def request_approval(task_id: str, payload: ApprovalRequest,
     if not task["team_id"]:
         raise HTTPException(400, "Cannot request approval for personal tasks")
 
-    owner = await pool.fetchrow("""
-        SELECT user_id FROM team_members
-        WHERE team_id=$1 AND role='owner' AND status='active' LIMIT 1
-    """, task["team_id"])
-    if not owner:
-        raise HTTPException(400, "No project owner found")
+    # Notify all owners + admins on this project
+    owners = await pool.fetch("""
+        SELECT DISTINCT u.user_id, u.email, COALESCE(u.full_name, u.name, u.email) AS name
+        FROM team_members tm
+        JOIN users u ON u.user_id = tm.user_id
+        WHERE tm.team_id=$1 AND tm.role IN ('owner','admin') AND tm.status='active'
+          AND tm.user_id != $2
+        UNION
+        SELECT DISTINCT u.user_id, u.email, COALESCE(u.full_name, u.name, u.email) AS name
+        FROM project_assignments pa
+        JOIN users u ON u.user_id = pa.user_id
+        WHERE pa.team_id=$1 AND pa.role IN ('owner','admin') AND pa.user_id != $2
+    """, task["team_id"], user["user_id"])
+    if not owners:
+        raise HTTPException(400, "No project owner or admin found")
+
+    requester_name = user.get("full_name") or user.get("name") or user.get("email", "Team member")
 
     await pool.execute("""
         UPDATE tasks
@@ -169,7 +202,18 @@ async def request_approval(task_id: str, payload: ApprovalRequest,
         WHERE task_id=$2
     """, payload.notes, task_id)
 
-    await send_approval_notification(pool, task_id, task["title"], owner["user_id"], "request", payload.notes, team_id=task["team_id"])
+    for owner in owners:
+        await _notify(pool, task_id, task["title"], owner["user_id"], "request", payload.notes, team_id=task["team_id"])
+        try:
+            from email_service import send_approval_request_email
+            send_approval_request_email(
+                owner["email"], owner["name"],
+                requester_name, task["title"],
+                notes=payload.notes,
+            )
+        except Exception as exc:
+            import logging; logging.getLogger(__name__).warning("approval req email failed: %s", exc)
+
     return {"message": "Approval requested", "approval_status": "pending"}
 
 
