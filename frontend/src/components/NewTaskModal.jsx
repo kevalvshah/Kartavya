@@ -386,7 +386,7 @@ export default function NewTaskModal({ open, onClose, onCreated }) {
 
               <select className="k-select" style={{ width: '100%' }} value={projectId} onChange={e => setProjectId(e.target.value)}>
 
-                <option value="">No project</option>
+                <option value="">Personal task</option>
 
                 {projects.map(p => <option key={p.team_id} value={p.team_id}>{p.name}</option>)}
 

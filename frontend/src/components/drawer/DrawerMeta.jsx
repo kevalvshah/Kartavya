@@ -33,8 +33,8 @@ export default function DrawerMeta({
         </select>
       </div>
 
-      {/* Column */}
-      {columns.length > 0 && (
+      {/* Column (project tasks) or Status (personal tasks) */}
+      {columns.length > 0 ? (
         <div className="k-prop">
           <span className="k-prop__lbl">
             Column <span className="k-prop__sans">&#x0938;&#x094D;&#x0924;&#x0902;&#x092D;</span>
@@ -48,6 +48,23 @@ export default function DrawerMeta({
             {columns.map(c => (
               <option key={c.column_id} value={c.column_id}>{c.name}</option>
             ))}
+          </select>
+        </div>
+      ) : (
+        <div className="k-prop">
+          <span className="k-prop__lbl">
+            Status <span className="k-prop__sans">&#x0938;&#x094D;&#x0925;&#x093F;&#x0924;&#x093F;</span>
+          </span>
+          <select
+            value={draft.status || 'todo'}
+            onChange={e => { setDraft(d => ({ ...d, status: e.target.value })); saveTask({ status: e.target.value }); }}
+            className="k-input"
+            style={{ fontSize: 13 }}
+          >
+            <option value="todo">To do</option>
+            <option value="in_progress">In progress</option>
+            <option value="in_review">In review</option>
+            <option value="done">Done</option>
           </select>
         </div>
       )}
