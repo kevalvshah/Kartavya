@@ -14,11 +14,19 @@ function relDue(due) {
   return { label: new Date(due).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }), tone: 'muted' };
 }
 
+function nameInitials(name) {
+  if (!name) return '?';
+  const parts = name.trim().split(/\s+/);
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
 export default function KanbanCard({ task, onClick, dragging = false, draggable = false, onDragStart, onDragEnd }) {
   const priority = task.priority || 'medium';
   const color    = priorityColor(priority);
   const due      = relDue(task.due_at);
   const assignees = task.assignee_user_ids || [];
+  const names     = task.assignee_names || [];
   const approvalPending = task.approval_status === 'pending' || task.approval_status === 'pending_client';
 
   const DUE_COLORS = { overdue: 'var(--k-danger)', today: '#d97706', soon: '#d97706', normal: 'var(--ink-3)', muted: 'var(--ink-3)' };
@@ -75,21 +83,28 @@ export default function KanbanCard({ task, onClick, dragging = false, draggable 
         </span>
 
         {assignees.length > 0 && (
-          <div style={{ display: 'flex', marginLeft: 'auto' }}>
+          <div style={{ display: 'flex', marginLeft: 'auto', alignItems: 'center' }}>
             {assignees.slice(0, 3).map((uid, i) => (
-              <span key={uid} title={uid} style={{
-                marginLeft: i > 0 ? -6 : 0,
-                width: 20, height: 20, borderRadius: '50%',
+              <span key={uid} title={names[i] || uid} style={{
+                marginLeft: i > 0 ? -8 : 0,
+                width: 26, height: 26, borderRadius: '50%',
                 display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                 background: AVATAR_COLORS[i % AVATAR_COLORS.length],
-                color: '#fff', fontSize: 9, fontWeight: 700,
+                color: '#fff', fontSize: 10, fontWeight: 700, letterSpacing: '-0.3px',
                 border: '2px solid var(--surface)',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.15)',
+                flexShrink: 0,
               }}>
-                {uid.slice(-2).toUpperCase()}
+                {nameInitials(names[i])}
               </span>
             ))}
             {assignees.length > 3 && (
-              <span style={{ fontSize: 10, color: 'var(--ink-3)', marginLeft: 4, alignSelf: 'center' }}>
+              <span style={{
+                marginLeft: -8, width: 26, height: 26, borderRadius: '50%',
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                background: 'var(--bg-soft)', border: '2px solid var(--surface)',
+                fontSize: 10, fontWeight: 700, color: 'var(--ink-2)',
+              }}>
                 +{assignees.length - 3}
               </span>
             )}
