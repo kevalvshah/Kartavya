@@ -1631,7 +1631,13 @@ async def move_task(task_id:str,payload:TaskMoveIn,pool=Depends(get_db),user=Dep
     completed_by=user["user_id"] if new_status=="done" else None
 
     is_approval_col = col and "approval" in (col["name"] or "").lower()
-    new_approval_status = "pending" if is_approval_col else doc["approval_status"]
+    # Moving INTO approval col → set pending; moving OUT → clear pending (keep approved/rejected)
+    if is_approval_col:
+        new_approval_status = "pending"
+    elif doc["approval_status"] == "pending":
+        new_approval_status = None
+    else:
+        new_approval_status = doc["approval_status"]
 
     row=await pool.fetchrow(
         "UPDATE tasks SET column_id=$1,status=$2,sort_order=$3,completed_at=$4,completed_by_user_id=$5,approval_status=$6,updated_at=NOW() WHERE task_id=$7 RETURNING *",

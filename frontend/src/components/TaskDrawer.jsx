@@ -364,10 +364,12 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
         });
         setTask(t => ({ ...t, approval_status: res.data.approval_status }));
       } else {
-        // Directly approve
-        const res = await api.post(`/tasks/${taskId}/approve`, { notes: approvalNotes });
-        setTask(t => ({ ...t, approval_status: res.data.approval_status }));
-        onSaved?.({ ...task, approval_status: res.data.approval_status });
+        // Directly approve — reload full task so column/status refresh
+        await api.post(`/tasks/${taskId}/approve`, { notes: approvalNotes });
+        const fresh = await api.get(`/tasks/${taskId}`);
+        setTask(fresh.data);
+        setDraft(d => ({ ...d, status: fresh.data.status, column_id: fresh.data.column_id }));
+        onSaved?.(fresh.data);
       }
       setShowApprovePanel(false); setApprovalNotes(''); setClientUserId('');
     } catch (e) {

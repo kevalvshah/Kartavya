@@ -74,12 +74,18 @@ async def get_task_with_permission(pool, task_id: str, user_id: str):
 
 
 async def is_project_owner(pool, team_id: str, user_id: str) -> bool:
-    """Return True if the user is an active owner or admin of the given team."""
+    """Return True if the user is an owner or admin of the given team (via either membership table)."""
     member = await pool.fetchrow("""
         SELECT role FROM team_members
         WHERE team_id=$1 AND user_id=$2 AND status='active'
     """, team_id, user_id)
-    return member and member["role"] in ("owner", "admin")
+    if member and member["role"] in ("owner", "admin"):
+        return True
+    pa = await pool.fetchrow("""
+        SELECT role FROM project_assignments
+        WHERE team_id=$1 AND user_id=$2 AND role IN ('owner','admin')
+    """, team_id, user_id)
+    return bool(pa)
 
 
 async def _notify(pool, task_id: str, task_title: str, recipient_id: str,
@@ -220,16 +226,17 @@ async def approve_task(task_id: str, payload: ApprovalRequest,
         else:
             new_col_id, new_status = task["column_id"], "in_progress"
 
-    await pool.execute("""
+    updated = await pool.fetchrow("""
         UPDATE tasks
         SET approval_status='approved', approved_by=$1, approval_notes=$2,
             approval_decided_at=NOW(), column_id=$3, status=$4, updated_at=NOW()
         WHERE task_id=$5
+        RETURNING *
     """, user["user_id"], payload.notes, new_col_id, new_status, task_id)
 
     await send_approval_notification(pool, task_id, task["title"],
                                      task["created_by_user_id"], "approved", payload.notes, team_id=task["team_id"])
-    return {"message": "Task approved", "approval_status": "approved", "new_column_id": new_col_id}
+    return {"message": "Task approved", "approval_status": "approved", "new_column_id": new_col_id, "status": new_status}
 
 
 @router.post("/tasks/{task_id}/reject")
