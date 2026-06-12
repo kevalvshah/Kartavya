@@ -355,8 +355,6 @@ export default function KanbanView({
     if (targetColId === srcColId) { setDragging(null); setOver(null); return; }
 
     const order = targetIdx ?? (byCol[targetColId]?.length ?? 0);
-    const targetCol = visibleColumns.find(c => c.column_id === targetColId);
-    const isApprovalCol = targetCol && (targetCol.name || '').toLowerCase().includes('approval');
 
     // Optimistic UI — move card instantly before API responds
     onTasksChange?.(prev => prev.map(t =>
@@ -365,15 +363,8 @@ export default function KanbanView({
     setDragging(null); setOver(null);
 
     try {
-      if (isApprovalCol) {
-        await api.post(`/tasks/${taskId}/request-approval`, { notes: '' });
-        const fresh = await api.get(`/tasks/${taskId}`);
-        onTasksChange?.(prev => prev.map(t => t.task_id === taskId ? fresh.data : t));
-        pushToast({ type: 'success', title: 'Approval request sent' });
-      } else {
-        const res = await api.patch(`/tasks/${taskId}/move`, { column_id: targetColId, order });
-        onTasksChange?.(prev => prev.map(t => t.task_id === taskId ? res.data : t));
-      }
+      const res = await api.patch(`/tasks/${taskId}/move`, { column_id: targetColId, order });
+      onTasksChange?.(prev => prev.map(t => t.task_id === taskId ? res.data : t));
     } catch (e) {
       logger.error('Move failed', e);
       pushToast({ type: 'error', title: 'Could not move task' });
