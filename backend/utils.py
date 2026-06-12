@@ -116,7 +116,8 @@ async def ensure_default_columns(pool, team_id: str) -> None:
             ("In Progress","#03a1b6", 1, False),
             ("In Review",  "#8b5cf6", 2, False),
             ("Approval",   "#f59e0b", 3, False),
-            ("Done",       "#05b7aa", 4, True),
+            ("Rejected",   "#ef4444", 4, False),
+            ("Done",       "#05b7aa", 5, True),
         ]
         for name, color, order, is_done in defaults:
             await pool.execute(

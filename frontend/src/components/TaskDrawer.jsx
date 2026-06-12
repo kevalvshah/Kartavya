@@ -331,8 +331,11 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
   const requestApproval = async () => {
     setApprovalLoading(true);
     try {
-      const res = await api.post(`/tasks/${taskId}/request-approval`, { notes: requestNotes });
-      setTask(t => ({ ...t, approval_status: res.data.approval_status }));
+      await api.post(`/tasks/${taskId}/request-approval`, { notes: requestNotes });
+      const fresh = await api.get(`/tasks/${taskId}`);
+      setTask(fresh.data);
+      setDraft(d => ({ ...d, status: fresh.data.status, column_id: fresh.data.column_id }));
+      onSaved?.(fresh.data);
       setShowRequestPanel(false); setRequestNotes('');
       pushToast({ type: 'success', title: 'Approval request sent' });
     } catch (e) {

@@ -177,18 +177,36 @@ async def request_approval(task_id: str, payload: ApprovalRequest,
     )
     requester_name = requester["name"] if requester else "A team member"
 
-    await pool.execute("""
-        UPDATE tasks
-        SET approval_status='pending', approval_requested_at=NOW(),
-            approval_notes=$1, updated_at=NOW()
-        WHERE task_id=$2
-    """, payload.notes, task_id)
+    # Move task into the Approval column automatically
+    approval_col = await pool.fetchrow(
+        "SELECT column_id FROM project_columns WHERE team_id=$1 AND name ILIKE '%approval%' ORDER BY sort_order LIMIT 1",
+        task["team_id"]
+    )
+
+    if approval_col:
+        await pool.execute("""
+            UPDATE tasks
+            SET approval_status='pending', approval_requested_at=NOW(),
+                approval_notes=$1, column_id=$2, status='in_review', updated_at=NOW()
+            WHERE task_id=$3
+        """, payload.notes, approval_col["column_id"], task_id)
+    else:
+        await pool.execute("""
+            UPDATE tasks
+            SET approval_status='pending', approval_requested_at=NOW(),
+                approval_notes=$1, updated_at=NOW()
+            WHERE task_id=$2
+        """, payload.notes, task_id)
 
     await send_approval_notification(
         pool, task_id, task["title"], owner["user_id"], "request",
         payload.notes, team_id=task["team_id"], requester_name=requester_name
     )
-    return {"message": "Approval requested", "approval_status": "pending"}
+    return {
+        "message": "Approval requested",
+        "approval_status": "pending",
+        "column_id": approval_col["column_id"] if approval_col else None,
+    }
 
 
 @router.post("/tasks/{task_id}/approve")
