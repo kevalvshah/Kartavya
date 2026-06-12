@@ -508,23 +508,19 @@ export default function KanbanView({
 
                   return (
 
-                    <div key={task.task_id}
-
-                      draggable={draggable}
-
-                      className={dragging?.taskId === task.task_id ? 'k-bcard--dragging' : ''}
-
-                      onDragStart={draggable ? (e) => { e.dataTransfer.effectAllowed = 'move'; handleDragStart(task.task_id, col.column_id, idx); } : undefined}
-
-                      onDragEnd={draggable ? () => { setDragging(null); setOver(null); } : undefined}
-
-                      style={draggable ? { cursor: 'grab' } : undefined}
-
-                    >
+                    <div key={task.task_id}>
 
                       <KanbanCard task={task} fieldDefs={fieldDefs || []} fieldValues={fieldValueMap?.[task.task_id] || {}}
 
-                        dragging={dragging?.taskId === task.task_id} onClick={() => !dragging && setDrawerTaskId(task.task_id)} />
+                        dragging={dragging?.taskId === task.task_id}
+
+                        draggable={draggable}
+
+                        onDragStart={draggable ? (e) => { e.dataTransfer.effectAllowed = 'move'; handleDragStart(task.task_id, col.column_id, idx); } : undefined}
+
+                        onDragEnd={draggable ? () => { setDragging(null); setOver(null); } : undefined}
+
+                        onClick={() => !dragging && setDrawerTaskId(task.task_id)} />
 
                     </div>
 

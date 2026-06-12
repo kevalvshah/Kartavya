@@ -14,7 +14,7 @@ function relDue(due) {
   return { label: new Date(due).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }), tone: 'muted' };
 }
 
-export default function KanbanCard({ task, onClick, dragging = false }) {
+export default function KanbanCard({ task, onClick, dragging = false, draggable = false, onDragStart, onDragEnd }) {
   const priority = task.priority || 'medium';
   const color    = priorityColor(priority);
   const due      = relDue(task.due_at);
@@ -27,6 +27,9 @@ export default function KanbanCard({ task, onClick, dragging = false }) {
     <button
       className={`k-bcard${dragging ? ' is-dragging' : ''}`}
       onClick={onClick}
+      draggable={draggable}
+      onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
       style={dragging ? { transform: 'rotate(2deg)', boxShadow: 'var(--shadow-lg)' } : undefined}
     >
       {/* Top row: priority dot + task ID + priority label */}
