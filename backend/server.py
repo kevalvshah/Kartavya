@@ -1305,10 +1305,15 @@ async def auto_archive_tasks(pool=Depends(get_db),user=Depends(require_user)):
     result=await pool.execute("""
         UPDATE tasks SET archived_at=NOW(), updated_at=NOW()
         WHERE archived_at IS NULL
-          AND status='done'
           AND completed_at IS NOT NULL
           AND completed_at < NOW() - INTERVAL '30 days'
           AND (user_id=$1 OR team_id=ANY($2::text[]) OR created_by_user_id=$1)
+          AND (
+            status='done'
+            OR column_id IN (
+              SELECT column_id FROM project_columns WHERE is_done=TRUE
+            )
+          )
     """,user["user_id"],team_ids)
     count=int((result or "UPDATE 0").split()[-1])
     return {"archived":count}
