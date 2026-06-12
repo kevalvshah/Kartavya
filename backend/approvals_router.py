@@ -4,9 +4,6 @@ signature extended; client-approve/reject fan out team-sync emails.
 Token-based magic-link endpoints for client approval via email.
 """
 
-import logging
-import traceback
-
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, EmailStr
 from typing import Optional, List
@@ -14,8 +11,6 @@ from datetime import datetime, timezone
 import asyncio
 import uuid
 import jwt as _jwt
-
-_log = logging.getLogger(__name__)
 
 from auth_router import require_user, JWT_SECRET as _JWT_SECRET
 from db import get_pool
@@ -164,16 +159,6 @@ async def send_approval_notification(pool, task_id: str, task_title: str,
 async def request_approval(task_id: str, payload: ApprovalRequest,
                             pool=Depends(get_pool), user=Depends(require_user)):
     """Submit a task for approval by the project owner."""
-    try:
-        return await _do_request_approval(task_id, payload, pool, user)
-    except HTTPException:
-        raise
-    except Exception:
-        _log.error("request_approval crashed:\n%s", traceback.format_exc())
-        raise HTTPException(500, f"Internal error: {traceback.format_exc()}")
-
-
-async def _do_request_approval(task_id: str, payload: ApprovalRequest, pool, user):
     task = await get_task_with_permission(pool, task_id, user["user_id"])
     if not task["team_id"]:
         raise HTTPException(400, "Cannot request approval for personal tasks")
@@ -202,7 +187,7 @@ async def _do_request_approval(task_id: str, payload: ApprovalRequest, pool, use
         await pool.execute("""
             UPDATE tasks
             SET approval_status='pending', approval_requested_at=NOW(),
-                approval_notes=$1, column_id=$2, status='in_review', updated_at=NOW()
+                approval_notes=$1, column_id=$2, status='in_progress', updated_at=NOW()
             WHERE task_id=$3
         """, payload.notes, approval_col["column_id"], task_id)
     else:
