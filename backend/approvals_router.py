@@ -255,16 +255,31 @@ async def reject_task(task_id: str, payload: ApprovalRequest,
     if not payload.notes or not payload.notes.strip():
         raise HTTPException(400, _REJECTION_REQUIRED)
 
+    # Move task back to a "Rejected" column if one exists, else the first "In Progress" col, else keep current
+    fallback_col_id = task["column_id"]
+    fallback_status = "in_progress"
+    if task["team_id"]:
+        all_cols = await pool.fetch(
+            "SELECT * FROM project_columns WHERE team_id=$1 ORDER BY sort_order ASC", task["team_id"]
+        )
+        rejected_col = next((c for c in all_cols if "reject" in (c["name"] or "").lower()), None)
+        inprog_col   = next((c for c in all_cols if "progress" in (c["name"] or "").lower()
+                             or "doing" in (c["name"] or "").lower()), None)
+        target = rejected_col or inprog_col
+        if target:
+            fallback_col_id = target["column_id"]
+            fallback_status = "done" if target["is_done"] else "in_progress"
+
     await pool.execute("""
         UPDATE tasks
         SET approval_status='rejected', approved_by=$1, approval_notes=$2,
-            approval_decided_at=NOW(), updated_at=NOW()
-        WHERE task_id=$3
-    """, user["user_id"], payload.notes, task_id)
+            approval_decided_at=NOW(), column_id=$3, status=$4, updated_at=NOW()
+        WHERE task_id=$5
+    """, user["user_id"], payload.notes, fallback_col_id, fallback_status, task_id)
 
     await send_approval_notification(pool, task_id, task["title"],
                                      task["created_by_user_id"], "rejected", payload.notes, team_id=task["team_id"])
-    return {"message": "Task rejected", "approval_status": "rejected"}
+    return {"message": "Task rejected", "approval_status": "rejected", "status": fallback_status}
 
 
 @router.get("/tasks/pending-approval", response_model=List[dict])

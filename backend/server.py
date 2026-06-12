@@ -1630,14 +1630,8 @@ async def move_task(task_id:str,payload:TaskMoveIn,pool=Depends(get_db),user=Dep
     completed_at=now_utc() if new_status=="done" else None
     completed_by=user["user_id"] if new_status=="done" else None
 
-    is_approval_col = col and "approval" in (col["name"] or "").lower()
-    # Moving INTO approval col → set pending; moving OUT → clear pending (keep approved/rejected)
-    if is_approval_col:
-        new_approval_status = "pending"
-    elif doc["approval_status"] == "pending":
-        new_approval_status = None
-    else:
-        new_approval_status = doc["approval_status"]
+    # Moving column resets pending approval; approved/rejected states are preserved
+    new_approval_status = None if doc["approval_status"] == "pending" else doc["approval_status"]
 
     row=await pool.fetchrow(
         "UPDATE tasks SET column_id=$1,status=$2,sort_order=$3,completed_at=$4,completed_by_user_id=$5,approval_status=$6,updated_at=NOW() WHERE task_id=$7 RETURNING *",
@@ -1645,28 +1639,6 @@ async def move_task(task_id:str,payload:TaskMoveIn,pool=Depends(get_db),user=Dep
     if doc["status"]!=new_status:
         from services.activity_logger import log_event
         await log_event(pool,task_id=task_id,actor_id=user["user_id"],event_type="status_changed",data={"from":doc["status"],"to":new_status})
-
-    # Auto-notify approver when task lands in an approval column
-    if is_approval_col and doc["approval_status"] != "pending":
-        try:
-            owner = await pool.fetchrow("""
-                SELECT user_id FROM team_members
-                WHERE team_id=$1 AND role IN ('owner','admin') AND status='active'
-                ORDER BY CASE role WHEN 'owner' THEN 0 ELSE 1 END LIMIT 1
-            """, doc["team_id"])
-            if owner:
-                requester = await pool.fetchrow(
-                    "SELECT COALESCE(full_name,name,email) AS name FROM users WHERE user_id=$1",
-                    user["user_id"]
-                )
-                from approvals_router import send_approval_notification
-                await send_approval_notification(
-                    pool, task_id, doc["title"], owner["user_id"], "request",
-                    notes=None, team_id=doc["team_id"],
-                    requester_name=requester["name"] if requester else None
-                )
-        except Exception as _e:
-            import logging; logging.getLogger(__name__).warning("approval auto-notify failed: %s", _e)
 
     return row_to_task(row)
 

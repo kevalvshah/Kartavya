@@ -50,8 +50,8 @@ export default function DrawerApproval({
         )}
       </div>
 
-      {/* Request approval (no active approval) — hidden when column move already triggered it */}
-      {!task.approval_status && !showRequestPanel && !isApprovalColumn && (
+      {/* Request approval (no active approval) */}
+      {!task.approval_status && !showRequestPanel && (
         <button
           className="k-btn k-btn--ghost k-btn--sm"
           onClick={() => setShowRequestPanel(true)}
@@ -59,11 +59,6 @@ export default function DrawerApproval({
         >
           &#8594; Send for Approval
         </button>
-      )}
-      {!task.approval_status && isApprovalColumn && (
-        <p style={{ fontSize: 12, color: 'var(--ink-3)', margin: '6px 0 0' }}>
-          Approval request sent automatically when this column was selected.
-        </p>
       )}
 
       {showRequestPanel && (

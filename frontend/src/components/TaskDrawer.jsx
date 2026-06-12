@@ -383,8 +383,11 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
     if (!rejectNote.trim()) return;
     setApprovalLoading(true);
     try {
-      const res = await api.post(`/tasks/${taskId}/reject`, { notes: rejectNote });
-      setTask(t => ({ ...t, approval_status: res.data.approval_status }));
+      await api.post(`/tasks/${taskId}/reject`, { notes: rejectNote });
+      const fresh = await api.get(`/tasks/${taskId}`);
+      setTask(fresh.data);
+      setDraft(d => ({ ...d, status: fresh.data.status, column_id: fresh.data.column_id }));
+      onSaved?.(fresh.data);
       setShowRejectInput(false); setRejectNote('');
     } catch (e) {
       logger.error(e);
@@ -504,7 +507,6 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
                 {task.team_id && (
                   <DrawerApproval
                     task={task}
-                    isApprovalColumn={columns.some(c => c.column_id === task.column_id && (c.name || '').toLowerCase().includes('approval'))}
                     isOwnerAdmin={isOwnerAdmin} isClient={isClient}
                     showApprovePanel={showApprovePanel}   setShowApprovePanel={setShowApprovePanel}
                     showRequestPanel={showRequestPanel}   setShowRequestPanel={setShowRequestPanel}

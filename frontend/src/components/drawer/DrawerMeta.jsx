@@ -45,9 +45,11 @@ export default function DrawerMeta({
             className="k-input"
             style={{ fontSize: 13 }}
           >
-            {columns.map(c => (
-              <option key={c.column_id} value={c.column_id}>{c.name}</option>
-            ))}
+            {columns
+              .filter(c => !(c.name || '').toLowerCase().includes('approval'))
+              .map(c => (
+                <option key={c.column_id} value={c.column_id}>{c.name}</option>
+              ))}
           </select>
         </div>
       ) : (
