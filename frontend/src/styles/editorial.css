@@ -1070,6 +1070,29 @@ input, textarea, select { font-family: inherit; color: inherit; }
 .k-bcol__add:hover { background: var(--rule-soft); color: var(--ink); }
 .k-bcol__body { display: flex; flex-direction: column; gap: var(--sp-3); }
 
+/* Drag-over highlight — column accepts a drop */
+.k-bcol.is-over {
+  background: color-mix(in srgb, var(--k-primary) 6%, var(--bg-soft));
+  border-color: var(--k-primary);
+  outline: 2px solid color-mix(in srgb, var(--k-primary) 40%, transparent);
+  outline-offset: -2px;
+}
+
+/* Dragging card — ghost appearance */
+.k-bcard--dragging {
+  opacity: 0.35;
+  pointer-events: none;
+}
+
+/* Drop placeholder */
+.k-bdrop-placeholder {
+  height: 56px;
+  border: 2px dashed color-mix(in srgb, var(--k-primary) 50%, transparent);
+  border-radius: var(--r-md);
+  background: color-mix(in srgb, var(--k-primary) 5%, transparent);
+  flex-shrink: 0;
+}
+
 /* Requested column — synthetic, dashed border, slate accent */
 .k-bcol--requested {
   border-style: dashed;
