@@ -195,6 +195,24 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
     });
   }, [taskId, onSaved, onClose, pushToast]);
 
+  const handleArchiveTask = useCallback(async () => {
+    try {
+      const res = await api.patch(`/tasks/${taskId}/archive`);
+      setTask(res.data);
+      onSaved?.(res.data);
+      pushToast({ type: 'success', title: 'Task archived' });
+    } catch { pushToast({ type: 'error', title: 'Could not archive task' }); }
+  }, [taskId, onSaved, pushToast]);
+
+  const handleUnarchiveTask = useCallback(async () => {
+    try {
+      const res = await api.patch(`/tasks/${taskId}/unarchive`);
+      setTask(res.data);
+      onSaved?.(res.data);
+      pushToast({ type: 'success', title: 'Task restored' });
+    } catch { pushToast({ type: 'error', title: 'Could not restore task' }); }
+  }, [taskId, onSaved, pushToast]);
+
   // ── Comment actions ───────────────────────────────────────────────────────
   const postComment = async () => {
     if (!comment.trim()) return;
@@ -411,6 +429,8 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
             task={task} draft={draft} setDraft={setDraft} saving={saving}
             canDeleteTask={canDeleteTask} deletingTask={deletingTask}
             onClose={onClose} onDeleteTask={handleDeleteTask} saveTask={saveTask}
+            onArchiveTask={!isClient ? handleArchiveTask : undefined}
+            onUnarchiveTask={!isClient ? handleUnarchiveTask : undefined}
             scrolled={scrolled}
           />
 

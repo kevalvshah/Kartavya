@@ -118,6 +118,7 @@ export default function TasksListPage() {
   const [newTaskOpen,  setNewTaskOpen]  = useState(false);
   const [colsOpen,     setColsOpen]     = useState(false);
   const [visible,      setVisible]      = useState(DEFAULT_VISIBLE);
+  const [showArchived, setShowArchived] = useState(false);
 
   const activeCols = ALL_COLS.filter(c => c.fixed || visible.has(c.key));
   const { widths, onMouseDown } = useResizableCols(ALL_COLS);
@@ -133,10 +134,12 @@ export default function TasksListPage() {
     });
   }, []);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (archived = false) => {
     setLoading(true);
     try {
-      const endpoint = isClient ? '/client/tasks' : '/tasks';
+      const endpoint = isClient
+        ? '/client/tasks'
+        : `/tasks${archived ? '?archived=true' : ''}`;
       const reqs = [
         api.get(endpoint),
         isClient ? api.get('/client/projects') : api.get('/teams'),
@@ -150,11 +153,37 @@ export default function TasksListPage() {
     finally { setLoading(false); }
   }, [isClient, pushToast]);
 
-  useEffect(() => { load(); }, [load]);
+  // On mount: load tasks and trigger auto-archive in background
+  useEffect(() => {
+    load(false);
+    if (!isClient) api.post('/tasks/auto-archive').catch(() => {});
+  }, [load, isClient]);
+
+  // Reload when switching archived view
+  useEffect(() => { load(showArchived); }, [showArchived]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const archiveTask = useCallback(async (taskId, e) => {
+    e.stopPropagation();
+    try {
+      await api.patch(`/tasks/${taskId}/archive`);
+      setTasks(prev => prev.filter(t => t.task_id !== taskId));
+      pushToast({ type: 'success', title: 'Task archived' });
+    } catch { pushToast({ type: 'error', title: 'Could not archive task' }); }
+  }, [pushToast]);
+
+  const unarchiveTask = useCallback(async (taskId, e) => {
+    e.stopPropagation();
+    try {
+      await api.patch(`/tasks/${taskId}/unarchive`);
+      setTasks(prev => prev.filter(t => t.task_id !== taskId));
+      pushToast({ type: 'success', title: 'Task restored' });
+    } catch { pushToast({ type: 'error', title: 'Could not restore task' }); }
+  }, [pushToast]);
 
   const myId = user?.user_id;
   const filtered = tasks.filter(t => {
     const matchSearch = !search || t.title.toLowerCase().includes(search.toLowerCase());
+    if (showArchived) return matchSearch;
     let matchFilter = true;
     if (filter === 'mine')    matchFilter = (t.user_id === myId || t.assignee_user_ids?.includes(myId)) && t.status !== 'done';
     if (filter === 'all')     matchFilter = t.status !== 'done';
@@ -222,13 +251,20 @@ export default function TasksListPage() {
           ].map(f => (
             <button
               key={f.key}
-              className={'k-segctrl__btn' + (filter === f.key ? ' is-active' : '')}
-              onClick={() => setFilter(f.key)}
+              className={'k-segctrl__btn' + (!showArchived && filter === f.key ? ' is-active' : '')}
+              onClick={() => { setShowArchived(false); setFilter(f.key); }}
             >
               {f.label}
               <span className="k-segctrl__count">{filterCounts[f.key]}</span>
             </button>
           ))}
+          <button
+            className={'k-segctrl__btn k-segctrl__btn--archive' + (showArchived ? ' is-active' : '')}
+            onClick={() => setShowArchived(v => !v)}
+          >
+            <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="1" y="4" width="14" height="3" rx="1"/><path d="M2 7v6a1 1 0 001 1h10a1 1 0 001-1V7"/><path d="M6 10h4"/></svg>
+            Archived
+          </button>
         </div>
         <div className="k-filterbar__right">
           {/* Columns toggle */}
@@ -307,7 +343,7 @@ export default function TasksListPage() {
                 return (
                   <button
                     key={t.task_id}
-                    className="k-trow k-trow--resizable"
+                    className={'k-trow k-trow--resizable' + (t.archived_at ? ' k-trow--archived' : '')}
                     style={rowStyle}
                     onClick={() => setDrawerTaskId(t.task_id)}
                   >
@@ -319,6 +355,24 @@ export default function TasksListPage() {
                               <PriorityDot priority={t.priority} />
                               <span className="k-trow__id">KAR-{String(idx + 100)}</span>
                               <span className="k-trow__title">{t.title}</span>
+                              {showArchived ? (
+                                <button
+                                  className="k-row-action k-row-action--unarchive"
+                                  onClick={e => unarchiveTask(t.task_id, e)}
+                                  title="Restore task"
+                                >
+                                  <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M8 12V6M5 9l3-3 3 3"/><rect x="1" y="4" width="14" height="3" rx="1"/></svg>
+                                  Restore
+                                </button>
+                              ) : (
+                                <button
+                                  className="k-row-action k-row-action--archive"
+                                  onClick={e => archiveTask(t.task_id, e)}
+                                  title="Archive task"
+                                >
+                                  <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="1" y="4" width="14" height="3" rx="1"/><path d="M2 7v6a1 1 0 001 1h10a1 1 0 001-1V7"/><path d="M6 10h4"/></svg>
+                                </button>
+                              )}
                             </div>
                           );
                         case 'project':

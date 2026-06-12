@@ -305,6 +305,7 @@ class TaskOut(BaseModel):
     approval_status:Optional[str]=None; approval_notes:Optional[str]=None; approved_by:Optional[str]=None
     approval_requested_at:Optional[datetime]=None; approval_decided_at:Optional[datetime]=None
     requires_approval:bool=False; created_by_name:Optional[str]=None
+    archived_at:Optional[datetime]=None
 class TaskMoveIn(BaseModel):
     column_id:str; order:int
 class CommentCreate(BaseModel):
@@ -350,7 +351,7 @@ def row_to_task(r) -> TaskOut:
         approval_status=col("approval_status"),approval_notes=col("approval_notes"),
         approved_by=col("approved_by"),approval_requested_at=col("approval_requested_at"),
         approval_decided_at=col("approval_decided_at"),requires_approval=bool(col("requires_approval",False)),
-        created_by_name=col("created_by_name"),
+        created_by_name=col("created_by_name"),archived_at=col("archived_at"),
     )
 
 
@@ -523,10 +524,11 @@ async def client_tasks(pool=Depends(get_db),user=Depends(require_user)):
                ) AS assignee_names
         FROM tasks t
         LEFT JOIN users cu ON cu.user_id=t.created_by_user_id
-        WHERE t.created_by_user_id=$1
+        WHERE t.archived_at IS NULL
+          AND (t.created_by_user_id=$1
            OR $1=ANY(t.assignee_user_ids)
            OR EXISTS(SELECT 1 FROM project_assignments pa WHERE pa.team_id=t.team_id AND pa.user_id=$1)
-           OR EXISTS(SELECT 1 FROM task_clients tc WHERE tc.task_id=t.task_id AND tc.user_id=$1)
+           OR EXISTS(SELECT 1 FROM task_clients tc WHERE tc.task_id=t.task_id AND tc.user_id=$1))
         ORDER BY t.updated_at DESC
     """, user["user_id"])
     return [row_to_task(r) for r in rows]
@@ -1263,12 +1265,17 @@ async def delete_category(category_id:str,pool=Depends(get_db),user=Depends(requ
 @api_router.get("/tasks",response_model=List[TaskOut])
 async def list_tasks(status:Optional[str]=None,category_id:Optional[str]=None,q:Optional[str]=None,
                      team_id:Optional[str]=None,assigned_to_me:Optional[bool]=None,
+                     archived:Optional[bool]=False,
                      pool=Depends(get_db),user=Depends(require_user)):
     """Return all tasks visible to the user, with optional filters for status, category, team, and search."""
     team_ids=await get_visible_team_ids(pool,user["user_id"],_user_dict=user)
     conditions=["(t.user_id=$1 OR t.team_id=ANY($2::text[])"
                 " OR t.created_by_user_id=$1"
                 " OR EXISTS(SELECT 1 FROM task_clients tc WHERE tc.task_id=t.task_id AND tc.user_id=$1))"]
+    if archived:
+        conditions.append("t.archived_at IS NOT NULL")
+    else:
+        conditions.append("t.archived_at IS NULL")
     vals=[user["user_id"],team_ids]
     if team_id:        conditions.append(f"t.team_id=${len(vals)+1}");       vals.append(team_id)
     if status:         conditions.append(f"t.status=${len(vals)+1}");         vals.append(status)
@@ -1289,6 +1296,50 @@ async def list_tasks(status:Optional[str]=None,category_id:Optional[str]=None,q:
         ORDER BY t.sort_order ASC
     """,*vals)
     return [row_to_task(r) for r in rows]
+
+
+@api_router.post("/tasks/auto-archive")
+async def auto_archive_tasks(pool=Depends(get_db),user=Depends(require_user)):
+    """Archive all done tasks that have been completed for more than 30 days."""
+    team_ids=await get_visible_team_ids(pool,user["user_id"],_user_dict=user)
+    result=await pool.execute("""
+        UPDATE tasks SET archived_at=NOW(), updated_at=NOW()
+        WHERE archived_at IS NULL
+          AND status='done'
+          AND completed_at IS NOT NULL
+          AND completed_at < NOW() - INTERVAL '30 days'
+          AND (user_id=$1 OR team_id=ANY($2::text[]) OR created_by_user_id=$1)
+    """,user["user_id"],team_ids)
+    count=int((result or "UPDATE 0").split()[-1])
+    return {"archived":count}
+
+
+@api_router.patch("/tasks/{task_id}/archive",response_model=TaskOut)
+async def archive_task(task_id:str,pool=Depends(get_db),user=Depends(require_user)):
+    """Manually archive a single task."""
+    team_ids=await get_visible_team_ids(pool,user["user_id"],_user_dict=user)
+    row=await pool.fetchrow("""
+        UPDATE tasks SET archived_at=NOW(), updated_at=NOW()
+        WHERE task_id=$1 AND archived_at IS NULL
+          AND (user_id=$2 OR team_id=ANY($3::text[]) OR created_by_user_id=$2)
+        RETURNING *
+    """,task_id,user["user_id"],team_ids)
+    if not row: raise HTTPException(404)
+    return row_to_task(row)
+
+
+@api_router.patch("/tasks/{task_id}/unarchive",response_model=TaskOut)
+async def unarchive_task(task_id:str,pool=Depends(get_db),user=Depends(require_user)):
+    """Restore an archived task back to the active list."""
+    team_ids=await get_visible_team_ids(pool,user["user_id"],_user_dict=user)
+    row=await pool.fetchrow("""
+        UPDATE tasks SET archived_at=NULL, updated_at=NOW()
+        WHERE task_id=$1 AND archived_at IS NOT NULL
+          AND (user_id=$2 OR team_id=ANY($3::text[]) OR created_by_user_id=$2)
+        RETURNING *
+    """,task_id,user["user_id"],team_ids)
+    if not row: raise HTTPException(404)
+    return row_to_task(row)
 
 
 @api_router.post("/tasks",response_model=TaskOut)

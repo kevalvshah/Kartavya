@@ -1,5 +1,5 @@
 import React from 'react';
-import { Trash2 } from 'lucide-react';
+import { Trash2, Archive, ArchiveRestore } from 'lucide-react';
 import { STATUS_LABELS, STATUS_COLORS } from './constants';
 
 /**
@@ -10,6 +10,7 @@ export default function DrawerHeader({
   task, draft, setDraft, saving,
   canDeleteTask, deletingTask,
   onClose, onDeleteTask, saveTask,
+  onArchiveTask, onUnarchiveTask,
   scrolled,
 }) {
   return (
@@ -43,6 +44,31 @@ export default function DrawerHeader({
             <span style={{ fontSize: 11, color: 'var(--ink-3)', marginRight: 6, alignSelf: 'center' }}>
               Saving&hellip;
             </span>
+          )}
+          {task?.archived_at ? (
+            onUnarchiveTask && (
+              <button
+                onClick={onUnarchiveTask}
+                className="k-iconbtn"
+                aria-label="Restore task"
+                title="Restore from archive"
+                style={{ color: 'var(--ink-3)' }}
+              >
+                <ArchiveRestore size={14} />
+              </button>
+            )
+          ) : (
+            onArchiveTask && task && (
+              <button
+                onClick={onArchiveTask}
+                className="k-iconbtn"
+                aria-label="Archive task"
+                title="Archive task"
+                style={{ color: 'var(--ink-3)' }}
+              >
+                <Archive size={14} />
+              </button>
+            )
           )}
           {canDeleteTask && task && (
             <button

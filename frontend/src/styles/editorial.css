@@ -854,6 +854,31 @@ input, textarea, select { font-family: inherit; color: inherit; }
 }
 .k-trow:last-child { border-bottom: 0; }
 .k-trow:hover { background: color-mix(in srgb, var(--k-primary) 4%, var(--surface)); }
+
+/* ── Archived row ──────────────────────────────── */
+.k-trow--archived { opacity: 0.52; }
+.k-trow--archived:hover { opacity: 0.8; }
+
+/* ── Row archive action button ─────────────────── */
+.k-row-action {
+  display: inline-flex; align-items: center; gap: 4px;
+  margin-left: auto; padding: 2px 7px;
+  border: 1px solid var(--rule); border-radius: var(--r-sm);
+  background: var(--surface); color: var(--ink-3);
+  font-size: 11px; font-weight: 500;
+  cursor: pointer; opacity: 0; transition: opacity 0.15s; white-space: nowrap;
+}
+.k-trow:hover .k-row-action { opacity: 1; }
+.k-row-action--unarchive { color: var(--ink-2); opacity: 1; }
+.k-row-action--archive:hover { background: var(--rule-soft); color: var(--ink-2); }
+
+/* ── Archived segment button ───────────────────── */
+.k-segctrl__btn--archive {
+  display: inline-flex; align-items: center; gap: 5px;
+  border-left: 1px solid var(--rule); margin-left: 4px;
+  padding-left: 10px; color: var(--ink-3);
+}
+.k-segctrl__btn--archive.is-active { color: var(--ink); background: var(--rule-soft); }
 .k-trow__cell { display: flex; align-items: center; gap: 10px; min-width: 0; overflow: hidden; }
 .k-c-task { gap: 12px; }
 .k-c-project .k-ptag { min-width: 0; overflow: hidden; }
