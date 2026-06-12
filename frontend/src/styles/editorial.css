@@ -812,7 +812,6 @@ input, textarea, select { font-family: inherit; color: inherit; }
 }
 .k-table__head {
   display: grid;
-  grid-template-columns: minmax(0, 2.4fr) minmax(0, 1.1fr) minmax(0, 1fr) 90px 120px;
   padding: 10px 18px;
   font-size: 10.5px; letter-spacing: 0.16em; text-transform: uppercase;
   color: var(--ink-3); font-weight: 700;
@@ -838,7 +837,6 @@ input, textarea, select { font-family: inherit; color: inherit; }
 
 .k-trow {
   display: grid;
-  grid-template-columns: minmax(0, 2.4fr) minmax(0, 1.1fr) minmax(0, 1fr) 90px 120px;
   align-items: center;
   padding: 0 18px;
   background: var(--surface); border: 0;
@@ -850,6 +848,9 @@ input, textarea, select { font-family: inherit; color: inherit; }
   cursor: pointer;
   width: 100%;
 }
+.k-trow--resizable {
+  min-width: max-content;
+}
 .k-trow:last-child { border-bottom: 0; }
 .k-trow:hover { background: color-mix(in srgb, var(--k-primary) 4%, var(--surface)); }
 .k-trow__cell { display: flex; align-items: center; gap: 10px; min-width: 0; overflow: hidden; }
@@ -860,16 +861,36 @@ input, textarea, select { font-family: inherit; color: inherit; }
 .k-trow__title { font-size: 13.5px; color: var(--ink); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .k-trow__due { font-size: 12px; color: var(--ink-3); }
 
-.k-c-assignees { flex-direction: column; align-items: flex-start; gap: 4px; }
+.k-c-assignees { flex-direction: column; align-items: flex-start; gap: 5px; overflow: visible; }
 .k-assignee-pill {
-  display: flex; align-items: center; gap: 6px;
+  display: flex; align-items: center; gap: 7px;
   min-width: 0; max-width: 100%;
 }
 .k-assignee-pill__name {
-  font-size: 12px; font-weight: 500; color: var(--ink-2);
+  font-size: 12.5px; font-weight: 500; color: var(--ink-2);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   min-width: 0;
 }
+.k-assignee-pill__more {
+  font-size: 11px; color: var(--ink-3); padding-left: 2px;
+}
+
+/* Resize handle */
+.k-col-resize {
+  position: absolute; right: 0; top: 50%; transform: translateY(-50%);
+  width: 8px; height: 18px;
+  cursor: col-resize;
+  display: flex; align-items: center; justify-content: center;
+  z-index: 1;
+}
+.k-col-resize::after {
+  content: ''; display: block;
+  width: 2px; height: 14px;
+  border-radius: 1px;
+  background: var(--rule);
+  transition: background 0.15s;
+}
+.k-col-resize:hover::after { background: var(--k-primary); }
 
 /* ── Board / Kanban ────────────────────────────────────────────────────── */
 .k-headerright { display: flex; flex-direction: column; gap: 10px; align-items: flex-end; }

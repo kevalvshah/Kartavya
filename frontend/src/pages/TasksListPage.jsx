@@ -1,14 +1,13 @@
 /**
- * TasksListPage.jsx — editorial Tasks screen.
- * GroupBy: priority (default) | project | status. All data hooks unchanged.
+ * TasksListPage.jsx — editorial Tasks screen with resizable columns.
  */
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { api } from '../lib/api';
 import { currentUser } from '../lib/auth';
 import { useToast } from '../components/ui/toast';
 import TaskDrawer  from '../components/TaskDrawer';
 import NewTaskModal from '../components/NewTaskModal';
-import { PageHeader, DueChip, PriorityDot, StatusChip, ProjectTag, AvatarStack } from '../components/editorial';
+import { PageHeader, DueChip, PriorityDot, StatusChip, ProjectTag } from '../components/editorial';
 import { AVATAR_COLORS, priorityColor } from '../lib/utils';
 
 const PRIORITY_ORDER  = ['urgent','high','medium','low'];
@@ -18,6 +17,47 @@ const STATUS_ORDER    = ['todo','in_progress','in_review','done','requested'];
 const STATUS_LABEL    = { todo:'To Do', in_progress:'In Progress', in_review:'In Review', done:'Done', requested:'Requested' };
 const STATUS_HI       = { todo:'कार्य', in_progress:'चालू', in_review:'समीक्षा', done:'सम्पन्न', requested:'अनुरोध' };
 const STATUS_COLOR    = { todo:'#94a3b8', in_progress:'#0082c6', in_review:'#a78bfa', done:'#05b7aa', requested:'#f59e0b' };
+
+const COLS = [
+  { key: 'task',      label: 'Task',      defaultW: 360, min: 180 },
+  { key: 'project',   label: 'Project',   defaultW: 180, min: 100 },
+  { key: 'assignees', label: 'Assignees', defaultW: 200, min: 120 },
+  { key: 'due',       label: 'Due',       defaultW: 100, min: 80  },
+  { key: 'status',    label: 'Status',    defaultW: 130, min: 90  },
+];
+
+function initials(name) {
+  return (name || '?').split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
+}
+
+function useResizableCols(cols) {
+  const [widths, setWidths] = useState(() => cols.map(c => c.defaultW));
+  const dragging = useRef(null);
+
+  const onMouseDown = useCallback((e, idx) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startW = widths[idx];
+    dragging.current = { idx, startX, startW };
+
+    function onMove(e) {
+      if (!dragging.current) return;
+      const { idx, startX, startW } = dragging.current;
+      const newW = Math.max(cols[idx].min, startW + e.clientX - startX);
+      setWidths(prev => { const n = [...prev]; n[idx] = newW; return n; });
+    }
+    function onUp() {
+      dragging.current = null;
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    }
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  }, [widths, cols]);
+
+  const gridTemplate = widths.map(w => `${w}px`).join(' ');
+  return { widths, gridTemplate, onMouseDown };
+}
 
 export default function TasksListPage() {
   const { pushToast } = useToast();
@@ -32,6 +72,8 @@ export default function TasksListPage() {
   const [group,   setGroup]   = useState('priority');
   const [drawerTaskId, setDrawerTaskId] = useState(null);
   const [newTaskOpen,  setNewTaskOpen]  = useState(false);
+
+  const { gridTemplate, onMouseDown } = useResizableCols(COLS);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -49,7 +91,6 @@ export default function TasksListPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  // ── Filter ─────────────────────────────────────────────────────────────────
   const myId = user?.user_id;
   const filtered = tasks.filter(t => {
     const matchSearch = !search || t.title.toLowerCase().includes(search.toLowerCase());
@@ -61,7 +102,6 @@ export default function TasksListPage() {
     return matchSearch && matchFilter;
   });
 
-  // ── Group ──────────────────────────────────────────────────────────────────
   const groups = [];
   if (group === 'priority') {
     PRIORITY_ORDER.forEach(p => {
@@ -90,6 +130,8 @@ export default function TasksListPage() {
     overdue: tasks.filter(t => t.due_at && new Date(t.due_at) < new Date() && t.status !== 'done').length,
     done:    tasks.filter(t => t.status === 'done').length,
   };
+
+  const rowStyle = { gridTemplateColumns: gridTemplate };
 
   return (
     <div className="k-screen">
@@ -143,19 +185,25 @@ export default function TasksListPage() {
         </div>
       </div>
 
-      {/* Table */}
       {loading ? (
         <div style={{ padding: '40px 0', textAlign: 'center', color: 'var(--ink-3)', fontFamily: 'var(--font-display)', fontStyle: 'italic' }}>
           Loading tasks…
         </div>
       ) : (
-        <div className="k-tablewrap">
-          <div className="k-table__head">
-            <div className="k-table__hcell k-c-task">Task</div>
-            <div className="k-table__hcell k-c-project">Project</div>
-            <div className="k-table__hcell k-c-assignees">Assignees</div>
-            <div className="k-table__hcell k-c-due">Due</div>
-            <div className="k-table__hcell k-c-status">Status</div>
+        <div className="k-tablewrap" style={{ overflowX: 'auto' }}>
+          {/* Header */}
+          <div className="k-table__head k-trow--resizable" style={rowStyle}>
+            {COLS.map((col, idx) => (
+              <div key={col.key} className={`k-table__hcell k-c-${col.key}`} style={{ position: 'relative', userSelect: 'none' }}>
+                {col.label}
+                {idx < COLS.length - 1 && (
+                  <span
+                    className="k-col-resize"
+                    onMouseDown={e => onMouseDown(e, idx)}
+                  />
+                )}
+              </div>
+            ))}
           </div>
 
           {groups.length === 0 && (
@@ -178,7 +226,8 @@ export default function TasksListPage() {
                 return (
                   <button
                     key={t.task_id}
-                    className="k-trow"
+                    className="k-trow k-trow--resizable"
+                    style={rowStyle}
                     onClick={() => setDrawerTaskId(t.task_id)}
                   >
                     <div className="k-trow__cell k-c-task">
@@ -190,19 +239,22 @@ export default function TasksListPage() {
                       {team && <ProjectTag name={team.name} dense />}
                     </div>
                     <div className="k-trow__cell k-c-assignees">
-                      {assignees.slice(0, 2).map((a, j) => (
+                      {assignees.length === 0 && (
+                        <span style={{ fontSize: 12, color: 'var(--ink-3)' }}>—</span>
+                      )}
+                      {assignees.slice(0, 3).map((a, j) => (
                         <span key={j} className="k-assignee-pill">
                           <span
                             className="k-avatar k-avatar--ring"
-                            style={{ width: 22, height: 22, fontSize: 9, background: a.color }}
+                            style={{ width: 24, height: 24, fontSize: 9, flexShrink: 0, background: a.color }}
                           >
-                            {(a.name || '?').split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}
+                            {initials(a.name)}
                           </span>
                           <span className="k-assignee-pill__name">{a.name}</span>
                         </span>
                       ))}
-                      {assignees.length > 2 && (
-                        <span style={{ fontSize: 11, color: 'var(--ink-3)' }}>+{assignees.length - 2} more</span>
+                      {assignees.length > 3 && (
+                        <span className="k-assignee-pill__more">+{assignees.length - 3}</span>
                       )}
                     </div>
                     <div className="k-trow__cell k-c-due">
