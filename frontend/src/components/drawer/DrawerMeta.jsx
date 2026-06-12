@@ -108,8 +108,8 @@ export default function DrawerMeta({
         </select>
       </div>
 
-      {/* Assignees */}
-      <div className="k-prop" ref={assigneeRef} style={{ position: 'relative' }}>
+      {/* Assignees — project tasks only */}
+      {task.team_id && <div className="k-prop" ref={assigneeRef} style={{ position: 'relative' }}>
         <span className="k-prop__lbl">
           Assignees <span className="k-prop__sans">&#x0928;&#x093F;&#x092F;&#x0941;&#x0915;&#x094D;&#x0924;</span>
         </span>
@@ -208,7 +208,7 @@ export default function DrawerMeta({
             })}
           </div>
         )}
-      </div>
+      </div>}
     </div>
   );
 }
