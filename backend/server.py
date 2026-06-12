@@ -1289,9 +1289,12 @@ async def list_tasks(status:Optional[str]=None,category_id:Optional[str]=None,q:
                  SELECT COALESCE(au.full_name,au.name,au.email)
                  FROM unnest(t.assignee_user_ids) AS uid
                  LEFT JOIN users au ON au.user_id=uid
-               ) AS assignee_names
+               ) AS assignee_names,
+               pc.name AS column_name,
+               pc.color AS column_color
         FROM tasks t
         LEFT JOIN users cu ON cu.user_id=t.created_by_user_id
+        LEFT JOIN project_columns pc ON pc.column_id=t.column_id
         WHERE {' AND '.join(conditions)}
         ORDER BY t.sort_order ASC
     """,*vals)

@@ -13,12 +13,32 @@ const STATUS_MAP = {
   rejected:       { label: 'Rejected',          color: '#ef4444' },
 };
 
-export default function StatusChip({ status, approvalStatus }) {
+export default function StatusChip({ status, approvalStatus, columnName, columnColor }) {
   // Approval state takes precedence when active
-  const key = (approvalStatus && approvalStatus !== 'approved' && approvalStatus !== 'rejected')
-    ? approvalStatus
-    : (approvalStatus === 'approved' || approvalStatus === 'rejected' ? approvalStatus : status);
-  const s = STATUS_MAP[key] || { label: key || '—', color: '#94a3b8' };
+  const activeApproval = approvalStatus && approvalStatus !== 'approved' && approvalStatus !== 'rejected';
+  const decidedApproval = approvalStatus === 'approved' || approvalStatus === 'rejected';
+
+  if (activeApproval || decidedApproval) {
+    const s = STATUS_MAP[approvalStatus] || { label: approvalStatus, color: '#94a3b8' };
+    return (
+      <span className="k-statuschip" style={{ '--c': s.color }}>
+        <span className="k-statuschip__dot" />
+        {s.label}
+      </span>
+    );
+  }
+
+  // Use column name + color when available (more accurate than raw status field)
+  if (columnName) {
+    return (
+      <span className="k-statuschip" style={{ '--c': columnColor || '#94a3b8' }}>
+        <span className="k-statuschip__dot" />
+        {columnName}
+      </span>
+    );
+  }
+
+  const s = STATUS_MAP[status] || { label: status || '—', color: '#94a3b8' };
   return (
     <span className="k-statuschip" style={{ '--c': s.color }}>
       <span className="k-statuschip__dot" />

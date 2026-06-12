@@ -250,6 +250,8 @@ class TaskOut(BaseModel):
     approval_decided_at: Optional[datetime] = None
     requires_approval: bool = False; created_by_name: Optional[str] = None
     archived_at: Optional[datetime] = None
+    column_name: Optional[str] = None
+    column_color: Optional[str] = None
 
 class TaskMoveIn(BaseModel):
     column_id: str; order: int
@@ -331,4 +333,6 @@ def row_to_task(r) -> TaskOut:
         requires_approval=bool(col("requires_approval", False)),
         created_by_name=col("created_by_name"),
         archived_at=col("archived_at"),
+        column_name=col("column_name"),
+        column_color=col("column_color"),
     )

@@ -423,7 +423,7 @@ export default function TasksListPage() {
                         case 'status':
                           return (
                             <div key="status" className="k-trow__cell k-c-status">
-                              <StatusChip status={t.status} approvalStatus={t.approval_status} />
+                              <StatusChip status={t.status} approvalStatus={t.approval_status} columnName={t.column_name} columnColor={t.column_color} />
                             </div>
                           );
                         default: return null;
