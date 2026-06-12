@@ -189,8 +189,23 @@ export default function TasksListPage() {
                     <div className="k-trow__cell k-c-project">
                       {team && <ProjectTag name={team.name} dense />}
                     </div>
-                    <div className="k-trow__cell k-c-assignees">
-                      <AvatarStack users={assignees} size={20} />
+                    <div className="k-trow__cell k-c-assignees" style={{ gap: 6, flexWrap: 'nowrap', overflow: 'hidden' }}>
+                      {assignees.slice(0, 2).map((a, j) => (
+                        <span key={j} style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0 }}>
+                          <span
+                            className="k-avatar"
+                            style={{ width: 20, height: 20, fontSize: 8, flexShrink: 0, background: a.color }}
+                          >
+                            {(a.name || '?').split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}
+                          </span>
+                          <span style={{ fontSize: 12, color: 'var(--ink-2)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 80 }}>
+                            {a.name}
+                          </span>
+                        </span>
+                      ))}
+                      {assignees.length > 2 && (
+                        <span style={{ fontSize: 11, color: 'var(--ink-3)', flexShrink: 0 }}>+{assignees.length - 2}</span>
+                      )}
                     </div>
                     <div className="k-trow__cell k-c-due">
                       <DueChip date={t.due_at} />
