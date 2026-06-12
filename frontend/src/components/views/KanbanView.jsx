@@ -518,10 +518,6 @@ export default function KanbanView({
 
                       onDragEnd={draggable ? () => { setDragging(null); setOver(null); } : undefined}
 
-                      onDrop={draggable ? e => { e.stopPropagation(); handleDrop(col.column_id, idx); } : undefined}
-
-                      onDragOver={draggable ? e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; } : undefined}
-
                       style={draggable ? { cursor: 'grab' } : undefined}
 
                     >
