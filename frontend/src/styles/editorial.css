@@ -890,6 +890,76 @@ input, textarea, select { font-family: inherit; color: inherit; }
 }
 
 /* Resize handle */
+/* Category chip */
+.k-cat-chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 2px 8px;
+  border-radius: 99px;
+  background: color-mix(in srgb, var(--cat-c) 12%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--cat-c) 28%, var(--rule));
+  font-size: 12px; font-weight: 500;
+  color: color-mix(in srgb, var(--cat-c) 70%, var(--ink));
+  white-space: nowrap;
+}
+.k-cat-chip__dot { width: 6px; height: 6px; border-radius: 50%; background: var(--cat-c); flex-shrink: 0; }
+
+/* Last updated cell */
+.k-trow__meta { font-size: 12px; color: var(--ink-3); white-space: nowrap; }
+.k-trow__empty { font-size: 13px; color: var(--ink-3); }
+
+/* Badge (hidden column count) */
+.k-badge {
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 1px 6px; border-radius: 99px;
+  font-size: 10px; font-weight: 700;
+  background: var(--k-primary); color: #fff;
+}
+
+/* Columns popover */
+.k-col-popover {
+  position: absolute; top: calc(100% + 6px); right: 0;
+  width: 200px;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-md);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.10);
+  z-index: 100;
+  overflow: hidden;
+}
+.k-col-popover__head {
+  padding: 10px 14px 8px;
+  font-size: 10px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--ink-3);
+  border-bottom: 1px solid var(--rule-soft);
+}
+.k-col-popover__row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 14px;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+.k-col-popover__row:hover { background: var(--bg-soft); }
+.k-col-popover__check { position: relative; width: 15px; height: 15px; flex-shrink: 0; }
+.k-col-popover__check input { position: absolute; opacity: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; }
+.k-col-popover__box {
+  display: block; width: 15px; height: 15px;
+  border-radius: 4px;
+  border: 1.5px solid var(--rule);
+  background: var(--surface);
+  transition: border-color 0.15s, background 0.15s;
+}
+.k-col-popover__check input:checked ~ .k-col-popover__box {
+  background: var(--k-primary);
+  border-color: var(--k-primary);
+}
+.k-col-popover__check input:checked ~ .k-col-popover__box::after {
+  content: ''; display: block;
+  width: 4px; height: 7px;
+  border: 2px solid #fff; border-top: 0; border-left: 0;
+  transform: rotate(45deg) translate(2px, -1px);
+}
+.k-col-popover__name { font-size: 13px; font-weight: 500; color: var(--ink-2); }
+
 .k-col-resize {
   position: absolute; right: -4px; top: 50%; transform: translateY(-50%);
   width: 8px; height: 18px;

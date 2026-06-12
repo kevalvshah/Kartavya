@@ -1,5 +1,5 @@
 /**
- * TasksListPage.jsx — editorial Tasks screen with resizable columns.
+ * TasksListPage.jsx — editorial Tasks screen with resizable + toggleable columns.
  */
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { api } from '../lib/api';
@@ -10,41 +10,57 @@ import NewTaskModal from '../components/NewTaskModal';
 import { PageHeader, DueChip, PriorityDot, StatusChip, ProjectTag } from '../components/editorial';
 import { AVATAR_COLORS, priorityColor } from '../lib/utils';
 
-const PRIORITY_ORDER  = ['urgent','high','medium','low'];
-const PRIORITY_LABEL  = { urgent:'Urgent', high:'High', medium:'Medium', low:'Low' };
-const PRIORITY_HI     = { urgent:'अत्यावश्यक', high:'उच्च', medium:'मध्यम', low:'न्यून' };
-const STATUS_ORDER    = ['todo','in_progress','in_review','done','requested'];
-const STATUS_LABEL    = { todo:'To Do', in_progress:'In Progress', in_review:'In Review', done:'Done', requested:'Requested' };
-const STATUS_HI       = { todo:'कार्य', in_progress:'चालू', in_review:'समीक्षा', done:'सम्पन्न', requested:'अनुरोध' };
-const STATUS_COLOR    = { todo:'#94a3b8', in_progress:'#0082c6', in_review:'#a78bfa', done:'#05b7aa', requested:'#f59e0b' };
+const PRIORITY_ORDER = ['urgent','high','medium','low'];
+const PRIORITY_LABEL = { urgent:'Urgent', high:'High', medium:'Medium', low:'Low' };
+const PRIORITY_HI    = { urgent:'अत्यावश्यक', high:'उच्च', medium:'मध्यम', low:'न्यून' };
+const STATUS_ORDER   = ['todo','in_progress','in_review','done','requested'];
+const STATUS_LABEL   = { todo:'To Do', in_progress:'In Progress', in_review:'In Review', done:'Done', requested:'Requested' };
+const STATUS_HI      = { todo:'कार्य', in_progress:'चालू', in_review:'समीक्षा', done:'सम्पन्न', requested:'अनुरोध' };
+const STATUS_COLOR   = { todo:'#94a3b8', in_progress:'#0082c6', in_review:'#a78bfa', done:'#05b7aa', requested:'#f59e0b' };
 
-const COLS = [
-  { key: 'task',      label: 'Task',      defaultW: 360, min: 180 },
-  { key: 'project',   label: 'Project',   defaultW: 180, min: 100 },
-  { key: 'assignees', label: 'Assignees', defaultW: 200, min: 120 },
-  { key: 'due',       label: 'Due',       defaultW: 100, min: 80  },
-  { key: 'status',    label: 'Status',    defaultW: 130, min: 90  },
+// All available columns. 'task' is always visible and cannot be hidden.
+const ALL_COLS = [
+  { key: 'task',       label: 'Task',         defaultW: 340, min: 180, fixed: true  },
+  { key: 'project',    label: 'Project',      defaultW: 180, min: 100, fixed: false },
+  { key: 'assignees',  label: 'Assignees',    defaultW: 200, min: 120, fixed: false },
+  { key: 'category',   label: 'Category',     defaultW: 140, min: 90,  fixed: false },
+  { key: 'due',        label: 'Due',          defaultW: 100, min: 80,  fixed: false },
+  { key: 'updated',    label: 'Last Updated', defaultW: 130, min: 100, fixed: false },
+  { key: 'status',     label: 'Status',       defaultW: 130, min: 90,  fixed: false },
 ];
+
+const DEFAULT_VISIBLE = new Set(['task','project','assignees','due','status']);
 
 function initials(name) {
   return (name || '?').split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
 }
 
+function relativeTime(dateStr) {
+  if (!dateStr) return '—';
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins  = Math.floor(diff / 60000);
+  const hours = Math.floor(diff / 3600000);
+  const days  = Math.floor(diff / 86400000);
+  if (mins < 1)   return 'just now';
+  if (mins < 60)  return `${mins}m ago`;
+  if (hours < 24) return `${hours}h ago`;
+  if (days < 7)   return `${days}d ago`;
+  return new Date(dateStr).toLocaleDateString('en-IN', { day:'numeric', month:'short' });
+}
+
 function useResizableCols(cols) {
-  const [widths, setWidths] = useState(() => cols.map(c => c.defaultW));
+  const [widths, setWidths] = useState(() => Object.fromEntries(cols.map(c => [c.key, c.defaultW])));
   const dragging = useRef(null);
 
-  const onMouseDown = useCallback((e, idx) => {
+  const onMouseDown = useCallback((e, key, min) => {
     e.preventDefault();
     const startX = e.clientX;
-    const startW = widths[idx];
-    dragging.current = { idx, startX, startW };
-
-    function onMove(e) {
+    const startW = widths[key];
+    dragging.current = { key, startX, startW, min };
+    function onMove(ev) {
       if (!dragging.current) return;
-      const { idx, startX, startW } = dragging.current;
-      const newW = Math.max(cols[idx].min, startW + e.clientX - startX);
-      setWidths(prev => { const n = [...prev]; n[idx] = newW; return n; });
+      const { key, startX, startW, min } = dragging.current;
+      setWidths(prev => ({ ...prev, [key]: Math.max(min, startW + ev.clientX - startX) }));
     }
     function onUp() {
       dragging.current = null;
@@ -53,10 +69,37 @@ function useResizableCols(cols) {
     }
     window.addEventListener('mousemove', onMove);
     window.addEventListener('mouseup', onUp);
-  }, [widths, cols]);
+  }, [widths]);
 
-  const gridTemplate = widths.map(w => `${w}px`).join(' ');
-  return { widths, gridTemplate, onMouseDown };
+  return { widths, onMouseDown };
+}
+
+function ColumnsPopover({ visible, onToggle, onClose }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    function handler(e) { if (ref.current && !ref.current.contains(e.target)) onClose(); }
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [onClose]);
+
+  return (
+    <div ref={ref} className="k-col-popover">
+      <div className="k-col-popover__head">Columns</div>
+      {ALL_COLS.filter(c => !c.fixed).map(col => (
+        <label key={col.key} className="k-col-popover__row">
+          <span className="k-col-popover__check">
+            <input
+              type="checkbox"
+              checked={visible.has(col.key)}
+              onChange={() => onToggle(col.key)}
+            />
+            <span className="k-col-popover__box" />
+          </span>
+          <span className="k-col-popover__name">{col.label}</span>
+        </label>
+      ))}
+    </div>
+  );
 }
 
 export default function TasksListPage() {
@@ -64,27 +107,45 @@ export default function TasksListPage() {
   const user     = currentUser();
   const isClient = user?.role === 'client';
 
-  const [tasks,   setTasks]   = useState([]);
-  const [teams,   setTeams]   = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [search,  setSearch]  = useState('');
-  const [filter,  setFilter]  = useState('all');
-  const [group,   setGroup]   = useState('priority');
+  const [tasks,        setTasks]        = useState([]);
+  const [teams,        setTeams]        = useState([]);
+  const [categories,   setCategories]   = useState([]);
+  const [loading,      setLoading]      = useState(true);
+  const [search,       setSearch]       = useState('');
+  const [filter,       setFilter]       = useState('all');
+  const [group,        setGroup]        = useState('priority');
   const [drawerTaskId, setDrawerTaskId] = useState(null);
   const [newTaskOpen,  setNewTaskOpen]  = useState(false);
+  const [colsOpen,     setColsOpen]     = useState(false);
+  const [visible,      setVisible]      = useState(DEFAULT_VISIBLE);
 
-  const { gridTemplate, onMouseDown } = useResizableCols(COLS);
+  const activeCols = ALL_COLS.filter(c => c.fixed || visible.has(c.key));
+  const { widths, onMouseDown } = useResizableCols(ALL_COLS);
+
+  const gridTemplate = activeCols.map(c => `${widths[c.key]}px`).join(' ');
+  const rowStyle = { gridTemplateColumns: gridTemplate };
+
+  const toggleCol = useCallback(key => {
+    setVisible(prev => {
+      const next = new Set(prev);
+      next.has(key) ? next.delete(key) : next.add(key);
+      return next;
+    });
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const endpoint = isClient ? '/client/tasks' : '/tasks';
-      const [tRes, pRes] = await Promise.all([
+      const reqs = [
         api.get(endpoint),
         isClient ? api.get('/client/projects') : api.get('/teams'),
-      ]);
+      ];
+      if (!isClient) reqs.push(api.get('/categories'));
+      const [tRes, pRes, cRes] = await Promise.all(reqs);
       setTasks(Array.isArray(tRes.data) ? tRes.data : []);
       setTeams((Array.isArray(pRes.data) ? pRes.data : []).map(t => ({ team_id: t.team_id, name: t.name })));
+      if (cRes) setCategories(Array.isArray(cRes.data) ? cRes.data : []);
     } catch (_) { pushToast({ type: 'error', title: 'Could not load tasks' }); }
     finally { setLoading(false); }
   }, [isClient, pushToast]);
@@ -131,7 +192,7 @@ export default function TasksListPage() {
     done:    tasks.filter(t => t.status === 'done').length,
   };
 
-  const rowStyle = { gridTemplateColumns: gridTemplate };
+  const hiddenCount = ALL_COLS.filter(c => !c.fixed && !visible.has(c.key)).length;
 
   return (
     <div className="k-screen">
@@ -170,6 +231,28 @@ export default function TasksListPage() {
           ))}
         </div>
         <div className="k-filterbar__right">
+          {/* Columns toggle */}
+          <div style={{ position: 'relative' }}>
+            <button
+              className={'k-btn k-btn--ghost k-btn--sm' + (colsOpen ? ' is-active' : '')}
+              onClick={() => setColsOpen(v => !v)}
+              style={{ gap: 6 }}
+            >
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6">
+                <rect x="1" y="3" width="4" height="10" rx="1"/><rect x="6" y="3" width="4" height="10" rx="1"/><rect x="11" y="3" width="4" height="10" rx="1"/>
+              </svg>
+              Columns
+              {hiddenCount > 0 && <span className="k-badge">{hiddenCount} hidden</span>}
+            </button>
+            {colsOpen && (
+              <ColumnsPopover
+                visible={visible}
+                onToggle={toggleCol}
+                onClose={() => setColsOpen(false)}
+              />
+            )}
+          </div>
+
           <label className="k-fld">
             <span className="k-fld__lbl">Group by</span>
             <select value={group} onChange={e => setGroup(e.target.value)} className="k-fld__sel">
@@ -193,14 +276,11 @@ export default function TasksListPage() {
         <div className="k-tablewrap" style={{ overflowX: 'auto' }}>
           {/* Header */}
           <div className="k-table__head k-trow--resizable" style={rowStyle}>
-            {COLS.map((col, idx) => (
+            {activeCols.map((col, idx) => (
               <div key={col.key} className={`k-table__hcell k-c-${col.key}`} style={{ position: 'relative', userSelect: 'none' }}>
                 {col.label}
-                {idx < COLS.length - 1 && (
-                  <span
-                    className="k-col-resize"
-                    onMouseDown={e => onMouseDown(e, idx)}
-                  />
+                {idx < activeCols.length - 1 && (
+                  <span className="k-col-resize" onMouseDown={e => onMouseDown(e, col.key, col.min)} />
                 )}
               </div>
             ))}
@@ -222,6 +302,7 @@ export default function TasksListPage() {
               </div>
               {g.items.map((t, idx) => {
                 const team      = teams.find(tm => tm.team_id === t.team_id);
+                const cat       = categories.find(c => c.category_id === t.category_id);
                 const assignees = (t.assignee_names || []).map((name, j) => ({ name, color: AVATAR_COLORS[j % AVATAR_COLORS.length] }));
                 return (
                   <button
@@ -230,34 +311,70 @@ export default function TasksListPage() {
                     style={rowStyle}
                     onClick={() => setDrawerTaskId(t.task_id)}
                   >
-                    <div className="k-trow__cell k-c-task">
-                      <PriorityDot priority={t.priority} />
-                      <span className="k-trow__id">KAR-{String(idx + 100)}</span>
-                      <span className="k-trow__title">{t.title}</span>
-                    </div>
-                    <div className="k-trow__cell k-c-project">
-                      {team && <ProjectTag name={team.name} dense />}
-                    </div>
-                    <div className="k-trow__cell k-c-assignees">
-                      {assignees.length === 0 && (
-                        <span style={{ fontSize: 12, color: 'var(--ink-3)' }}>—</span>
-                      )}
-                      {assignees.slice(0, 3).map((a, j) => (
-                        <span key={j} className="k-assignee-pill" style={{ '--av-c': a.color }}>
-                          <span className="k-assignee-pill__avatar">{initials(a.name)}</span>
-                          <span className="k-assignee-pill__name">{a.name}</span>
-                        </span>
-                      ))}
-                      {assignees.length > 3 && (
-                        <span className="k-assignee-pill__more">+{assignees.length - 3}</span>
-                      )}
-                    </div>
-                    <div className="k-trow__cell k-c-due">
-                      <DueChip date={t.due_at} />
-                    </div>
-                    <div className="k-trow__cell k-c-status">
-                      <StatusChip status={t.status} />
-                    </div>
+                    {activeCols.map(col => {
+                      switch (col.key) {
+                        case 'task':
+                          return (
+                            <div key="task" className="k-trow__cell k-c-task">
+                              <PriorityDot priority={t.priority} />
+                              <span className="k-trow__id">KAR-{String(idx + 100)}</span>
+                              <span className="k-trow__title">{t.title}</span>
+                            </div>
+                          );
+                        case 'project':
+                          return (
+                            <div key="project" className="k-trow__cell k-c-project">
+                              {team ? <ProjectTag name={team.name} dense /> : <span className="k-trow__empty">—</span>}
+                            </div>
+                          );
+                        case 'assignees':
+                          return (
+                            <div key="assignees" className="k-trow__cell k-c-assignees">
+                              {assignees.length === 0
+                                ? <span className="k-trow__empty">—</span>
+                                : assignees.slice(0, 3).map((a, j) => (
+                                    <span key={j} className="k-assignee-pill" style={{ '--av-c': a.color }}>
+                                      <span className="k-assignee-pill__avatar">{initials(a.name)}</span>
+                                      <span className="k-assignee-pill__name">{a.name}</span>
+                                    </span>
+                                  ))
+                              }
+                              {assignees.length > 3 && <span className="k-assignee-pill__more">+{assignees.length - 3}</span>}
+                            </div>
+                          );
+                        case 'category':
+                          return (
+                            <div key="category" className="k-trow__cell k-c-category">
+                              {cat
+                                ? <span className="k-cat-chip" style={{ '--cat-c': cat.color }}>
+                                    <span className="k-cat-chip__dot" />
+                                    {cat.name}
+                                  </span>
+                                : <span className="k-trow__empty">—</span>
+                              }
+                            </div>
+                          );
+                        case 'due':
+                          return (
+                            <div key="due" className="k-trow__cell k-c-due">
+                              <DueChip date={t.due_at} />
+                            </div>
+                          );
+                        case 'updated':
+                          return (
+                            <div key="updated" className="k-trow__cell k-c-updated">
+                              <span className="k-trow__meta">{relativeTime(t.updated_at)}</span>
+                            </div>
+                          );
+                        case 'status':
+                          return (
+                            <div key="status" className="k-trow__cell k-c-status">
+                              <StatusChip status={t.status} />
+                            </div>
+                          );
+                        default: return null;
+                      }
+                    })}
                   </button>
                 );
               })}
