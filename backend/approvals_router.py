@@ -187,7 +187,7 @@ async def request_approval(task_id: str, payload: ApprovalRequest,
         await pool.execute("""
             UPDATE tasks
             SET approval_status='pending', approval_requested_at=NOW(),
-                approval_notes=$1, column_id=$2, status='in_progress', updated_at=NOW()
+                approval_notes=$1, column_id=$2, updated_at=NOW()
             WHERE task_id=$3
         """, payload.notes, approval_col["column_id"], task_id)
     else:
