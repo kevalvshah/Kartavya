@@ -1,8 +1,7 @@
 import React from 'react';
-import { priorityColor } from '../../lib/utils';
+import { priorityColor, avatarColor } from '../../lib/utils';
 
 const PRIORITY_LABEL = { low: 'Low', medium: 'Medium', high: 'High', urgent: 'Urgent' };
-const AVATAR_COLORS  = ['#0082c6','#05b7aa','#8b5cf6','#ec4899','#f59e0b','#10b981','#6366f1'];
 
 function relDue(due) {
   if (!due) return null;
@@ -89,7 +88,7 @@ export default function KanbanCard({ task, onClick, dragging = false, draggable 
                 marginLeft: i > 0 ? -8 : 0,
                 width: 26, height: 26, borderRadius: '50%',
                 display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                background: AVATAR_COLORS[i % AVATAR_COLORS.length],
+                background: avatarColor(names[i]),
                 color: '#fff', fontSize: 10, fontWeight: 700, letterSpacing: '-0.3px',
                 border: '2px solid var(--surface)',
                 boxShadow: '0 1px 3px rgba(0,0,0,0.15)',

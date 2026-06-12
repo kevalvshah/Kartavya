@@ -8,7 +8,7 @@ import { useToast } from '../components/ui/toast';
 import TaskDrawer  from '../components/TaskDrawer';
 import NewTaskModal from '../components/NewTaskModal';
 import { PageHeader, DueChip, PriorityDot, StatusChip, ProjectTag } from '../components/editorial';
-import { AVATAR_COLORS, priorityColor } from '../lib/utils';
+import { AVATAR_COLORS, avatarColor, priorityColor } from '../lib/utils';
 
 const PRIORITY_ORDER = ['urgent','high','medium','low'];
 const PRIORITY_LABEL = { urgent:'Urgent', high:'High', medium:'Medium', low:'Low' };
@@ -339,7 +339,7 @@ export default function TasksListPage() {
               {g.items.map((t, idx) => {
                 const team      = teams.find(tm => tm.team_id === t.team_id);
                 const cat       = categories.find(c => c.category_id === t.category_id);
-                const assignees = (t.assignee_names || []).map((name, j) => ({ name, color: AVATAR_COLORS[j % AVATAR_COLORS.length] }));
+                const assignees = (t.assignee_names || []).map(name => ({ name, color: avatarColor(name) }));
                 return (
                   <button
                     key={t.task_id}
