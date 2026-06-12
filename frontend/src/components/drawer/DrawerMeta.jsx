@@ -65,7 +65,6 @@ export default function DrawerMeta({
           >
             <option value="todo">To do</option>
             <option value="in_progress">In progress</option>
-            <option value="in_review">In review</option>
             <option value="done">Done</option>
           </select>
         </div>
