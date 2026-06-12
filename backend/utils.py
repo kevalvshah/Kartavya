@@ -234,7 +234,7 @@ class TaskOut(BaseModel):
     title: str; description: Optional[str] = None
     status: str; priority: str; category_id: Optional[str] = None
     tags: List[str] = []; assignee_user_ids: List[str] = []
-    assignee_emails: List[str] = []
+    assignee_emails: List[str] = []; assignee_names: List[str] = []
     due_at: Optional[datetime] = None; reminder_at: Optional[datetime] = None
     reminder_sent_at: Optional[datetime] = None
     recurrence: Recurrence = Field(default_factory=Recurrence)

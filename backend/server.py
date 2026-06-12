@@ -297,7 +297,7 @@ class TaskOut(BaseModel):
     task_id:str; user_id:Optional[str]=None; team_id:Optional[str]=None; column_id:Optional[str]=None
     created_by_user_id:str; assigned_by_user_id:Optional[str]=None; completed_by_user_id:Optional[str]=None
     title:str; description:Optional[str]=None; status:str; priority:str; category_id:Optional[str]=None
-    tags:List[str]=[]; assignee_user_ids:List[str]=[]; assignee_emails:List[str]=[]
+    tags:List[str]=[]; assignee_user_ids:List[str]=[]; assignee_emails:List[str]=[]; assignee_names:List[str]=[]
     due_at:Optional[datetime]=None; reminder_at:Optional[datetime]=None; reminder_sent_at:Optional[datetime]=None
     recurrence:Recurrence=Field(default_factory=Recurrence); estimated_minutes:Optional[int]=None
     attachments:List[Attachment]=[]; custom_fields:Dict[str,Any]={}; subtasks:List[Subtask]=[]
@@ -338,7 +338,7 @@ def row_to_task(r) -> TaskOut:
         completed_by_user_id=r["completed_by_user_id"],title=r["title"],description=r["description"],
         status=r["status"],priority=r["priority"],category_id=r["category_id"],
         tags=list(r["tags"] or []),assignee_user_ids=list(r["assignee_user_ids"] or []),
-        assignee_emails=list(r["assignee_emails"] or []),
+        assignee_emails=list(r["assignee_emails"] or []),assignee_names=list(col("assignee_names") or []),
         due_at=r["due_at"],reminder_at=r["reminder_at"],reminder_sent_at=r["reminder_sent_at"],
         recurrence=Recurrence(rule=r["recurrence_rule"] or "none",interval=r["recurrence_interval"] or 1),
         estimated_minutes=r["estimated_minutes"],
@@ -514,7 +514,15 @@ async def reorder_columns(team_id:str,body:dict,pool=Depends(get_db),user=Depend
 async def client_tasks(pool=Depends(get_db),user=Depends(require_user)):
     """Return all tasks visible to the authenticated client user."""
     rows=await pool.fetch("""
-        SELECT t.* FROM tasks t
+        SELECT t.*,
+               COALESCE(cu.full_name,cu.name,cu.email) AS created_by_name,
+               ARRAY(
+                 SELECT COALESCE(au.full_name,au.name,au.email)
+                 FROM unnest(t.assignee_user_ids) AS uid
+                 LEFT JOIN users au ON au.user_id=uid
+               ) AS assignee_names
+        FROM tasks t
+        LEFT JOIN users cu ON cu.user_id=t.created_by_user_id
         WHERE t.created_by_user_id=$1
            OR $1=ANY(t.assignee_user_ids)
            OR EXISTS(SELECT 1 FROM project_assignments pa WHERE pa.team_id=t.team_id AND pa.user_id=$1)
@@ -1267,7 +1275,19 @@ async def list_tasks(status:Optional[str]=None,category_id:Optional[str]=None,q:
     if category_id:    conditions.append(f"t.category_id=${len(vals)+1}");   vals.append(category_id)
     if q:              conditions.append(f"t.title ILIKE ${len(vals)+1}");    vals.append(f"%{q}%")
     if assigned_to_me: conditions.append(f"${len(vals)+1}=ANY(t.assignee_user_ids)"); vals.append(user["user_id"])
-    rows=await pool.fetch(f"SELECT t.*,COALESCE(u.full_name,u.name,u.email) AS created_by_name FROM tasks t LEFT JOIN users u ON u.user_id=t.created_by_user_id WHERE {' AND '.join(conditions)} ORDER BY t.sort_order ASC",*vals)
+    rows=await pool.fetch(f"""
+        SELECT t.*,
+               COALESCE(cu.full_name,cu.name,cu.email) AS created_by_name,
+               ARRAY(
+                 SELECT COALESCE(au.full_name,au.name,au.email)
+                 FROM unnest(t.assignee_user_ids) AS uid
+                 LEFT JOIN users au ON au.user_id=uid
+               ) AS assignee_names
+        FROM tasks t
+        LEFT JOIN users cu ON cu.user_id=t.created_by_user_id
+        WHERE {' AND '.join(conditions)}
+        ORDER BY t.sort_order ASC
+    """,*vals)
     return [row_to_task(r) for r in rows]
 
 
