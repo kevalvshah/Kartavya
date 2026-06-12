@@ -243,13 +243,8 @@ export default function TasksListPage() {
                         <span style={{ fontSize: 12, color: 'var(--ink-3)' }}>—</span>
                       )}
                       {assignees.slice(0, 3).map((a, j) => (
-                        <span key={j} className="k-assignee-pill">
-                          <span
-                            className="k-avatar k-avatar--ring"
-                            style={{ width: 24, height: 24, fontSize: 9, flexShrink: 0, background: a.color }}
-                          >
-                            {initials(a.name)}
-                          </span>
+                        <span key={j} className="k-assignee-pill" style={{ '--av-c': a.color }}>
+                          <span className="k-assignee-pill__avatar">{initials(a.name)}</span>
                           <span className="k-assignee-pill__name">{a.name}</span>
                         </span>
                       ))}
