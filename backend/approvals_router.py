@@ -198,19 +198,27 @@ async def approve_task(task_id: str, payload: ApprovalRequest,
         if not user_data or user_data["role"] != "admin":
             raise HTTPException(403, "Only project owner or admin can approve")
 
-    current_col = await pool.fetchrow(
-        "SELECT * FROM project_columns WHERE column_id=$1", task["column_id"]
+    all_cols = await pool.fetch(
+        "SELECT * FROM project_columns WHERE team_id=$1 ORDER BY sort_order ASC", task["team_id"]
     )
-    if current_col:
-        next_col = await pool.fetchrow("""
-            SELECT * FROM project_columns
-            WHERE team_id=$1 AND sort_order > $2
-            ORDER BY sort_order ASC LIMIT 1
-        """, task["team_id"], current_col["sort_order"])
-        new_col_id = next_col["column_id"] if next_col else task["column_id"]
-        new_status = "done" if (next_col and next_col["is_done"]) else "in_progress"
+    # Prefer a column explicitly named "Approved"; fall back to next col after current; then last col
+    approved_col = next((c for c in all_cols if "approved" in (c["name"] or "").lower()
+                         and "approval" not in (c["name"] or "").lower().replace("approved","")), None)
+    if approved_col:
+        new_col_id = approved_col["column_id"]
+        new_status  = "done" if approved_col["is_done"] else "in_progress"
     else:
-        new_col_id, new_status = task["column_id"], "in_progress"
+        current_col = next((c for c in all_cols if c["column_id"] == task["column_id"]), None)
+        next_col = next((c for c in all_cols if current_col and c["sort_order"] > current_col["sort_order"]), None)
+        if next_col:
+            new_col_id = next_col["column_id"]
+            new_status  = "done" if next_col["is_done"] else "in_progress"
+        elif all_cols:
+            # No next col — use last column and mark done
+            new_col_id = all_cols[-1]["column_id"]
+            new_status  = "done"
+        else:
+            new_col_id, new_status = task["column_id"], "in_progress"
 
     await pool.execute("""
         UPDATE tasks

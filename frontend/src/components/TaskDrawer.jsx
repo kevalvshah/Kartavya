@@ -482,6 +482,7 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
                 {task.team_id && (
                   <DrawerApproval
                     task={task}
+                    isApprovalColumn={columns.some(c => c.column_id === task.column_id && (c.name || '').toLowerCase().includes('approval'))}
                     isOwnerAdmin={isOwnerAdmin} isClient={isClient}
                     showApprovePanel={showApprovePanel}   setShowApprovePanel={setShowApprovePanel}
                     showRequestPanel={showRequestPanel}   setShowRequestPanel={setShowRequestPanel}
