@@ -102,7 +102,8 @@ async def _notify(pool, task_id: str, task_title: str, recipient_id: str,
 
 async def send_approval_notification(pool, task_id: str, task_title: str,
                                      recipient_id: str, notification_type: str,
-                                     notes: Optional[str] = None, team_id: Optional[str] = None):
+                                     notes: Optional[str] = None, team_id: Optional[str] = None,
+                                     requester_name: Optional[str] = None):
     """Send a DB notification, email, and push notification for an approval event."""
     user = await pool.fetchrow(
         "SELECT email, COALESCE(full_name,name) AS name FROM users WHERE user_id=$1", recipient_id
@@ -114,7 +115,8 @@ async def send_approval_notification(pool, task_id: str, task_title: str,
             send_approval_notification_email(
                 user["email"], user["name"] or user["email"],
                 task_title, notification_type, notes,
-                task_id=task_id,  # ← deep-link fix
+                task_id=task_id,
+                requester_name=requester_name,
             )
         except Exception as exc:
             import logging; logging.getLogger(__name__).warning("approval email failed: %s", exc)
@@ -157,10 +159,17 @@ async def request_approval(task_id: str, payload: ApprovalRequest,
 
     owner = await pool.fetchrow("""
         SELECT user_id FROM team_members
-        WHERE team_id=$1 AND role='owner' AND status='active' LIMIT 1
+        WHERE team_id=$1 AND role IN ('owner','admin') AND status='active'
+        ORDER BY CASE role WHEN 'owner' THEN 0 ELSE 1 END LIMIT 1
     """, task["team_id"])
     if not owner:
-        raise HTTPException(400, "No project owner found")
+        raise HTTPException(400, "No project owner or admin found to approve")
+
+    requester = await pool.fetchrow(
+        "SELECT COALESCE(full_name, name, email) AS name FROM users WHERE user_id=$1",
+        user["user_id"]
+    )
+    requester_name = requester["name"] if requester else "A team member"
 
     await pool.execute("""
         UPDATE tasks
@@ -169,7 +178,10 @@ async def request_approval(task_id: str, payload: ApprovalRequest,
         WHERE task_id=$2
     """, payload.notes, task_id)
 
-    await send_approval_notification(pool, task_id, task["title"], owner["user_id"], "request", payload.notes, team_id=task["team_id"])
+    await send_approval_notification(
+        pool, task_id, task["title"], owner["user_id"], "request",
+        payload.notes, team_id=task["team_id"], requester_name=requester_name
+    )
     return {"message": "Approval requested", "approval_status": "pending"}
 
 

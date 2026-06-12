@@ -316,7 +316,11 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
       const res = await api.post(`/tasks/${taskId}/request-approval`, { notes: requestNotes });
       setTask(t => ({ ...t, approval_status: res.data.approval_status }));
       setShowRequestPanel(false); setRequestNotes('');
-    } catch (e) { logger.error(e); }
+      pushToast({ type: 'success', title: 'Approval request sent' });
+    } catch (e) {
+      logger.error(e);
+      pushToast({ type: 'error', title: e?.response?.data?.detail || 'Could not send approval request' });
+    }
     finally { setApprovalLoading(false); }
   };
 
@@ -332,30 +336,40 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
 
   const approveTask = async () => {
     setApprovalLoading(true);
-    const approvalId = `task_approval--${taskId}`;
-    const selected   = clientList.find(c => c.user_id === clientUserId);
+    const selected = clientList.find(c => c.user_id === clientUserId);
     try {
-      const res = await api.post(`/approvals/${approvalId}/review`, {
-        status: 'approved', notes: approvalNotes,
-        send_to_client: !!selected,
-        client_email: selected ? selected.email : '',
-      });
-      setTask(t => ({ ...t, approval_status: res.data.status }));
+      if (selected) {
+        // Forward to client for their approval
+        const res = await api.post(`/tasks/${taskId}/request-client-approval`, {
+          client_email: selected.email,
+          notes: approvalNotes,
+        });
+        setTask(t => ({ ...t, approval_status: res.data.approval_status }));
+      } else {
+        // Directly approve
+        const res = await api.post(`/tasks/${taskId}/approve`, { notes: approvalNotes });
+        setTask(t => ({ ...t, approval_status: res.data.approval_status }));
+        onSaved?.({ ...task, approval_status: res.data.approval_status });
+      }
       setShowApprovePanel(false); setApprovalNotes(''); setClientUserId('');
-      if (res.data.status !== 'pending_client') onSaved?.({ ...task, approval_status: res.data.status });
-    } catch (e) { logger.error(e); }
+    } catch (e) {
+      logger.error(e);
+      pushToast({ type: 'error', title: e?.response?.data?.detail || 'Could not approve task' });
+    }
     finally { setApprovalLoading(false); }
   };
 
   const rejectTask = async () => {
     if (!rejectNote.trim()) return;
     setApprovalLoading(true);
-    const approvalId = `task_approval--${taskId}`;
     try {
-      await api.post(`/approvals/${approvalId}/review`, { status: 'rejected', notes: rejectNote });
-      setTask(t => ({ ...t, approval_status: 'rejected' }));
+      const res = await api.post(`/tasks/${taskId}/reject`, { notes: rejectNote });
+      setTask(t => ({ ...t, approval_status: res.data.approval_status }));
       setShowRejectInput(false); setRejectNote('');
-    } catch (e) { logger.error(e); }
+    } catch (e) {
+      logger.error(e);
+      pushToast({ type: 'error', title: e?.response?.data?.detail || 'Could not reject task' });
+    }
     finally { setApprovalLoading(false); }
   };
 

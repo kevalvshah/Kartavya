@@ -1097,11 +1097,11 @@ def send_password_reset_email(user_email: str, user_name: str, reset_token: str)
 # ── Legacy aliases ─────────────────────────────────────────────────────────────
 def send_approval_notification_email(user_email: str, user_name: str, task_title: str,
                                      notification_type: str, notes: str = None,
-                                     task_id: str = None):
-    """Legacy alias — dispatch to send_approval_request_email or send_approval_decision_email."""
+                                     task_id: str = None, requester_name: str = None):
+    """Dispatch to send_approval_request_email or send_approval_decision_email."""
     if notification_type == "request":
         return send_approval_request_email(
-            user_email, user_name, "A team member", task_title, notes=notes)
+            user_email, user_name, requester_name or "A team member", task_title, notes=notes)
     else:
         return send_approval_decision_email(
             user_email, user_name, "The reviewer", task_title, task_id or "", notification_type, notes)
