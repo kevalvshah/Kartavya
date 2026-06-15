@@ -1409,19 +1409,30 @@ async def create_task(payload:TaskCreate,pool=Depends(get_db),user=Depends(requi
     return row_to_task(row)
 
 
+def _filter_private_attachments(task_out, user_id: str, is_creator: bool) -> "TaskOut":
+    """Strip private attachments the caller is not allowed to see."""
+    filtered = [
+        a for a in (task_out.attachments or [])
+        if not a.is_private or is_creator or user_id in (a.visible_to or [])
+    ]
+    task_out.attachments = filtered
+    return task_out
+
 @api_router.get("/tasks/{task_id}",response_model=TaskOut)
 async def get_task(task_id:str,pool=Depends(get_db),user=Depends(require_user)):
     """Return a single task by ID, enforcing visibility and access rules."""
     row=await pool.fetchrow("SELECT t.*,COALESCE(u.full_name,u.name,u.email) AS created_by_name FROM tasks t LEFT JOIN users u ON u.user_id=t.created_by_user_id WHERE t.task_id=$1",task_id)
     if not row: raise HTTPException(404)
-    if user.get("role")=="admin": return row_to_task(row)
-    if row["created_by_user_id"]==user["user_id"]: return row_to_task(row)
-    if user["user_id"] in (row["assignee_user_ids"] or []): return row_to_task(row)
+    uid=user["user_id"]; is_creator=row["created_by_user_id"]==uid
+    def _out(): return _filter_private_attachments(row_to_task(row), uid, is_creator or user.get("role")=="admin")
+    if user.get("role")=="admin": return _out()
+    if is_creator: return _out()
+    if uid in (row["assignee_user_ids"] or []): return _out()
     if row["team_id"]:
-        team_ids=await get_visible_team_ids(pool,user["user_id"],_user_dict=user)
-        if row["team_id"] in team_ids: return row_to_task(row)
-    client_link=await pool.fetchrow("SELECT 1 FROM task_clients WHERE task_id=$1 AND user_id=$2",task_id,user["user_id"])
-    if client_link: return row_to_task(row)
+        team_ids=await get_visible_team_ids(pool,uid,_user_dict=user)
+        if row["team_id"] in team_ids: return _out()
+    client_link=await pool.fetchrow("SELECT 1 FROM task_clients WHERE task_id=$1 AND user_id=$2",task_id,uid)
+    if client_link: return _out()
     raise HTTPException(403,"Not authorized")
 
 
@@ -1478,6 +1489,13 @@ async def update_task(task_id:str,payload:TaskUpdate,pool=Depends(get_db),user=D
     from services.activity_logger import log_event, log_assigned
     if old_status!=new_status:
         await log_event(pool,task_id=task_id,actor_id=user["user_id"],event_type="status_changed",data={"from":old_status,"to":new_status})
+        actor_name=user.get("full_name") or user.get("name") or user.get("email","Someone")
+        for uid in new_assignees:
+            if uid!=user["user_id"]:
+                try:
+                    await create_notification(pool,uid,"status_changed",f"Task status updated: {row['title']}",f"{actor_name} moved it to {new_status}",task_id,existing["team_id"],"/tasks")
+                except Exception:
+                    pass
         from services.automation_engine import fire_automations
         _bg(fire_automations(pool,"status_changed",{"task":{"task_id":task_id,"team_id":existing["team_id"]},"team_id":existing["team_id"],"from":old_status,"to":new_status}), label="fire_automations")
     if "assignee_user_ids" in data:
@@ -1545,7 +1563,8 @@ async def add_task_attachment(
     if ext in {".heic", ".heif"} and mime == "application/octet-stream":
         mime = f"image/{ext.lstrip('.')}"
 
-    result = await upload_file(file_bytes=content, filename=file.filename or "upload", content_type=mime, user_id=user["user_id"])
+    folder = f"projects/{row['team_id']}" if row.get("team_id") else None
+    result = await upload_file(file_bytes=content, filename=file.filename or "upload", content_type=mime, user_id=user["user_id"], folder=folder)
 
     current = pj(row["attachments"], [])
     if len(current) >= 5:

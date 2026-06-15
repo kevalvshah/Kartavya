@@ -52,7 +52,7 @@ BUCKET   = os.environ.get("R2_BUCKET_NAME", "kartavya-uploads")
 PUB_URL  = os.environ.get("R2_PUBLIC_URL", "").rstrip("/")
 
 
-async def upload_file(file_bytes: bytes, filename: str, content_type: str, user_id: str) -> dict:
+async def upload_file(file_bytes: bytes, filename: str, content_type: str, user_id: str, folder: Optional[str] = None) -> dict:
     """
     Upload a file to R2. Returns {url, name, key, size}.
     Falls back to base64 data-URI when R2 is not configured.
@@ -71,7 +71,8 @@ async def upload_file(file_bytes: bytes, filename: str, content_type: str, user_
 
     import asyncio
     ext = Path(filename).suffix
-    key = f"uploads/{user_id}/{uuid.uuid4().hex}{ext}"
+    prefix = folder or f"personal/{user_id}"
+    key = f"{prefix}/{uuid.uuid4().hex}{ext}"
 
     await asyncio.get_running_loop().run_in_executor(
         None,

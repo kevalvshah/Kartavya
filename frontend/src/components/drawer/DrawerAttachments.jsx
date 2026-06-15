@@ -1,12 +1,107 @@
 import React, { useRef, useState } from 'react';
-import { Paperclip, ExternalLink, Trash2, Upload, Image, FileText } from 'lucide-react';
+import { Paperclip, ExternalLink, Trash2, Upload, Image, FileText, Film, Lock, Unlock, Users } from 'lucide-react';
+import { avatarColor, userInitials } from '../../lib/utils';
 
-const MAX_FILES = 5;
-const MAX_MB    = 5;
+const MAX_FILES     = 5;
+const MAX_MB        = 5;
+const MAX_MB_VIDEO  = 50;
+const VIDEO_EXT     = /\.(mov|mp4|webm|avi|mkv)$/i;
 
-function FileChip({ file, onRemove }) {
+function fileIcon(name) {
+  if (/\.(jpg|jpeg|png|gif|webp|heic)$/i.test(name)) return <Image size={13} style={{ color: 'var(--k-primary)', flexShrink: 0 }} />;
+  if (VIDEO_EXT.test(name)) return <Film size={13} style={{ color: '#8b5cf6', flexShrink: 0 }} />;
+  return <FileText size={13} style={{ color: 'var(--k-primary)', flexShrink: 0 }} />;
+}
+
+function PrivacyPicker({ file, members, currentUserId, onChange }) {
+  const [open, setOpen] = useState(false);
+  const isPrivate = file.is_private || false;
+  const visibleTo = file.visible_to || [];
+
+  function toggleMember(uid) {
+    const next = visibleTo.includes(uid) ? visibleTo.filter(x => x !== uid) : [...visibleTo, uid];
+    onChange({ ...file, is_private: true, visible_to: next });
+  }
+
+  return (
+    <div style={{ position: 'relative', display: 'inline-flex' }}>
+      <button
+        title={isPrivate ? 'Private — click to manage' : 'Public to project — click to make private'}
+        onClick={() => setOpen(v => !v)}
+        style={{
+          background: isPrivate ? '#fef3c7' : 'transparent',
+          border: isPrivate ? '1px solid #fbbf24' : 'none',
+          borderRadius: 6, padding: '2px 5px', cursor: 'pointer',
+          display: 'flex', alignItems: 'center', gap: 3,
+          color: isPrivate ? '#92400e' : 'var(--ink-3)',
+        }}
+      >
+        {isPrivate ? <Lock size={11} /> : <Unlock size={11} />}
+        {isPrivate && visibleTo.length > 0 && (
+          <span style={{ fontSize: 10, fontWeight: 700 }}>{visibleTo.length}</span>
+        )}
+      </button>
+
+      {open && (
+        <div style={{
+          position: 'absolute', bottom: 'calc(100% + 4px)', right: 0, zIndex: 300,
+          background: 'var(--surface)', border: '1px solid var(--rule)',
+          borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,0.18)',
+          minWidth: 200, padding: 8,
+        }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--ink-3)', padding: '2px 6px 6px' }}>
+            File visibility
+          </div>
+          <button
+            onClick={() => { onChange({ ...file, is_private: false, visible_to: [] }); setOpen(false); }}
+            style={{
+              width: '100%', textAlign: 'left', padding: '6px 8px', borderRadius: 6,
+              border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 500,
+              background: !isPrivate ? 'var(--side-active)' : 'transparent',
+              color: 'var(--ink)',
+            }}
+          >
+            <Unlock size={11} style={{ marginRight: 5, verticalAlign: 'middle' }} />
+            Visible to all project members
+          </button>
+          {members.filter(m => (m.user_id || m.member_id) !== currentUserId).map((m, i) => {
+            const uid  = m.user_id || m.member_id;
+            const name = m.display_name || m.full_name || m.name || '';
+            const checked = visibleTo.includes(uid);
+            return (
+              <button
+                key={uid}
+                onClick={() => { toggleMember(uid); }}
+                style={{
+                  width: '100%', textAlign: 'left', padding: '6px 8px', borderRadius: 6,
+                  border: 'none', cursor: 'pointer', fontSize: 12,
+                  background: checked ? 'var(--side-active)' : 'transparent',
+                  display: 'flex', alignItems: 'center', gap: 6, color: 'var(--ink)',
+                }}
+              >
+                <span style={{
+                  width: 20, height: 20, borderRadius: '50%', fontSize: 9, fontWeight: 700, flexShrink: 0,
+                  background: avatarColor(name), color: '#fff',
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  {userInitials(name)}
+                </span>
+                <span style={{ flex: 1 }}>{name}</span>
+                {checked && <span style={{ color: 'var(--k-primary)', fontSize: 14 }}>✓</span>}
+              </button>
+            );
+          })}
+          {members.filter(m => (m.user_id || m.member_id) !== currentUserId).length === 0 && (
+            <div style={{ fontSize: 11, color: 'var(--ink-3)', padding: '6px 8px' }}>No other members</div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function FileChip({ file, onRemove, members, currentUserId, onPrivacyChange }) {
   const name = file.name || file.url?.split('/').pop() || 'File';
-  const isImage = /\.(jpg|jpeg|png|gif|webp|heic)$/i.test(name);
   return (
     <div style={{
       display: 'flex', alignItems: 'center', gap: 8,
@@ -14,10 +109,7 @@ function FileChip({ file, onRemove }) {
       background: 'var(--bg)', border: '1px solid var(--rule)',
       borderRadius: 'var(--r-md)', fontSize: 13,
     }}>
-      {isImage
-        ? <Image size={13} style={{ color: 'var(--k-primary)', flexShrink: 0 }} />
-        : <FileText size={13} style={{ color: 'var(--k-primary)', flexShrink: 0 }} />
-      }
+      {fileIcon(name)}
       <a
         href={file.url}
         target="_blank"
@@ -26,7 +118,15 @@ function FileChip({ file, onRemove }) {
       >
         {name}
       </a>
+      {file.is_private && (
+        <span style={{ fontSize: 10, fontWeight: 700, color: '#92400e', background: '#fef3c7', border: '1px solid #fbbf24', borderRadius: 4, padding: '1px 5px', flexShrink: 0 }}>
+          Private
+        </span>
+      )}
       <ExternalLink size={11} style={{ color: 'var(--ink-3)', flexShrink: 0 }} />
+      {onPrivacyChange && members && (
+        <PrivacyPicker file={file} members={members} currentUserId={currentUserId} onChange={onPrivacyChange} />
+      )}
       {onRemove && (
         <button
           onClick={onRemove}
@@ -39,19 +139,20 @@ function FileChip({ file, onRemove }) {
   );
 }
 
-export default function DrawerAttachments({ attachments, uploading, fileRef, handleFileChange, removeAttachment }) {
-  const dropRef = useRef(null);
+export default function DrawerAttachments({
+  attachments, uploading, fileRef, handleFileChange, removeAttachment,
+  onPrivacyChange, members = [], currentUserId,
+}) {
   const [dragging, setDragging] = useState(false);
+  const isProjectTask = members.length > 0;
 
   const handleDrop = (e) => {
     e.preventDefault();
     setDragging(false);
     if (!fileRef.current) return;
-    // Create a synthetic change event with the dropped files
     const dt = e.dataTransfer;
     if (!dt?.files?.length) return;
-    const synth = { target: { files: dt.files, value: '' } };
-    handleFileChange(synth);
+    handleFileChange({ target: { files: dt.files, value: '' } });
   };
 
   const full = attachments.length >= MAX_FILES;
@@ -62,7 +163,7 @@ export default function DrawerAttachments({ attachments, uploading, fileRef, han
         ref={fileRef}
         type="file"
         multiple
-        accept=".jpg,.jpeg,.png,.gif,.heic,.heif,.pdf,.doc,.docx,.xls,.xlsx,.csv,.ppt,.pptx,.txt"
+        accept=".jpg,.jpeg,.png,.gif,.heic,.heif,.pdf,.doc,.docx,.xls,.xlsx,.csv,.ppt,.pptx,.txt,.mov,.mp4,.webm,.avi,video/quicktime,video/mp4,video/webm"
         style={{ display: 'none' }}
         onChange={handleFileChange}
       />
@@ -79,14 +180,13 @@ export default function DrawerAttachments({ attachments, uploading, fileRef, han
           {uploading ? 'Uploading…' : 'Attach files'}
         </button>
         <span style={{ fontSize: 11, color: 'var(--ink-3)' }}>
-          {attachments.length}/{MAX_FILES} · max {MAX_MB} MB
+          {attachments.length}/{MAX_FILES} · images/docs {MAX_MB} MB · video {MAX_MB_VIDEO} MB
         </span>
       </div>
 
-      {/* Drop zone / empty state */}
+      {/* Drop zone */}
       {attachments.length === 0 && !uploading && (
         <div
-          ref={dropRef}
           onClick={() => !full && fileRef.current?.click()}
           onDragOver={e => { e.preventDefault(); setDragging(true); }}
           onDragLeave={() => setDragging(false)}
@@ -106,8 +206,8 @@ export default function DrawerAttachments({ attachments, uploading, fileRef, han
             Drop files or click to browse
           </div>
           <div style={{ fontSize: 11, color: 'var(--ink-3)', lineHeight: 1.6 }}>
-            Computer · Google Drive · OneDrive · Dropbox<br />
-            Images, PDF, Word, Excel, PowerPoint · max 5 MB
+            Images, PDF, Word, Excel, PowerPoint<br />
+            Video (MOV, MP4, WebM) · images/docs max {MAX_MB} MB · video max {MAX_MB_VIDEO} MB
           </div>
         </div>
       )}
@@ -124,7 +224,14 @@ export default function DrawerAttachments({ attachments, uploading, fileRef, han
       {attachments.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           {attachments.map((f, i) => (
-            <FileChip key={i} file={f} onRemove={() => removeAttachment(i)} />
+            <FileChip
+              key={i}
+              file={f}
+              onRemove={() => removeAttachment(i)}
+              members={isProjectTask ? members : null}
+              currentUserId={currentUserId}
+              onPrivacyChange={isProjectTask ? (updated) => onPrivacyChange?.(i, updated) : null}
+            />
           ))}
           {!full && !uploading && (
             <button

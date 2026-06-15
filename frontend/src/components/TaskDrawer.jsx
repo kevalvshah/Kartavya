@@ -16,8 +16,10 @@ import DrawerTimeEntries from './drawer/DrawerTimeEntries';
 import DrawerApproval    from './drawer/DrawerApproval';
 import { lbl }           from './drawer/constants';
 
-const MAX_FILES = 5;
-const MAX_MB    = 5;
+const MAX_FILES    = 5;
+const MAX_MB       = 5;
+const MAX_MB_VIDEO = 50;
+const VIDEO_EXT    = /\.(mov|mp4|webm|avi|mkv)$/i;
 
 export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers = [] }) {
   const me = currentUser();
@@ -281,9 +283,12 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
     if (toUpload.length < picked.length)
       pushToast({ type: 'error', title: `Only ${slots} slot(s) remaining — uploading first ${slots}` });
 
-    const oversized = toUpload.filter(f => f.size > MAX_MB * 1024 * 1024);
+    const oversized = toUpload.filter(f => {
+      const isVideo = VIDEO_EXT.test(f.name);
+      return f.size > (isVideo ? MAX_MB_VIDEO : MAX_MB) * 1024 * 1024;
+    });
     if (oversized.length) {
-      pushToast({ type: 'error', title: `${oversized.map(f => f.name).join(', ')} exceed${oversized.length > 1 ? '' : 's'} ${MAX_MB} MB` });
+      pushToast({ type: 'error', title: `${oversized.map(f => f.name).join(', ')} exceed the file size limit` });
       if (fileRef.current) fileRef.current.value = '';
       return;
     }
@@ -291,15 +296,17 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
     setUploading(true);
     try {
       const newFiles = [];
+      const teamId = task?.team_id;
       for (const file of toUpload) {
         const fd = new FormData();
         fd.append('file', file);
-        const res = await api.post('/upload', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
-        newFiles.push({ name: file.name, url: res.data.url, key: res.data.key, size: res.data.size });
+        const url = teamId ? `/upload?team_id=${encodeURIComponent(teamId)}` : '/upload';
+        const res = await api.post(url, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+        newFiles.push({ name: file.name, url: res.data.url, key: res.data.key, size: res.data.size, is_private: false, visible_to: [] });
       }
       const updated = [...attachments, ...newFiles];
       setAttachments(updated);
-      await saveTask({ attachments: updated.map(f => ({ name: f.name, url: f.url, key: f.key || null })) });
+      await saveTask({ attachments: updated.map(f => ({ name: f.name, url: f.url, key: f.key || null, is_private: f.is_private || false, visible_to: f.visible_to || [] })) });
       pushToast({ type: 'success', title: `${newFiles.length} file${newFiles.length > 1 ? 's' : ''} uploaded` });
     } catch (err) {
       pushToast({ type: 'error', title: err?.response?.data?.detail || 'Upload failed' });
@@ -312,7 +319,13 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
   const removeAttachment = async idx => {
     const updated = attachments.filter((_, i) => i !== idx);
     setAttachments(updated);
-    await saveTask({ attachments: updated.map(f => ({ name: f.name, url: f.url, key: f.key || null })) });
+    await saveTask({ attachments: updated.map(f => ({ name: f.name, url: f.url, key: f.key || null, is_private: f.is_private || false, visible_to: f.visible_to || [] })) });
+  };
+
+  const handlePrivacyChange = async (idx, updatedFile) => {
+    const updated = attachments.map((f, i) => i === idx ? updatedFile : f);
+    setAttachments(updated);
+    await saveTask({ attachments: updated.map(f => ({ name: f.name, url: f.url, key: f.key || null, is_private: f.is_private || false, visible_to: f.visible_to || [] })) });
   };
 
   // ── Time actions ──────────────────────────────────────────────────────────
@@ -544,6 +557,9 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
                     attachments={attachments} uploading={uploading}
                     fileRef={fileRef} handleFileChange={handleFileChange}
                     removeAttachment={removeAttachment}
+                    onPrivacyChange={handlePrivacyChange}
+                    members={members}
+                    currentUserId={me?.user_id}
                   />
                 </div>
 

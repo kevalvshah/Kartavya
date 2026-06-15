@@ -624,8 +624,11 @@ export default function KanbanView({
       </div>
 
       <TaskDrawer taskId={drawerTaskId} open={!!drawerTaskId} onClose={() => setDrawerTaskId(null)}
-
-        teamMembers={teamMembers} onSaved={u => onTasksChange?.(p => p.map(t => t.task_id === u.task_id ? u : t))} />
+        teamMembers={teamMembers}
+        onSaved={u => {
+          if (!u) { setDrawerTaskId(null); return; }
+          onTasksChange?.(p => p.map(t => t.task_id === u.task_id ? { ...t, ...u } : t));
+        }} />
 
       <ConfirmDialog state={confirmState} onClose={() => setConfirmState(null)} />
 

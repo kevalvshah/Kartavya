@@ -441,7 +441,10 @@ export default function TasksListPage() {
         taskId={drawerTaskId}
         open={!!drawerTaskId}
         onClose={() => setDrawerTaskId(null)}
-        onSaved={() => { setDrawerTaskId(null); load(); }}
+        onSaved={updated => {
+          if (!updated) { setDrawerTaskId(null); return; }
+          setTasks(prev => prev.map(t => t.task_id === updated.task_id ? { ...t, ...updated } : t));
+        }}
       />
 
       <NewTaskModal

@@ -192,6 +192,8 @@ class TeamMemberOut(BaseModel):
 
 class Attachment(BaseModel):
     name: str; url: str; key: Optional[str] = None
+    is_private: bool = False
+    visible_to: List[str] = []
 
 class Subtask(BaseModel):
     subtask_id: str = Field(default_factory=lambda: f"sub_{uuid.uuid4().hex[:12]}")
