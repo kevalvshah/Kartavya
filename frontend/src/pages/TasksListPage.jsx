@@ -443,7 +443,15 @@ export default function TasksListPage() {
         onClose={() => setDrawerTaskId(null)}
         onSaved={updated => {
           if (!updated) { setDrawerTaskId(null); return; }
-          setTasks(prev => prev.map(t => t.task_id === updated.task_id ? { ...t, ...updated } : t));
+          setTasks(prev => prev.map(t => {
+            if (t.task_id !== updated.task_id) return t;
+            return {
+              ...t, ...updated,
+              column_name:    updated.column_name    ?? t.column_name,
+              column_color:   updated.column_color   ?? t.column_color,
+              assignee_names: updated.assignee_names?.length ? updated.assignee_names : (t.assignee_names || []),
+            };
+          }));
         }}
       />
 

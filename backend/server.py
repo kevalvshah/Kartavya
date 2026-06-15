@@ -1409,6 +1409,25 @@ async def create_task(payload:TaskCreate,pool=Depends(get_db),user=Depends(requi
     return row_to_task(row)
 
 
+async def _fetch_enriched_task(pool, task_id: str) -> "TaskOut":
+    """Re-fetch a task with all JOIN'd fields (column_name, column_color, assignee_names)."""
+    row = await pool.fetchrow("""
+        SELECT t.*,
+               COALESCE(cu.full_name, cu.name, cu.email) AS created_by_name,
+               ARRAY(
+                 SELECT COALESCE(u.full_name, u.name, u.email)
+                 FROM unnest(t.assignee_user_ids) AS aid
+                 JOIN users u ON u.user_id = aid
+               ) AS assignee_names,
+               pc.name  AS column_name,
+               pc.color AS column_color
+        FROM tasks t
+        LEFT JOIN users cu ON cu.user_id = t.created_by_user_id
+        LEFT JOIN project_columns pc ON pc.column_id = t.column_id
+        WHERE t.task_id = $1
+    """, task_id)
+    return row_to_task(row) if row else None
+
 def _filter_private_attachments(task_out, user_id: str, is_creator: bool) -> "TaskOut":
     """Strip private attachments the caller is not allowed to see."""
     filtered = [
@@ -1424,15 +1443,17 @@ async def get_task(task_id:str,pool=Depends(get_db),user=Depends(require_user)):
     row=await pool.fetchrow("SELECT t.*,COALESCE(u.full_name,u.name,u.email) AS created_by_name FROM tasks t LEFT JOIN users u ON u.user_id=t.created_by_user_id WHERE t.task_id=$1",task_id)
     if not row: raise HTTPException(404)
     uid=user["user_id"]; is_creator=row["created_by_user_id"]==uid
-    def _out(): return _filter_private_attachments(row_to_task(row), uid, is_creator or user.get("role")=="admin")
-    if user.get("role")=="admin": return _out()
-    if is_creator: return _out()
-    if uid in (row["assignee_user_ids"] or []): return _out()
+    async def _out():
+        enriched = await _fetch_enriched_task(pool, task_id)
+        return _filter_private_attachments(enriched, uid, is_creator or user.get("role")=="admin")
+    if user.get("role")=="admin": return await _out()
+    if is_creator: return await _out()
+    if uid in (row["assignee_user_ids"] or []): return await _out()
     if row["team_id"]:
         team_ids=await get_visible_team_ids(pool,uid,_user_dict=user)
-        if row["team_id"] in team_ids: return _out()
+        if row["team_id"] in team_ids: return await _out()
     client_link=await pool.fetchrow("SELECT 1 FROM task_clients WHERE task_id=$1 AND user_id=$2",task_id,uid)
-    if client_link: return _out()
+    if client_link: return await _out()
     raise HTTPException(403,"Not authorized")
 
 
@@ -1536,7 +1557,7 @@ async def update_task(task_id:str,payload:TaskUpdate,pool=Depends(get_db),user=D
                 ))
             except Exception as _pe:
                 logger.warning("assignee push failed: %s", _pe)
-    return row_to_task(row)
+    return await _fetch_enriched_task(pool, task_id)
 
 
 @api_router.patch("/tasks/{task_id}",response_model=TaskOut)
@@ -1685,7 +1706,7 @@ async def move_task(task_id:str,payload:TaskMoveIn,pool=Depends(get_db),user=Dep
         from services.activity_logger import log_event
         await log_event(pool,task_id=task_id,actor_id=user["user_id"],event_type="status_changed",data={"from":doc["status"],"to":new_status})
 
-    return row_to_task(row)
+    return await _fetch_enriched_task(pool, task_id)
 
 # ── Notifications ─────────────────────────────────────────────────
 

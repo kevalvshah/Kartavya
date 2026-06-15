@@ -627,7 +627,15 @@ export default function KanbanView({
         teamMembers={teamMembers}
         onSaved={u => {
           if (!u) { setDrawerTaskId(null); return; }
-          onTasksChange?.(p => p.map(t => t.task_id === u.task_id ? { ...t, ...u } : t));
+          onTasksChange?.(p => p.map(t => {
+            if (t.task_id !== u.task_id) return t;
+            return {
+              ...t, ...u,
+              column_name:    u.column_name    ?? t.column_name,
+              column_color:   u.column_color   ?? t.column_color,
+              assignee_names: u.assignee_names?.length ? u.assignee_names : (t.assignee_names || []),
+            };
+          }));
         }} />
 
       <ConfirmDialog state={confirmState} onClose={() => setConfirmState(null)} />
