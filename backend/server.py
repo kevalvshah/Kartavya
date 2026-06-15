@@ -1409,6 +1409,79 @@ async def create_task(payload:TaskCreate,pool=Depends(get_db),user=Depends(requi
     return row_to_task(row)
 
 
+async def _notify_status_changed(pool, row, existing, old_status: str, new_status: str, actor: dict, task_id: str):
+    """Fan-out in-app + email notifications after a task status change."""
+    actor_name   = actor.get("full_name") or actor.get("name") or actor.get("email", "Someone")
+    actor_id     = actor["user_id"]
+    assignees    = list(row.get("assignee_user_ids") or [])
+    creator_id   = existing["created_by_user_id"]
+    team_id      = existing.get("team_id")
+
+    # Notify: assignees + creator, excluding the actor
+    notif_targets = list({uid for uid in assignees + ([creator_id] if creator_id else []) if uid and uid != actor_id})
+
+    # In-app notifications
+    for uid in notif_targets:
+        try:
+            await create_notification(pool, uid, "status_changed",
+                f"Task status updated: {row['title']}",
+                f"{actor_name} moved it to {new_status}",
+                task_id, team_id, "/tasks")
+        except Exception:
+            pass
+
+    # Email notifications
+    try:
+        if notif_targets:
+            user_rows = await pool.fetch(
+                "SELECT user_id, COALESCE(full_name,name,email) AS name, email FROM users WHERE user_id=ANY($1::text[])",
+                notif_targets
+            )
+            project_row  = await pool.fetchrow("SELECT name FROM teams WHERE team_id=$1", team_id) if team_id else None
+            project_name = project_row["name"] if project_row else None
+            from email_service import send_status_changed_email
+            for ur in user_rows:
+                if ur["email"]:
+                    send_status_changed_email(
+                        ur["email"], ur["name"] or ur["email"],
+                        actor_name, row["title"], task_id,
+                        new_status, project=project_name,
+                    )
+    except Exception as _e:
+        logger.warning("status_changed email failed: %s", _e)
+
+    # Task-done: notify ALL project members
+    if new_status == "done" and team_id:
+        try:
+            member_rows = await pool.fetch("""
+                SELECT DISTINCT u.user_id, COALESCE(u.full_name,u.name,u.email) AS name, u.email
+                FROM team_members tm
+                JOIN users u ON u.user_id = tm.user_id
+                WHERE tm.team_id=$1 AND tm.status='active' AND tm.user_id IS NOT NULL
+                  AND tm.user_id != $2
+            """, team_id, actor_id)
+            project_row  = await pool.fetchrow("SELECT name FROM teams WHERE team_id=$1", team_id) if not locals().get("project_name") else None
+            project_name = (project_row["name"] if project_row else None) if project_row else locals().get("project_name")
+            from email_service import send_task_done_email
+            for mr in member_rows:
+                if mr["email"]:
+                    # In-app notification
+                    try:
+                        await create_notification(pool, mr["user_id"], "done",
+                            f"Task completed: {row['title']}",
+                            f"{actor_name} marked it as done.",
+                            task_id, team_id, "/tasks")
+                    except Exception:
+                        pass
+                    # Email
+                    send_task_done_email(
+                        mr["email"], mr["name"] or mr["email"],
+                        actor_name, row["title"],
+                    )
+        except Exception as _e:
+            logger.warning("task_done notification failed: %s", _e)
+
+
 async def _fetch_enriched_task(pool, task_id: str) -> "TaskOut":
     """Re-fetch a task with all JOIN'd fields (column_name, column_color, assignee_names)."""
     row = await pool.fetchrow("""
@@ -1510,31 +1583,7 @@ async def update_task(task_id:str,payload:TaskUpdate,pool=Depends(get_db),user=D
     from services.activity_logger import log_event, log_assigned
     if old_status!=new_status:
         await log_event(pool,task_id=task_id,actor_id=user["user_id"],event_type="status_changed",data={"from":old_status,"to":new_status})
-        actor_name=user.get("full_name") or user.get("name") or user.get("email","Someone")
-        recipients=[uid for uid in new_assignees if uid!=user["user_id"]]
-        for uid in recipients:
-            try:
-                await create_notification(pool,uid,"status_changed",f"Task status updated: {row['title']}",f"{actor_name} moved it to {new_status}",task_id,existing["team_id"],"/tasks")
-            except Exception:
-                pass
-        if recipients:
-            try:
-                assignee_rows=await pool.fetch(
-                    "SELECT COALESCE(full_name,name,email) AS name, email FROM users WHERE user_id=ANY($1::text[])",
-                    recipients
-                )
-                project_row=await pool.fetchrow("SELECT name FROM teams WHERE team_id=$1",existing["team_id"]) if existing.get("team_id") else None
-                project_name=project_row["name"] if project_row else None
-                from email_service import send_status_changed_email
-                for ar in assignee_rows:
-                    if ar["email"]:
-                        send_status_changed_email(
-                            ar["email"], ar["name"] or ar["email"],
-                            actor_name, row["title"], task_id,
-                            new_status, project=project_name
-                        )
-            except Exception as _email_err:
-                logger.warning("status_changed email failed: %s", _email_err)
+        await _notify_status_changed(pool, row, existing, old_status, new_status, user, task_id)
         from services.automation_engine import fire_automations
         _bg(fire_automations(pool,"status_changed",{"task":{"task_id":task_id,"team_id":existing["team_id"]},"team_id":existing["team_id"],"from":old_status,"to":new_status}), label="fire_automations")
     if "assignee_user_ids" in data:
@@ -1705,6 +1754,7 @@ async def move_task(task_id:str,payload:TaskMoveIn,pool=Depends(get_db),user=Dep
     if doc["status"]!=new_status:
         from services.activity_logger import log_event
         await log_event(pool,task_id=task_id,actor_id=user["user_id"],event_type="status_changed",data={"from":doc["status"],"to":new_status})
+        await _notify_status_changed(pool, row, dict(doc), doc["status"], new_status, user, task_id)
 
     return await _fetch_enriched_task(pool, task_id)
 
