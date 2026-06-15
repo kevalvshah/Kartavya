@@ -1490,12 +1490,30 @@ async def update_task(task_id:str,payload:TaskUpdate,pool=Depends(get_db),user=D
     if old_status!=new_status:
         await log_event(pool,task_id=task_id,actor_id=user["user_id"],event_type="status_changed",data={"from":old_status,"to":new_status})
         actor_name=user.get("full_name") or user.get("name") or user.get("email","Someone")
-        for uid in new_assignees:
-            if uid!=user["user_id"]:
-                try:
-                    await create_notification(pool,uid,"status_changed",f"Task status updated: {row['title']}",f"{actor_name} moved it to {new_status}",task_id,existing["team_id"],"/tasks")
-                except Exception:
-                    pass
+        recipients=[uid for uid in new_assignees if uid!=user["user_id"]]
+        for uid in recipients:
+            try:
+                await create_notification(pool,uid,"status_changed",f"Task status updated: {row['title']}",f"{actor_name} moved it to {new_status}",task_id,existing["team_id"],"/tasks")
+            except Exception:
+                pass
+        if recipients:
+            try:
+                assignee_rows=await pool.fetch(
+                    "SELECT COALESCE(full_name,name,email) AS name, email FROM users WHERE user_id=ANY($1::text[])",
+                    recipients
+                )
+                project_row=await pool.fetchrow("SELECT name FROM teams WHERE team_id=$1",existing["team_id"]) if existing.get("team_id") else None
+                project_name=project_row["name"] if project_row else None
+                from email_service import send_status_changed_email
+                for ar in assignee_rows:
+                    if ar["email"]:
+                        send_status_changed_email(
+                            ar["email"], ar["name"] or ar["email"],
+                            actor_name, row["title"], task_id,
+                            new_status, project=project_name
+                        )
+            except Exception as _email_err:
+                logger.warning("status_changed email failed: %s", _email_err)
         from services.automation_engine import fire_automations
         _bg(fire_automations(pool,"status_changed",{"task":{"task_id":task_id,"team_id":existing["team_id"]},"team_id":existing["team_id"],"from":old_status,"to":new_status}), label="fire_automations")
     if "assignee_user_ids" in data:

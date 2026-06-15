@@ -1094,6 +1094,34 @@ def send_password_reset_email(user_email: str, user_name: str, reset_token: str)
     )
 
 
+# ── Status changed email ──────────────────────────────────────────────────────
+def send_status_changed_email(user_email: str, user_name: str,
+                               actor_name: str, task_title: str,
+                               task_id: str, new_status: str,
+                               project: str = None):
+    """Notify an assignee that the status of one of their tasks has changed."""
+    task_url   = f"{FRONTEND_URL}/tasks"
+    first_name = _h(user_name.split()[0] if user_name else "there")
+    preheader  = f"{actor_name} updated "{task_title}" to {new_status}"
+    card_rows  = [("TASK", task_title), ("NEW STATUS", new_status)]
+    if project:
+        card_rows.append(("PROJECT", project))
+    card = _info_card(card_rows)
+    body = (
+        _body_text(f'Hi <strong>{first_name}</strong>, '
+                   f'<strong>{_h(actor_name)}</strong> moved your task to '
+                   f'<strong>{_h(new_status)}</strong>.')
+        + card
+        + _cta_row(task_url, "View Task", "primary")
+    )
+    return send_email(
+        user_email,
+        f"Task updated: {task_title}",
+        _base(preheader, "STATUS UPDATE · स्थिति", "Task status changed", "स्थिति परिवर्तन",
+              "", body),
+    )
+
+
 # ── Legacy aliases ─────────────────────────────────────────────────────────────
 def send_approval_notification_email(user_email: str, user_name: str, task_title: str,
                                      notification_type: str, notes: str = None,
