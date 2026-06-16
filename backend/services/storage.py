@@ -58,8 +58,8 @@ async def upload_file(file_bytes: bytes, filename: str, content_type: str, user_
     Falls back to base64 data-URI when R2 is not configured.
 
     Key layout:
-      projects/{team_id}/{user_id}/{uuid}{ext}  — project attachments, grouped per uploader
-      personal/{user_id}/{uuid}{ext}             — personal (non-project) attachments
+      projects/{team_id}/{uuid}{ext}  — project attachments, all files for that project together
+      personal/{user_id}/{uuid}{ext}  — personal (non-project) attachments, one folder per user
     """
     client = _client()
     if client is None:
@@ -75,7 +75,7 @@ async def upload_file(file_bytes: bytes, filename: str, content_type: str, user_
 
     import asyncio
     ext = Path(filename).suffix
-    prefix = f"{folder}/{user_id}" if folder else f"personal/{user_id}"
+    prefix = folder or f"personal/{user_id}"
     key = f"{prefix}/{uuid.uuid4().hex}{ext}"
 
     await asyncio.get_running_loop().run_in_executor(
