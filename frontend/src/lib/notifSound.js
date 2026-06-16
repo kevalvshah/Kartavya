@@ -175,7 +175,7 @@ export function playNotifSound() {
 }
 
 const PRAISE_SOUNDS = [
-  // Gujju
+  // Gujju — male
   '/sounds/praise/kya_baat.mp3',
   '/sounds/praise/moje_moj.mp3',
   '/sounds/praise/wah_re_wah.mp3',
@@ -186,7 +186,16 @@ const PRAISE_SOUNDS = [
   '/sounds/praise/fatafat_kaam.mp3',
   '/sounds/praise/jai_kaam_thayu.mp3',
   '/sounds/praise/gujju_hero.mp3',
-  // Hindi
+  // Gujju — female
+  '/sounds/praise/f_kya_baat.mp3',
+  '/sounds/praise/f_moje_moj.mp3',
+  '/sounds/praise/f_wah_re_wah.mp3',
+  '/sounds/praise/f_shabash_bhai.mp3',
+  '/sounds/praise/f_aapde_champion.mp3',
+  '/sounds/praise/f_mast_kaam.mp3',
+  '/sounds/praise/f_fatafat_kaam.mp3',
+  '/sounds/praise/f_gujju_hero.mp3',
+  // Hindi — male
   '/sounds/praise/hi_kya_baat.mp3',
   '/sounds/praise/hi_wah_wah.mp3',
   '/sounds/praise/hi_shabash.mp3',
@@ -197,6 +206,25 @@ const PRAISE_SOUNDS = [
   '/sounds/praise/hi_ekdum_mast.mp3',
   '/sounds/praise/hi_mast_hai.mp3',
   '/sounds/praise/hi_arey_waah.mp3',
+  // Hindi — female
+  '/sounds/praise/f_hi_kya_baat.mp3',
+  '/sounds/praise/f_hi_wah_wah.mp3',
+  '/sounds/praise/f_hi_shabash.mp3',
+  '/sounds/praise/f_hi_bahut_badhiya.mp3',
+  '/sounds/praise/f_hi_champion.mp3',
+  '/sounds/praise/f_hi_ekdum_mast.mp3',
+  '/sounds/praise/f_hi_jai_ho.mp3',
+  '/sounds/praise/f_hi_arey_waah.mp3',
+  // English — male
+  '/sounds/praise/en_crushed_it.mp3',
+  '/sounds/praise/en_legendary.mp3',
+  '/sounds/praise/en_nailed_it.mp3',
+  '/sounds/praise/en_you_beast.mp3',
+  // English — female
+  '/sounds/praise/en_f_on_fire.mp3',
+  '/sounds/praise/en_f_amazing_work.mp3',
+  '/sounds/praise/en_f_killing_it.mp3',
+  '/sounds/praise/en_f_proud_of_you.mp3',
 ];
 
 export function playPraiseSound() {
