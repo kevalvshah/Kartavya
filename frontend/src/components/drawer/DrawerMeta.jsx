@@ -3,6 +3,14 @@ import { AVATAR_COLORS, userInitials, PRIORITY_COLOR as PRIORITY_COLORS } from '
 import { PRIORITY_LABELS } from './constants';
 import ReminderPicker, { DEFAULT_REMINDERS } from '../ReminderPicker';
 
+// Convert a UTC ISO string to the "YYYY-MM-DDTHH:mm" shape <input type="datetime-local"> expects, in local time.
+function toLocalDatetimeValue(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  const pad = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 /**
  * DrawerMeta — props row: priority, board column, due date, reminders, category, and assignees.
  */
@@ -83,9 +91,9 @@ export default function DrawerMeta({
           Due date <span className="k-prop__sans">&#x0938;&#x092E;&#x092F;-&#x0938;&#x0940;&#x092E;&#x093E;</span>
         </span>
         <input
-          type="date"
+          type="datetime-local"
           className="k-input"
-          value={draft.due_at ? draft.due_at.slice(0, 10) : ''}
+          value={toLocalDatetimeValue(draft.due_at)}
           onChange={async e => {
             const v = e.target.value ? new Date(e.target.value).toISOString() : null;
             setDraft(d => ({ ...d, due_at: v }));
