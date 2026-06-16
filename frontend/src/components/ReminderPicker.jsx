@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 
 /**
  * ReminderPicker — pick one or more due-date reminder offsets, each with its
@@ -47,6 +47,16 @@ const CHANNELS = [
 ];
 
 export default function ReminderPicker({ value = [], onChange, disabled = false }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+
   const find = (mins) => value.find(r => r.offset_minutes === mins);
 
   const toggleOffset = (mins) => {
@@ -66,29 +76,58 @@ export default function ReminderPicker({ value = [], onChange, disabled = false 
     ));
   };
 
+  const summary = value.length === 0 ? 'Add reminder…'
+    : value.map(r => OFFSETS.find(o => o.minutes === r.offset_minutes)?.label || `${r.offset_minutes}m`).join(', ');
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, opacity: disabled ? 0.5 : 1 }}>
-      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-        {OFFSETS.map(o => {
-          const active = !!find(o.minutes);
-          return (
-            <button
-              key={o.minutes}
-              type="button"
-              disabled={disabled}
-              onClick={() => toggleOffset(o.minutes)}
-              style={{
-                padding: '4px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600,
-                fontFamily: 'var(--font-ui)', cursor: disabled ? 'default' : 'pointer',
-                border: `1px solid ${active ? 'var(--k-primary)' : 'var(--rule)'}`,
-                background: active ? 'var(--side-active)' : 'var(--bg-soft)',
-                color: active ? 'var(--k-primary)' : 'var(--ink-3)',
-              }}
-            >
-              {o.label}
-            </button>
-          );
-        })}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, opacity: disabled ? 0.5 : 1 }}>
+      <div ref={ref} style={{ position: 'relative' }}>
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={() => setOpen(v => !v)}
+          style={{
+            width: '100%', display: 'flex', alignItems: 'center', gap: 6,
+            background: 'var(--bg-soft)', border: '1px solid var(--rule)',
+            borderRadius: 'var(--r-md)', padding: '6px 10px', cursor: disabled ? 'default' : 'pointer',
+            fontFamily: 'var(--font-ui)', fontSize: 12,
+            color: value.length ? 'var(--ink)' : 'var(--ink-faint)', minHeight: 34,
+          }}
+        >
+          <span style={{ flex: 1, textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{summary}</span>
+          <svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ flexShrink: 0, color: 'var(--ink-3)' }}>
+            <path d={open ? 'M2 8l4-4 4 4' : 'M2 4l4 4 4-4'} />
+          </svg>
+        </button>
+
+        {open && (
+          <div style={{
+            position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0, zIndex: 200,
+            background: 'var(--surface)', border: '1px solid var(--rule)',
+            borderRadius: 'var(--r-md)', boxShadow: '0 8px 24px rgba(0,0,0,0.18)',
+            padding: 6, display: 'flex', flexWrap: 'wrap', gap: 6,
+          }}>
+            {OFFSETS.map(o => {
+              const active = !!find(o.minutes);
+              return (
+                <button
+                  key={o.minutes}
+                  type="button"
+                  onClick={() => toggleOffset(o.minutes)}
+                  style={{
+                    padding: '4px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600,
+                    fontFamily: 'var(--font-ui)', cursor: 'pointer',
+                    border: `1px solid ${active ? 'var(--k-primary)' : 'var(--rule)'}`,
+                    background: active ? 'var(--side-active)' : 'var(--bg-soft)',
+                    color: active ? 'var(--k-primary)' : 'var(--ink-3)',
+                  }}
+                >
+                  {o.label}
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {value.length > 0 && (
