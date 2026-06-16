@@ -121,6 +121,25 @@ export const NOTIF_SOUND_GROUPS = [
       { id: 'hi_task_pending',         label: 'Task pending, film baad mein!',  hi: 'टास्क',    url: '/sounds/hi_task_pending.mp3' },
     ],
   },
+  {
+    group: 'English Slang',
+    hi: 'इंग्लिश स्लैंग',
+    sounds: [
+      { id: 'en_bruh',           label: 'Bruuuh...',               hi: 'ब्रुह',       url: '/sounds/en_bruh.mp3' },
+      { id: 'en_cmon_man',       label: 'Come on man!',            hi: 'कम ऑन',       url: '/sounds/en_cmon_man.mp3' },
+      { id: 'en_oh_my_god',      label: 'Oh my Goood!',            hi: 'ओह माय गॉड',  url: '/sounds/en_oh_my_god.mp3' },
+      { id: 'en_are_you_serious','label': 'Are you serious?',      hi: 'सीरियस?',     url: '/sounds/en_are_you_serious.mp3' },
+      { id: 'en_no_way',         label: 'No waaaay!',              hi: 'नो वे',       url: '/sounds/en_no_way.mp3' },
+      { id: 'en_lets_gooo',      label: "Let's gooo!",             hi: 'लेट्स गो',    url: '/sounds/en_lets_gooo.mp3' },
+      { id: 'en_sheesh',         label: 'Sheeeesh!',               hi: 'शीश',         url: '/sounds/en_sheesh.mp3' },
+      { id: 'en_not_bad',        label: 'Not bad not bad!',        hi: 'नॉट बैड',     url: '/sounds/en_not_bad.mp3' },
+      { id: 'en_you_got_this',   label: 'You got this bro!',       hi: 'यू गॉट दिस',  url: '/sounds/en_you_got_this.mp3' },
+      { id: 'en_absolute_legend',label: 'Absolute legend!',        hi: 'लेजेंड',      url: '/sounds/en_absolute_legend.mp3' },
+      { id: 'en_keep_grinding',  label: 'Keep grinding!',          hi: 'ग्राइंड',     url: '/sounds/en_keep_grinding.mp3' },
+      { id: 'en_w_move',         label: 'That is a W move!',       hi: 'डब्लू मूव',   url: '/sounds/en_w_move.mp3' },
+      { id: 'en_task_or_nap',    label: 'Task or nap? Task wins!', hi: 'टास्क',       url: '/sounds/en_task_or_nap.mp3' },
+    ],
+  },
 ];
 
 // Flat list for lookups (playNotifSound, etc.)
