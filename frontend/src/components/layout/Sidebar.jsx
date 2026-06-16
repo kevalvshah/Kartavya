@@ -56,7 +56,8 @@ const NAV_FULL = [
   {
     section: 'settings', sans: 'व्यवस्था',
     items: [
-      { to: '/settings/categories', icon: 'categories', en: 'Categories', hi: 'वर्ग' },
+      { to: '/settings/categories',    icon: 'categories',    en: 'Categories',    hi: 'वर्ग' },
+      { to: '/settings/notifications', icon: 'notifications', en: 'Notifications', hi: 'सूचना' },
     ],
   },
 ];
