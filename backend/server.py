@@ -45,6 +45,7 @@ from routers.templates   import router as templates_router
 from routers.time_entries import router as time_router
 from routers.uploads     import router as uploads_router   # R2-backed upload
 from routers.reports     import router as reports_router
+from routers.task_reminders import router as task_reminders_router
 from services.gita            import get_verse_of_the_day
 from services.web_push_service import (
     is_configured as wp_is_configured,
@@ -213,15 +214,50 @@ async def normalize_orders(pool, scope_col, scope_val, column_id):
         *params,
     )
 
-async def create_notification(pool, user_id, notif_type, title, message, task_id=None, team_id=None, url=None):
-    """Insert a notification row and fire a Web Push if the user has a subscription."""
+async def create_notification(pool, user_id, notif_type, title, message, task_id=None, team_id=None, url=None, push=True):
+    """Insert a notification row and fire a Web Push if the user has a subscription.
+
+    Pass push=False to write the in-app row only (used for reminders whose
+    push channel was switched off).
+    """
     await pool.execute(
         "INSERT INTO notifications (notification_id,user_id,team_id,type,title,message,task_id,url) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)",
         f"notif_{uuid.uuid4().hex[:12]}", user_id, team_id, notif_type, title, message, task_id, url,
     )
+    if not push: return
     # Fire Web Push (browser) + Expo Push (mobile) — both non-blocking
     asyncio.create_task(send_web_push(pool, user_id=user_id, title=title, body=message, url=url or "/"))
     asyncio.create_task(send_expo_push(pool, user_id=user_id, title=title, body=message, url=url or "/", task_id=task_id))
+
+async def _replace_task_reminders(pool, task_id: str, due_dt, reminders: List["ReminderIn"]) -> List["ReminderOut"]:
+    """Delete unsent reminders for a task and insert the new set, computed off due_dt.
+
+    Reminders whose offset isn't in REMINDER_OFFSETS, whose channels aren't a
+    recognized subset, or whose computed fire_at has already passed are skipped.
+    """
+    await pool.execute("DELETE FROM task_reminders WHERE task_id=$1 AND sent_at IS NULL", task_id)
+    if not due_dt or not reminders: return []
+    now = now_utc(); out = []
+    for r in reminders:
+        if r.offset_minutes not in REMINDER_OFFSETS: continue
+        channels = [c for c in r.channels if c in REMINDER_CHANNELS] or ["in_app"]
+        fire_at = due_dt - timedelta(minutes=r.offset_minutes)
+        if fire_at <= now: continue
+        row = await pool.fetchrow(
+            """INSERT INTO task_reminders (task_id,offset_minutes,channel_inapp,channel_push,channel_email,fire_at)
+               VALUES ($1,$2,$3,$4,$5,$6) RETURNING *""",
+            task_id, r.offset_minutes, "in_app" in channels, "push" in channels, "email" in channels, fire_at,
+        )
+        out.append(_reminder_row_to_out(row))
+    return out
+
+def _reminder_row_to_out(row) -> "ReminderOut":
+    channels = [c for c, flag in (("in_app", row["channel_inapp"]), ("push", row["channel_push"]), ("email", row["channel_email"])) if flag]
+    return ReminderOut(reminder_id=row["reminder_id"], offset_minutes=row["offset_minutes"], channels=channels, fire_at=row["fire_at"], sent_at=row["sent_at"])
+
+async def _fetch_task_reminders(pool, task_id: str) -> List["ReminderOut"]:
+    rows = await pool.fetch("SELECT * FROM task_reminders WHERE task_id=$1 AND sent_at IS NULL ORDER BY fire_at ASC", task_id)
+    return [_reminder_row_to_out(r) for r in rows]
 
 async def ensure_default_columns(pool, team_id):
     """Create the five default kanban columns for a new project if none exist yet."""
@@ -279,11 +315,17 @@ class Subtask(BaseModel):
     subtask_id:str=Field(default_factory=lambda:f"sub_{uuid.uuid4().hex[:12]}"); title:str; is_done:bool=False; order:int=0; assignee_user_id:Optional[str]=None
 class Recurrence(BaseModel):
     rule:str="none"; interval:int=1
+REMINDER_OFFSETS = {2880, 1440, 240, 120, 60, 30, 15}
+REMINDER_CHANNELS = {"in_app", "push", "email"}
+class ReminderIn(BaseModel):
+    offset_minutes:int; channels:List[str]=["in_app"]
+class ReminderOut(BaseModel):
+    reminder_id:str; offset_minutes:int; channels:List[str]; fire_at:datetime; sent_at:Optional[datetime]=None
 class TaskCreate(BaseModel):
     title:str; description:Optional[str]=None; status:str="todo"; column_id:Optional[str]=None
     priority:str="medium"; category_id:Optional[str]=None; tags:List[str]=[]; team_id:Optional[str]=None
     assignee_user_ids:List[str]=[]; assignee_emails:List[str]=[]; due_at:Optional[str]=None
-    reminder_at:Optional[str]=None; recurrence:Recurrence=Field(default_factory=Recurrence)
+    reminder_at:Optional[str]=None; reminders:List[ReminderIn]=[]; recurrence:Recurrence=Field(default_factory=Recurrence)
     estimated_minutes:Optional[int]=None; attachments:List[Attachment]=[]
     custom_fields:Dict[str,Any]={}; subtasks:List[Subtask]=[]
 class TaskUpdate(BaseModel):
@@ -306,7 +348,7 @@ class TaskOut(BaseModel):
     approval_status:Optional[str]=None; approval_notes:Optional[str]=None; approved_by:Optional[str]=None
     approval_requested_at:Optional[datetime]=None; approval_decided_at:Optional[datetime]=None
     requires_approval:bool=False; created_by_name:Optional[str]=None
-    archived_at:Optional[datetime]=None
+    archived_at:Optional[datetime]=None; reminders:List[ReminderOut]=[]
 class TaskMoveIn(BaseModel):
     column_id:str; order:int
 class CommentCreate(BaseModel):
@@ -1407,7 +1449,9 @@ async def create_task(payload:TaskCreate,pool=Depends(get_db),user=Depends(requi
     await log_event(pool,task_id=task_id,team_id=payload.team_id,actor_id=user["user_id"],event_type="created",data={"title":payload.title})
     from services.automation_engine import fire_automations
     _bg(fire_automations(pool,"task_created",{"task":{"task_id":task_id,"team_id":payload.team_id},"team_id":payload.team_id}), label="fire_automations")
-    return row_to_task(row)
+    out=row_to_task(row)
+    out.reminders=await _replace_task_reminders(pool,task_id,due_dt,payload.reminders)
+    return out
 
 
 async def _notify_status_changed(pool, row, existing, old_status: str, new_status: str, actor: dict, task_id: str):
@@ -1500,7 +1544,10 @@ async def _fetch_enriched_task(pool, task_id: str) -> "TaskOut":
         LEFT JOIN project_columns pc ON pc.column_id = t.column_id
         WHERE t.task_id = $1
     """, task_id)
-    return row_to_task(row) if row else None
+    if not row: return None
+    out = row_to_task(row)
+    out.reminders = await _fetch_task_reminders(pool, task_id)
+    return out
 
 def _filter_private_attachments(task_out, user_id: str, is_creator: bool) -> "TaskOut":
     """Strip private attachments the caller is not allowed to see."""
@@ -1529,6 +1576,20 @@ async def get_task(task_id:str,pool=Depends(get_db),user=Depends(require_user)):
     client_link=await pool.fetchrow("SELECT 1 FROM task_clients WHERE task_id=$1 AND user_id=$2",task_id,uid)
     if client_link: return await _out()
     raise HTTPException(403,"Not authorized")
+
+
+@api_router.put("/tasks/{task_id}/reminders",response_model=List[ReminderOut])
+async def set_task_reminders(task_id:str,payload:List[ReminderIn],pool=Depends(get_db),user=Depends(require_user)):
+    """Replace all pending reminders for a task. Usable at creation time or any time after, from the drawer."""
+    team_ids=await get_visible_team_ids(pool,user["user_id"],_user_dict=user)
+    existing=await pool.fetchrow(
+        "SELECT due_at FROM tasks WHERE task_id=$1 AND (user_id=$2 OR team_id=ANY($3::text[]) OR created_by_user_id=$2)",
+        task_id,user["user_id"],team_ids
+    )
+    if not existing: raise HTTPException(404)
+    if not existing["due_at"] and payload:
+        raise HTTPException(400,"Task has no due date — set one before adding reminders")
+    return await _replace_task_reminders(pool,task_id,existing["due_at"],payload)
 
 
 @api_router.put("/tasks/{task_id}",response_model=TaskOut)
@@ -1872,6 +1933,7 @@ app.include_router(templates_router)
 app.include_router(time_router)
 app.include_router(uploads_router)   # R2-backed file upload (replaces old base64 /api/upload)
 app.include_router(reports_router)
+app.include_router(task_reminders_router)
 
 
 # ── Verse of the day (public) ────────────────────────────────────────────────
@@ -2045,6 +2107,22 @@ async def _run_startup_migrations():
         """)
         await pool.execute("CREATE INDEX IF NOT EXISTS idx_report_sched_team ON report_schedules(team_id)")
         await pool.execute("CREATE INDEX IF NOT EXISTS idx_report_sched_next ON report_schedules(next_run_at) WHERE is_active=TRUE")
+        # Custom task reminders (multi-offset, multi-channel)
+        await pool.execute("""
+            CREATE TABLE IF NOT EXISTS task_reminders (
+                reminder_id     TEXT PRIMARY KEY DEFAULT ('trm_' || substr(md5(random()::text),1,12)),
+                task_id         TEXT NOT NULL REFERENCES tasks(task_id) ON DELETE CASCADE,
+                offset_minutes  INTEGER NOT NULL,
+                channel_inapp   BOOLEAN NOT NULL DEFAULT TRUE,
+                channel_push    BOOLEAN NOT NULL DEFAULT TRUE,
+                channel_email   BOOLEAN NOT NULL DEFAULT FALSE,
+                fire_at         TIMESTAMPTZ NOT NULL,
+                sent_at         TIMESTAMPTZ,
+                created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            )
+        """)
+        await pool.execute("CREATE INDEX IF NOT EXISTS idx_task_reminders_due ON task_reminders(fire_at) WHERE sent_at IS NULL")
+        await pool.execute("CREATE INDEX IF NOT EXISTS idx_task_reminders_task ON task_reminders(task_id)")
         logger.info("Startup migrations OK")
     except Exception as e:
         logger.warning("Startup migration warning (non-fatal): %s", e)

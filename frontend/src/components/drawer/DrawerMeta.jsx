@@ -1,16 +1,23 @@
 import React from 'react';
 import { AVATAR_COLORS, userInitials, PRIORITY_COLOR as PRIORITY_COLORS } from '../../lib/utils';
 import { PRIORITY_LABELS } from './constants';
+import ReminderPicker, { DEFAULT_REMINDERS } from '../ReminderPicker';
 
 /**
- * DrawerMeta — props row: priority, board column, due date, category, and assignees.
+ * DrawerMeta — props row: priority, board column, due date, reminders, category, and assignees.
  */
 export default function DrawerMeta({
-  task, draft, setDraft, saveTask, onColumnChange,
+  task, draft, setDraft, saveTask, saveReminders, onColumnChange,
   columns, members, categories,
   assigneeOpen, setAssigneeOpen, assigneeRef, toggleAssignee,
 }) {
   if (!task) return null;
+
+  // API shape (channels: string[]) <-> picker shape (channels: {in_app,push,email})
+  const pickerReminders = (draft.reminders || []).map(r => ({
+    offset_minutes: r.offset_minutes,
+    channels: { in_app: r.channels.includes('in_app'), push: r.channels.includes('push'), email: r.channels.includes('email') },
+  }));
 
   const selIds     = task.assignee_user_ids || [];
   const selMembers = members.filter(m => selIds.includes(m.user_id || m.member_id));
@@ -79,12 +86,38 @@ export default function DrawerMeta({
           type="date"
           className="k-input"
           value={draft.due_at ? draft.due_at.slice(0, 10) : ''}
-          onChange={e => {
+          onChange={async e => {
             const v = e.target.value ? new Date(e.target.value).toISOString() : null;
             setDraft(d => ({ ...d, due_at: v }));
-            saveTask({ due_at: v });
+            await saveTask({ due_at: v });
+            // Teams-like default: 1hr + 15min reminders the first time a due date is set.
+            if (v && (draft.reminders || []).length === 0) saveReminders(DEFAULT_REMINDERS);
           }}
         />
+      </div>
+
+      {/* Reminders */}
+      <div className="k-prop">
+        <span className="k-prop__lbl">
+          Reminders <span className="k-prop__sans">&#x0930;&#x093F;&#x092E;&#x093E;&#x0907;&#x0902;&#x0921;&#x0930;</span>
+        </span>
+        <ReminderPicker
+          value={pickerReminders}
+          onChange={next => {
+            setDraft(d => ({
+              ...d,
+              reminders: next.map(r => ({
+                offset_minutes: r.offset_minutes,
+                channels: Object.entries(r.channels).filter(([, v]) => v).map(([k]) => k),
+              })),
+            }));
+            saveReminders(next);
+          }}
+          disabled={!draft.due_at}
+        />
+        {!draft.due_at && (
+          <span style={{ fontSize: 11, color: 'var(--ink-faint)' }}>Set a due date to enable reminders</span>
+        )}
       </div>
 
       {/* Category */}

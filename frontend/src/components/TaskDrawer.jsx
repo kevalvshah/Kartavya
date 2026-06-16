@@ -121,7 +121,7 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
       setTimer(timeRes.data?.active_entry || null);
       const t = tRes.data;
       setTask(t);
-      setDraft({ title: t.title, description: t.description, priority: t.priority, due_at: t.due_at, status: t.status, category_id: t.category_id || '' });
+      setDraft({ title: t.title, description: t.description, priority: t.priority, due_at: t.due_at, status: t.status, category_id: t.category_id || '', reminders: t.reminders || [] });
       setComments(Array.isArray(cRes.data) ? cRes.data : []);
       const att = t.attachments || [];
       setAttachments(Array.isArray(att) ? att.map(a => typeof a === 'string' ? { url: a, name: a.split('/').pop() } : a) : []);
@@ -154,6 +154,20 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
     } catch (e) { logger.error('Save failed', e); }
     finally { setSaving(false); }
   }, [taskId, onSaved]);
+
+  const saveReminders = useCallback(async (reminders) => {
+    setSaving(true);
+    try {
+      const payload = reminders.map(r => ({
+        offset_minutes: r.offset_minutes,
+        channels: Object.entries(r.channels).filter(([, v]) => v).map(([k]) => k),
+      }));
+      const res = await api.put(`/tasks/${taskId}/reminders`, payload);
+      setTask(prev => ({ ...prev, reminders: res.data }));
+      setDraft(prev => ({ ...prev, reminders: res.data }));
+    } catch (e) { logger.error('Reminder save failed', e); }
+    finally { setSaving(false); }
+  }, [taskId]);
 
   const saveFieldValue = useCallback(async (field_id, value) => {
     setFValues(prev => ({ ...prev, [field_id]: value }));
@@ -457,6 +471,7 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
 
           <DrawerMeta
             task={task} draft={draft} setDraft={setDraft} saveTask={saveTask}
+            saveReminders={saveReminders}
             onColumnChange={onColumnChange}
             columns={columns} members={members} categories={categories}
             assigneeOpen={assigneeOpen} setAssigneeOpen={setAssigneeOpen}

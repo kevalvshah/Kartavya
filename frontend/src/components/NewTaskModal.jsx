@@ -4,6 +4,7 @@
  */
 import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../lib/api';
+import ReminderPicker, { DEFAULT_REMINDERS } from './ReminderPicker';
 import { AVATAR_COLORS, userInitials, logger } from '../lib/utils';import { currentUser } from '../lib/auth';
 
 const PRIORITY_DOTS = {
@@ -19,6 +20,7 @@ export default function NewTaskModal({ open, onClose, onCreated }) {  const is
   const [status,      setStatus]      = useState('todo');
   const [priority,    setPriority]    = useState('medium');
   const [dueAt,       setDueAt]       = useState('');
+  const [reminders,   setReminders]   = useState([]);
   const [description, setDescription] = useState('');
   const [assignees,   setAssignees]   = useState([]);
   const [files,       setFiles]       = useState([]);
@@ -36,7 +38,7 @@ export default function NewTaskModal({ open, onClose, onCreated }) {  const is
   useEffect(() => {
     if (!open) return;
     setTitle(''); setProjectId(''); setStatus('todo'); setPriority('medium');
-    setDueAt(''); setDescription(''); setAssignees([]); setFiles([]);
+    setDueAt(''); setReminders([]); setDescription(''); setAssignees([]); setFiles([]);
     setTitleError(false); setAssigneeOpen(false);
     api.get('/teams').then(r => setProjects(Array.isArray(r.data) ? r.data : [])).catch(() => {});
     setTimeout(() => titleRef.current?.focus(), 80);
@@ -92,6 +94,12 @@ export default function NewTaskModal({ open, onClose, onCreated }) {  const is
       };
       if (projectId)        payload.team_id           = projectId;
       if (dueAt)            payload.due_at             = new Date(dueAt).toISOString();
+      if (dueAt && reminders.length) {
+        payload.reminders = reminders.map(r => ({
+          offset_minutes: r.offset_minutes,
+          channels: Object.entries(r.channels).filter(([, v]) => v).map(([k]) => k),
+        }));
+      }
       if (assignees.length) payload.assignee_user_ids  = assignees;
       if (files.length)     payload.attachments        = files.map(f => ({ name: f.name, url: f.url, key: f.key || null }));
       await (isClient ? api.post('/client/tasks/request', payload) : api.post('/tasks', payload));
@@ -192,7 +200,21 @@ export default function NewTaskModal({ open, onClose, onCreated }) {  const is
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
             <div>
               <FieldLabel>DUE · नियत तिथि</FieldLabel>
-              <input type="date" className="k-input" style={{ width: '100%' }} value={dueAt} onChange={e => setDueAt(e.target.value)} />
+              <input
+                type="date"
+                className="k-input"
+                style={{ width: '100%' }}
+                value={dueAt}
+                onChange={e => {
+                  setDueAt(e.target.value);
+                  if (!e.target.value) setReminders([]);
+                  // Teams-like default: 1hr + 15min reminders the first time a due date is set.
+                  else if (reminders.length === 0) setReminders(DEFAULT_REMINDERS);
+                }}
+              />
+              <div style={{ marginTop: 8 }}>
+                <ReminderPicker value={reminders} onChange={setReminders} disabled={!dueAt} />
+              </div>
             </div>
 
             {/* Assignee dropdown */}
