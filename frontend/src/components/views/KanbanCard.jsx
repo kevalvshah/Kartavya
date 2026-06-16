@@ -1,18 +1,20 @@
 import React from 'react';
 import { priorityColor, avatarColor } from '../../lib/utils';
+import { formatTime, hasTimeComponent } from '../../lib/timeFormat';
 
 const PRIORITY_LABEL = { low: 'Low', medium: 'Medium', high: 'High', urgent: 'Urgent' };
 
 function relDue(due) {
   if (!due) return null;
+  const time = hasTimeComponent(due) ? `, ${formatTime(due)}` : '';
   const d = new Date(due); d.setHours(0, 0, 0, 0); // compare calendar dates, ignore time-of-day
   const now = new Date(); now.setHours(0, 0, 0, 0);
   const diff = Math.round((d - now) / 86400000);
   if (diff < 0)  return { label: `${Math.abs(diff)}d overdue`, tone: 'overdue' };
-  if (diff === 0) return { label: 'Due today', tone: 'today' };
-  if (diff <= 2)  return { label: `In ${diff}d`, tone: 'soon' };
-  if (diff < 7)   return { label: `In ${diff}d`, tone: 'normal' };
-  return { label: new Date(due).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }), tone: 'muted' };
+  if (diff === 0) return { label: `Due today${time}`, tone: 'today' };
+  if (diff <= 2)  return { label: `In ${diff}d${time}`, tone: 'soon' };
+  if (diff < 7)   return { label: `In ${diff}d${time}`, tone: 'normal' };
+  return { label: `${new Date(due).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}${time}`, tone: 'muted' };
 }
 
 function nameInitials(name) {

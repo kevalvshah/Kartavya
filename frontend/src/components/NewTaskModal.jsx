@@ -5,6 +5,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../lib/api';
 import ReminderPicker, { DEFAULT_REMINDERS } from './ReminderPicker';
+import { formatDueDateTime } from '../lib/timeFormat';
 import { AVATAR_COLORS, userInitials, logger } from '../lib/utils';import { currentUser } from '../lib/auth';
 
 const PRIORITY_DOTS = {
@@ -212,6 +213,9 @@ export default function NewTaskModal({ open, onClose, onCreated }) {  const is
                   else if (reminders.length === 0) setReminders(DEFAULT_REMINDERS);
                 }}
               />
+              {dueAt && (
+                <span style={{ fontSize: 11, color: 'var(--ink-faint)' }}>{formatDueDateTime(new Date(dueAt).toISOString())}</span>
+              )}
               <div style={{ marginTop: 8 }}>
                 <ReminderPicker value={reminders} onChange={setReminders} disabled={!dueAt} />
               </div>

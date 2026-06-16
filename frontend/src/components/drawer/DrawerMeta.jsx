@@ -2,6 +2,7 @@ import React from 'react';
 import { AVATAR_COLORS, userInitials, PRIORITY_COLOR as PRIORITY_COLORS } from '../../lib/utils';
 import { PRIORITY_LABELS } from './constants';
 import ReminderPicker, { DEFAULT_REMINDERS } from '../ReminderPicker';
+import { formatDueDateTime } from '../../lib/timeFormat';
 
 // Convert a UTC ISO string to the "YYYY-MM-DDTHH:mm" shape <input type="datetime-local"> expects, in local time.
 function toLocalDatetimeValue(iso) {
@@ -102,6 +103,9 @@ export default function DrawerMeta({
             if (v && (draft.reminders || []).length === 0) saveReminders(DEFAULT_REMINDERS);
           }}
         />
+        {draft.due_at && (
+          <span style={{ fontSize: 11, color: 'var(--ink-faint)' }}>{formatDueDateTime(draft.due_at)}</span>
+        )}
       </div>
 
       {/* Reminders */}
