@@ -3,6 +3,7 @@ import { api } from '../lib/api';
 import { ensureServiceWorkerRegistered, urlBase64ToUint8Array } from '../lib/push';
 import { PageHeader } from '../components/editorial';
 import { NOTIF_SOUNDS, getNotifSoundId, setNotifSoundId, playNotifSound } from '../lib/notifSound';
+import { getTimeFormat, setTimeFormat } from '../lib/timeFormat';
 
 export default function NotificationsSettingsPage() {
   const [supported,  setSupported]  = useState(false);
@@ -10,6 +11,7 @@ export default function NotificationsSettingsPage() {
   const [enabled,    setEnabled]    = useState(false);
   const [loading,    setLoading]    = useState(false);
   const [soundId,    setSoundId]    = useState(getNotifSoundId());
+  const [timeFmt,    setTimeFmt]    = useState(getTimeFormat());
 
   useEffect(() => {
     setSupported('serviceWorker' in navigator && 'PushManager' in window);
@@ -20,6 +22,11 @@ export default function NotificationsSettingsPage() {
     setSoundId(id);
     setNotifSoundId(id);
     if (id !== 'none') playNotifSound();
+  };
+
+  const chooseTimeFormat = (fmt) => {
+    setTimeFmt(fmt);
+    setTimeFormat(fmt);
   };
 
   const statusColor = useMemo(() => {
@@ -135,6 +142,40 @@ export default function NotificationsSettingsPage() {
                 }}
               >
                 {s.label} <span style={{ fontFamily: 'var(--font-hindi)', fontWeight: 400, opacity: 0.7 }}>{s.hi}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Time format */}
+      <section className="k-card">
+        <div className="k-card__head">
+          <div className="k-card__titles">
+            <h3 className="k-card__title">Time format</h3>
+            <span className="k-card__sans">समय प्रारूप</span>
+          </div>
+        </div>
+        <div className="k-card__body">
+          <p style={{ fontSize: 13, color: 'var(--ink-3)', marginBottom: 14 }}>
+            Applies to due dates and reminders shown on cards and in the task drawer. Doesn't change your browser's
+            own date/time picker popup — that follows your device settings.
+          </p>
+          <div style={{ display: 'flex', gap: 8 }}>
+            {[{ id: '12h', label: '12-hour', example: '5:00 PM' }, { id: '24h', label: '24-hour', example: '17:00' }].map(f => (
+              <button
+                key={f.id}
+                type="button"
+                onClick={() => chooseTimeFormat(f.id)}
+                className="k-btn k-btn--sm"
+                style={{
+                  border: `1.5px solid ${timeFmt === f.id ? 'var(--k-primary)' : 'var(--rule)'}`,
+                  background: timeFmt === f.id ? 'color-mix(in srgb, var(--k-primary) 12%, transparent)' : 'transparent',
+                  color: timeFmt === f.id ? 'var(--k-primary)' : 'var(--ink-2)',
+                  fontWeight: timeFmt === f.id ? 700 : 400,
+                }}
+              >
+                {f.label} <span style={{ opacity: 0.65 }}>({f.example})</span>
               </button>
             ))}
           </div>
