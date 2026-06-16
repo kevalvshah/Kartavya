@@ -207,9 +207,11 @@ export default function NewTaskModal({ open, onClose, onCreated }) {  const is
                 style={{ width: '100%' }}
                 value={dueAt}
                 onChange={e => {
-                  setDueAt(e.target.value);
-                  if (!e.target.value) setReminders([]);
-                  // Teams-like default: 1hr + 15min reminders the first time a due date is set.
+                  let val = e.target.value;
+                  // If user picks a date without changing the time, default to 16:00
+                  if (val && val.slice(-5) === '00:00') val = val.slice(0, -5) + '16:00';
+                  setDueAt(val);
+                  if (!val) setReminders([]);
                   else if (reminders.length === 0) setReminders(DEFAULT_REMINDERS);
                 }}
               />
