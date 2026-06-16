@@ -131,7 +131,7 @@ let cachedUrl = null;
 export function playNotifSound() {
   const id = getNotifSoundId();
   const sound = NOTIF_SOUNDS.find(s => s.id === id);
-  if (!sound || !sound.url) return; // silent
+  if (!sound || !sound.url) return;
   try {
     if (cachedUrl !== sound.url) {
       cachedAudio = new Audio(sound.url);
@@ -139,6 +139,29 @@ export function playNotifSound() {
     }
     cachedAudio.currentTime = 0;
     cachedAudio.volume = 0.5;
-    cachedAudio.play().catch(() => {}); // browsers may block autoplay before first user gesture
+    cachedAudio.play().catch(() => {});
+  } catch (_) {}
+}
+
+const PRAISE_SOUNDS = [
+  '/sounds/praise/kya_baat.mp3',
+  '/sounds/praise/moje_moj.mp3',
+  '/sounds/praise/wah_re_wah.mp3',
+  '/sounds/praise/haakan_kevu.mp3',
+  '/sounds/praise/shabash_bhai.mp3',
+  '/sounds/praise/aapde_champion.mp3',
+  '/sounds/praise/mast_kaam.mp3',
+  '/sounds/praise/fatafat_kaam.mp3',
+  '/sounds/praise/jai_kaam_thayu.mp3',
+  '/sounds/praise/gujju_hero.mp3',
+];
+
+export function playPraiseSound() {
+  if (getNotifSoundId() === 'none') return;
+  try {
+    const url = PRAISE_SOUNDS[Math.floor(Math.random() * PRAISE_SOUNDS.length)];
+    const audio = new Audio(url);
+    audio.volume = 0.6;
+    audio.play().catch(() => {});
   } catch (_) {}
 }

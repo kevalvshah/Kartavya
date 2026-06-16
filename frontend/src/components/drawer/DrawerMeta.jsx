@@ -3,6 +3,7 @@ import { AVATAR_COLORS, userInitials, PRIORITY_COLOR as PRIORITY_COLORS } from '
 import { PRIORITY_LABELS } from './constants';
 import ReminderPicker, { DEFAULT_REMINDERS } from '../ReminderPicker';
 import { formatDueDateTime } from '../../lib/timeFormat';
+import { playPraiseSound } from '../../lib/notifSound';
 
 // Convert a UTC ISO string to the "YYYY-MM-DDTHH:mm" shape <input type="datetime-local"> expects, in local time.
 function toLocalDatetimeValue(iso) {
@@ -75,7 +76,7 @@ export default function DrawerMeta({
           </span>
           <select
             value={draft.status || 'todo'}
-            onChange={e => { setDraft(d => ({ ...d, status: e.target.value })); saveTask({ status: e.target.value }); }}
+            onChange={e => { setDraft(d => ({ ...d, status: e.target.value })); saveTask({ status: e.target.value }); if (e.target.value === 'done') playPraiseSound(); }}
             className="k-input"
             style={{ fontSize: 13 }}
           >

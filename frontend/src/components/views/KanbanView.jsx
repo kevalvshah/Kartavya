@@ -5,6 +5,7 @@ import { api } from '../../lib/api';
 import KanbanCard from './KanbanCard';
 
 import TaskDrawer from '../TaskDrawer';
+import { playPraiseSound } from '../../lib/notifSound';
 
 import { useToast } from '../ui/toast';
 
@@ -365,6 +366,7 @@ export default function KanbanView({
     try {
       const res = await api.patch(`/tasks/${taskId}/move`, { column_id: targetColId, order });
       onTasksChange?.(prev => prev.map(t => t.task_id === taskId ? res.data : t));
+      if (res.data.status === 'done') playPraiseSound();
     } catch (e) {
       logger.error('Move failed', e);
       pushToast({ type: 'error', title: 'Could not move task' });
