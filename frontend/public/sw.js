@@ -1,5 +1,5 @@
 ﻿/* Kartavya Service Worker — PWA offline support */
-const CACHE = 'kartavya-v1';
+const CACHE = 'kartavya-v2';
 const PRECACHE = ['/', '/index.html'];
 
 self.addEventListener('install', (e) => {
@@ -43,19 +43,26 @@ self.addEventListener('fetch', (e) => {
   // Only cache same-origin requests — skip cross-origin (fonts, CDN) to avoid opaque response bloat
   if (new URL(e.request.url).origin !== self.location.origin) return;
   if (e.request.url.includes('/api/')) return; // never cache API calls
+
+  // Network-first: always try the network so a new deploy is picked up on a
+  // normal refresh, not just a hard refresh. Cache is only a fallback for when
+  // the network request fails (offline) — never the primary source, otherwise
+  // stale JS/CSS bundles get served forever after every deploy.
   e.respondWith(
-    caches.match(e.request).then((cached) => cached || fetch(e.request).then((res) => {
-      // Only cache successful same-origin basic responses
+    fetch(e.request).then((res) => {
       if (res.status === 200 && res.type === 'basic') {
         const clone = res.clone();
         caches.open(CACHE).then((c) => c.put(e.request, clone));
       }
       return res;
-    }).catch(() => {
-      // Only fall back to the app shell for navigation requests, not for assets/XHR
-      if (e.request.mode === 'navigate') return caches.match('/index.html');
-      return new Response('', { status: 408, statusText: 'Offline' });
-    }))
+    }).catch(() =>
+      caches.match(e.request).then((cached) => {
+        if (cached) return cached;
+        // Only fall back to the app shell for navigation requests, not for assets/XHR
+        if (e.request.mode === 'navigate') return caches.match('/index.html');
+        return new Response('', { status: 408, statusText: 'Offline' });
+      })
+    )
   );
 });
 

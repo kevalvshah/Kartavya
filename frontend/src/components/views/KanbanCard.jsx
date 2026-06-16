@@ -5,7 +5,9 @@ const PRIORITY_LABEL = { low: 'Low', medium: 'Medium', high: 'High', urgent: 'Ur
 
 function relDue(due) {
   if (!due) return null;
-  const diff = Math.round((new Date(due) - Date.now()) / 86400000);
+  const d = new Date(due); d.setHours(0, 0, 0, 0); // compare calendar dates, ignore time-of-day
+  const now = new Date(); now.setHours(0, 0, 0, 0);
+  const diff = Math.round((d - now) / 86400000);
   if (diff < 0)  return { label: `${Math.abs(diff)}d overdue`, tone: 'overdue' };
   if (diff === 0) return { label: 'Due today', tone: 'today' };
   if (diff <= 2)  return { label: `In ${diff}d`, tone: 'soon' };

@@ -2,7 +2,7 @@ import React from 'react';
 
 function relDue(iso) {
   if (!iso) return { label: '—', tone: 'muted' };
-  const d = new Date(iso);
+  const d = new Date(iso); d.setHours(0, 0, 0, 0); // compare calendar dates, ignore time-of-day
   const now = new Date(); now.setHours(0, 0, 0, 0);
   const diff = Math.round((d - now) / 86400000);
   if (diff < 0)   return { label: `${Math.abs(diff)}d overdue`, tone: 'danger' };
