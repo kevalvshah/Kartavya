@@ -274,6 +274,7 @@ class TeamMemberOut(BaseModel):
     member_id:str; team_id:str; email:str; user_id:Optional[str]=None; role:str; status:str; created_at:datetime; updated_at:datetime
 class Attachment(BaseModel):
     name:str; url:str; key:Optional[str]=None
+    is_private:bool=False; visible_to:List[str]=[]
 class Subtask(BaseModel):
     subtask_id:str=Field(default_factory=lambda:f"sub_{uuid.uuid4().hex[:12]}"); title:str; is_done:bool=False; order:int=0; assignee_user_id:Optional[str]=None
 class Recurrence(BaseModel):
