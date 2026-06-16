@@ -118,6 +118,23 @@ async def _assert_project_owner(pool, team_id: str, user: dict):
         raise HTTPException(403, "Owner or admin required")
 
 
+async def _assert_project_member(pool, team_id: str, user: dict):
+    """Raise 403 unless the user is a system admin or any member of the project.
+
+    Viewing/exporting a report you already have task access to shouldn't require
+    being the project owner — that restriction is reserved for managing schedules,
+    which dispatch automated emails to other people.
+    """
+    if user.get("role") == "admin":
+        return
+    mem = await pool.fetchrow(
+        "SELECT 1 FROM project_assignments WHERE team_id=$1 AND user_id=$2",
+        team_id, user["user_id"]
+    )
+    if not mem:
+        raise HTTPException(403, "Project membership required")
+
+
 def _next_run(frequency: str, day_of_week: int, day_of_month: int, send_hour_utc: int) -> datetime:
     """Calculate the next UTC run time for a report schedule given its frequency settings."""
     now = datetime.now(timezone.utc)
@@ -264,7 +281,7 @@ async def get_report_data(
     """Return raw report data (tasks, time entries, throughput) for the given project and date range."""
     if not _DATE_RE.match(from_date) or not _DATE_RE.match(to_date):
         raise HTTPException(400, "Invalid date format — use YYYY-MM-DD")
-    await _assert_project_owner(pool, team_id, user)
+    await _assert_project_member(pool, team_id, user)
     try:
         return await _fetch_report_data(pool, team_id, from_date, to_date)
     except Exception as exc:
@@ -285,7 +302,7 @@ async def download_report(
     if not _DATE_RE.match(from_date) or not _DATE_RE.match(to_date):
         raise HTTPException(400, "Invalid date format — use YYYY-MM-DD")
 
-    await _assert_project_owner(pool, team_id, user)
+    await _assert_project_member(pool, team_id, user)
 
     team = await pool.fetchrow("SELECT name FROM teams WHERE team_id=$1", team_id)
     if not team:

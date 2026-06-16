@@ -378,15 +378,29 @@ export default function ReportsPage({ teams: propTeams }) {
     }
   }, [allMembers, projectIds]); // eslint-disable-line
 
-  // Fetch preview stats (debounced, primary project)
+  // Fetch preview stats (debounced, aggregated across all selected projects)
   useEffect(() => {
-    const primary = projectIds[0];
-    if (!primary || !from || !to) { setPreview(null); return; }
+    if (!projectIds.length || !from || !to) { setPreview(null); return; }
     const t = setTimeout(async () => {
       setPrevLoading(true);
       try {
-        const r = await api.get(`/reports/data/${primary}`, { params: { from, to } });
-        setPreview(r.data);
+        const results = await Promise.all(
+          projectIds.map(id =>
+            api.get(`/reports/data/${id}`, { params: { from, to } })
+              .then(r => r.data)
+              .catch(() => null)
+          )
+        );
+        const ok = results.filter(Boolean);
+        const agg = ok.reduce((acc, d) => {
+          acc.total_minutes += d.total_minutes || 0;
+          acc.tasks.todo        += d.tasks?.todo        || 0;
+          acc.tasks.in_progress += d.tasks?.in_progress || 0;
+          acc.tasks.done        += d.tasks?.done        || 0;
+          acc.tasks.overdue     += d.tasks?.overdue     || 0;
+          return acc;
+        }, { total_minutes: 0, tasks: { todo: 0, in_progress: 0, done: 0, overdue: 0 } });
+        setPreview(ok.length ? agg : null);
       } catch { setPreview(null); }
       finally { setPrevLoading(false); }
     }, 700);

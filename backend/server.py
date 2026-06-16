@@ -104,6 +104,10 @@ DEFAULT_ORIGINS = [
 _extra = [o.strip() for o in os.environ.get("CORS_ORIGINS", "").split(",") if o.strip()]
 ALLOWED_ORIGINS = list(dict.fromkeys(DEFAULT_ORIGINS + _extra))
 
+# Workspace super-owner — auto-added as owner on every new project so the
+# company account always has full visibility, regardless of who created it.
+DEFAULT_OWNER_EMAIL = os.environ.get("DEFAULT_OWNER_EMAIL", "admin@aekaminc.com")
+
 # Scoped regex for Vercel PR preview deployments — locked to this project's Vercel tenant.
 # Pattern covers both per-commit previews (kartavya-abc123-...) and branch-alias previews
 # (kartavya-git-feat-branch-name-...). [a-z0-9-] allows hyphens in branch-derived slugs.
@@ -1125,6 +1129,27 @@ async def list_deleted_teams(pool=Depends(get_db),user=Depends(require_admin)):
     """)
     return [dict(r) for r in rows]
 
+async def _ensure_default_owner(pool, team_id: str, creator: dict):
+    """Add DEFAULT_OWNER_EMAIL as owner on every project, unless they created it themselves."""
+    if not DEFAULT_OWNER_EMAIL or creator.get("email", "").lower() == DEFAULT_OWNER_EMAIL.lower():
+        return
+    owner = await pool.fetchrow("SELECT user_id, email FROM users WHERE email=$1", DEFAULT_OWNER_EMAIL)
+    if not owner:
+        return
+    # team_id is freshly created here, so no existing row can collide —
+    # neither table has a unique constraint on (team_id,user_id) to upsert against.
+    await pool.execute(
+        "INSERT INTO team_members (member_id,team_id,email,user_id,role,status) "
+        "VALUES ($1,$2,$3,$4,'owner','active')",
+        f"mem_{uuid.uuid4().hex[:12]}", team_id, owner["email"], owner["user_id"],
+    )
+    await pool.execute(
+        "INSERT INTO project_assignments (assignment_id,team_id,user_id,role,assigned_by) "
+        "VALUES ($1,$2,$3,'owner',$4)",
+        f"assign_{uuid.uuid4().hex[:12]}", team_id, owner["user_id"], owner["user_id"],
+    )
+
+
 @api_router.post("/teams",response_model=TeamOut)
 async def create_team(payload:TeamCreate,pool=Depends(get_db),user=Depends(require_user)):
     """Create a new project and set the caller as owner with default kanban columns."""
@@ -1132,6 +1157,7 @@ async def create_team(payload:TeamCreate,pool=Depends(get_db),user=Depends(requi
     row=await pool.fetchrow("INSERT INTO teams (team_id,name,created_by) VALUES ($1,$2,$3) RETURNING *",team_id,payload.name,user["user_id"])
     await pool.execute("INSERT INTO team_members (member_id,team_id,email,user_id,role,status) VALUES ($1,$2,$3,$4,'owner','active')",f"mem_{uuid.uuid4().hex[:12]}",team_id,user["email"],user["user_id"])
     await pool.execute("INSERT INTO project_assignments (assignment_id,team_id,user_id,role,assigned_by) VALUES ($1,$2,$3,'owner',$4)",f"assign_{uuid.uuid4().hex[:12]}",team_id,user["user_id"],user["user_id"])
+    await _ensure_default_owner(pool,team_id,creator=user)
     await ensure_default_columns(pool,team_id)
     return TeamOut(**dict(row))
 
