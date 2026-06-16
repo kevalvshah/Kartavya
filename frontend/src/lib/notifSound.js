@@ -144,6 +144,7 @@ export function playNotifSound() {
 }
 
 const PRAISE_SOUNDS = [
+  // Gujju
   '/sounds/praise/kya_baat.mp3',
   '/sounds/praise/moje_moj.mp3',
   '/sounds/praise/wah_re_wah.mp3',
@@ -154,6 +155,17 @@ const PRAISE_SOUNDS = [
   '/sounds/praise/fatafat_kaam.mp3',
   '/sounds/praise/jai_kaam_thayu.mp3',
   '/sounds/praise/gujju_hero.mp3',
+  // Hindi
+  '/sounds/praise/hi_kya_baat.mp3',
+  '/sounds/praise/hi_wah_wah.mp3',
+  '/sounds/praise/hi_shabash.mp3',
+  '/sounds/praise/hi_kamaal.mp3',
+  '/sounds/praise/hi_bahut_badhiya.mp3',
+  '/sounds/praise/hi_champion.mp3',
+  '/sounds/praise/hi_jai_ho.mp3',
+  '/sounds/praise/hi_ekdum_mast.mp3',
+  '/sounds/praise/hi_mast_hai.mp3',
+  '/sounds/praise/hi_arey_waah.mp3',
 ];
 
 export function playPraiseSound() {
