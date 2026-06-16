@@ -42,12 +42,21 @@ export default function DueChip({ date, flush, status, completedAt }) {
         </span>
       );
     }
-    // Completed late → red pill showing how late
-    const lateDays = Math.round((new Date(completedAt) - new Date(date)) / 86400000);
-    const lateLabel = lateDays <= 0 ? 'same day late' : `${lateDays}d late`;
+    // Completed late — check if same calendar day
+    const dueDay  = new Date(date);       dueDay.setHours(0,0,0,0);
+    const doneDay = new Date(completedAt); doneDay.setHours(0,0,0,0);
+    const lateDays = Math.round((doneDay - dueDay) / 86400000);
+    if (lateDays === 0) {
+      // Same calendar day, just past the time — treat as on time
+      return (
+        <span className={`k-due k-due--done${flush ? ' k-due--flush' : ''}`}>
+          ✓ Done {relCompleted(completedAt)}
+        </span>
+      );
+    }
     return (
       <span className={`k-due k-due--danger${flush ? ' k-due--flush' : ''}`}>
-        ✓ Done · {lateLabel}
+        ✓ Done · {lateDays}d late
       </span>
     );
   }
