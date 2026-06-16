@@ -87,6 +87,30 @@ export const NOTIF_SOUND_GROUPS = [
   },
 ];
 
+  {
+    group: 'Movie Dialogues',
+    hi: 'ફિલ્મ ડાયલોગ',
+    sounds: [
+      { id: 'pushpa_jhukse_nahi',  label: 'Jhukse nahi sala! 🌿',      hi: 'પુષ્પા',     url: '/sounds/pushpa_jhukse_nahi.mp3' },
+      { id: 'pushpa_main_pushpa',  label: 'Hu phool nahi, aag chhu!',  hi: 'પુષ્પા',     url: '/sounds/pushpa_main_pushpa.mp3' },
+      { id: 'kgf_aa_kgf_che',      label: 'Aa KGF che!',               hi: 'KGF',        url: '/sounds/kgf_aa_kgf_che.mp3' },
+      { id: 'kgf_maro_naam',       label: 'Mara naam thi duniya dare!', hi: 'KGF',        url: '/sounds/kgf_maro_naam.mp3' },
+      { id: 'sholay_ketla_maanas', label: 'Ketla maanas hata?',         hi: 'શોલે',       url: '/sounds/sholay_ketla_maanas.mp3' },
+      { id: 'sholay_tera_kaliya',  label: 'Taru shu thaase Kaliya?',   hi: 'શોલે',       url: '/sounds/sholay_tera_kaliya.mp3' },
+      { id: 'sholay_mogambo',      label: 'Mogambo khush thayo!',      hi: 'શોલે',       url: '/sounds/sholay_mogambo.mp3' },
+      { id: 'don_pakadvu_mushkel', label: 'Don ne pakadvu ashakya!',   hi: 'ડૉન',        url: '/sounds/don_pakadvu_mushkel.mp3' },
+      { id: 'bahubali_kyun_mara',  label: 'Kattappa e kyun maaryo?',   hi: 'બાહુબલી',   url: '/sounds/bahubali_kyun_mara.mp3' },
+      { id: 'stree_kal_aavje',     label: 'O Stree, kaale aavje!',     hi: 'સ્ત્રી',     url: '/sounds/stree_kal_aavje.mp3' },
+      { id: 'singham_aata_majhi',  label: 'Have mari satki!',          hi: 'સિંઘમ',     url: '/sounds/singham_aata_majhi.mp3' },
+      { id: '3idiots_all_is_well', label: 'All is well!',              hi: '3 Idiots',   url: '/sounds/3idiots_all_is_well.mp3' },
+      { id: '3idiots_balatkar',    label: 'Gyaan ni upasna karo!',     hi: '3 Idiots',   url: '/sounds/3idiots_balatkar.mp3' },
+      { id: 'ddlj_ja_jee_le',      label: 'Ja, jeevi le Simran!',      hi: 'DDLJ',       url: '/sounds/ddlj_ja_jee_le.mp3' },
+      { id: 'golmaal_dhamaal',     label: 'Dhamaal masti Gujju style!',hi: 'ધમાલ',      url: '/sounds/golmaal_dhamaal.mp3' },
+      { id: 'task_baaki',          label: 'Task pending, film pachi!', hi: 'ટાસ્ક',      url: '/sounds/task_baaki.mp3' },
+    ],
+  },
+];
+
 // Flat list for lookups (playNotifSound, etc.)
 export const NOTIF_SOUNDS = NOTIF_SOUND_GROUPS.flatMap(g => g.sounds);
 
