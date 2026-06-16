@@ -201,7 +201,7 @@ export default function NewTaskModal({ open, onClose, onCreated }) {  const is
             <div>
               <FieldLabel>DUE · नियत तिथि</FieldLabel>
               <input
-                type="date"
+                type="datetime-local"
                 className="k-input"
                 style={{ width: '100%' }}
                 value={dueAt}
