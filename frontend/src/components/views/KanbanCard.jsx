@@ -72,7 +72,7 @@ export default function KanbanCard({ task, onClick, dragging = false, draggable 
             ? <span style={{ fontSize: 11, color: '#16a34a', fontWeight: 600 }}>✓ Done on time</span>
             : <span style={{ fontSize: 11, color: 'var(--k-danger)', fontWeight: 600 }}>{`✓ Done · ${lateDays}d late`}</span>;
         })()
-        ) : due && !isDone && (
+        : due && !isDone && (
           <span style={{ fontSize: 11, color: DUE_COLORS[due.tone] || 'var(--ink-3)', fontWeight: due.tone === 'overdue' ? 700 : 400 }}>
             {due.tone === 'overdue' && '⚠ '}{due.label}
           </span>

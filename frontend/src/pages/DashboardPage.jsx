@@ -258,14 +258,14 @@ export default function DashboardPage({ teams = [] }) {
                   const initials = userInitials(a.actor_name || a.actor || '');
                   const color    = AVATAR_COLORS[i % AVATAR_COLORS.length];
                   return (
-                    <div key={a.activity_id || i} className="k-activity__row">
+                    <div key={a.event_id || i} className="k-activity__row">
                       <span className="k-avatar" style={{ width: 22, height: 22, fontSize: 9, background: color, flexShrink: 0 }}>
                         {initials}
                       </span>
                       <div className="k-activity__body">
                         <div className="k-activity__line">
                           <b>{(a.actor_name || a.actor || 'Someone').split(' ')[0]}</b>{' '}
-                          <span className="k-mute">{a.verb || a.event_type || 'updated'}</span>{' '}
+                          <span className="k-mute">{a.verb || a.type || 'updated'}</span>{' '}
                           <span className="k-activity__what">{a.subject_title || a.task_title || ''}</span>
                         </div>
                         <div className="k-activity__when">{relTime(a.created_at || a.at)}</div>

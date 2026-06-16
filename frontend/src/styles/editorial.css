@@ -649,7 +649,7 @@ input, textarea, select { font-family: inherit; color: inherit; }
 /* ── Upcoming + Activity (right col) ───────────────────────────────────── */
 .k-upcoming { display: flex; flex-direction: column; gap: 4px; margin: -8px -10px; }
 .k-upcoming__row {
-  display: grid; grid-template-columns: 60px 1fr auto;
+  display: grid; grid-template-columns: auto 1fr auto;
   align-items: center; gap: 10px;
   padding: 10px;
   background: transparent; border: 0; text-align: left;
