@@ -2,17 +2,25 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { api } from '../lib/api';
 import { ensureServiceWorkerRegistered, urlBase64ToUint8Array } from '../lib/push';
 import { PageHeader } from '../components/editorial';
+import { NOTIF_SOUNDS, getNotifSoundId, setNotifSoundId, playNotifSound } from '../lib/notifSound';
 
 export default function NotificationsSettingsPage() {
   const [supported,  setSupported]  = useState(false);
   const [permission, setPermission] = useState('default');
   const [enabled,    setEnabled]    = useState(false);
   const [loading,    setLoading]    = useState(false);
+  const [soundId,    setSoundId]    = useState(getNotifSoundId());
 
   useEffect(() => {
     setSupported('serviceWorker' in navigator && 'PushManager' in window);
     setPermission(Notification.permission);
   }, []);
+
+  const chooseSound = (id) => {
+    setSoundId(id);
+    setNotifSoundId(id);
+    if (id !== 'none') playNotifSound();
+  };
 
   const statusColor = useMemo(() => {
     if (!supported || permission === 'denied') return 'var(--danger)';
@@ -100,6 +108,39 @@ export default function NotificationsSettingsPage() {
         </div>
       </section>
 
+      {/* Notification sound */}
+      <section className="k-card">
+        <div className="k-card__head">
+          <div className="k-card__titles">
+            <h3 className="k-card__title">Notification sound</h3>
+            <span className="k-card__sans">ध्वनि</span>
+          </div>
+        </div>
+        <div className="k-card__body">
+          <p style={{ fontSize: 13, color: 'var(--ink-3)', marginBottom: 14 }}>
+            Plays when an in-app reminder or notification toast appears while Kartavya is open.
+          </p>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {NOTIF_SOUNDS.map(s => (
+              <button
+                key={s.id}
+                type="button"
+                onClick={() => chooseSound(s.id)}
+                className="k-btn k-btn--sm"
+                style={{
+                  border: `1.5px solid ${soundId === s.id ? 'var(--k-primary)' : 'var(--rule)'}`,
+                  background: soundId === s.id ? 'color-mix(in srgb, var(--k-primary) 12%, transparent)' : 'transparent',
+                  color: soundId === s.id ? 'var(--k-primary)' : 'var(--ink-2)',
+                  fontWeight: soundId === s.id ? 700 : 400,
+                }}
+              >
+                {s.label} <span style={{ fontFamily: 'var(--font-hindi)', fontWeight: 400, opacity: 0.7 }}>{s.hi}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* Reminder defaults */}
       <section className="k-card">
         <div className="k-card__head">
@@ -110,7 +151,8 @@ export default function NotificationsSettingsPage() {
         </div>
         <div className="k-card__body">
           <p style={{ fontSize: 13, color: 'var(--ink-2)' }}>
-            Default reminder fires <strong>2 hours before</strong> the due date. Override per task in the Task Editor.
+            New tasks default to reminders <strong>1 hour</strong> and <strong>15 minutes</strong> before the due date.
+            Pick from 2 days down to 15 minutes, with separate in-app/push/email toggles, in the task drawer or New Task form.
           </p>
         </div>
       </section>

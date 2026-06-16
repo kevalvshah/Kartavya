@@ -18,6 +18,7 @@ import Sidebar from './Sidebar';
 import Topbar  from './Topbar';
 import { NotifToastContainer, NotifPermissionPrompt } from './NotifToast';
 import { urlBase64ToUint8Array } from '../../lib/push';
+import { playNotifSound } from '../../lib/notifSound';
 import { Bell, Menu, X } from 'lucide-react';
 
 async function subscribeToPush() {
@@ -129,6 +130,7 @@ export default function AppShell() {
                 // Fallback synthetic toast if fresh list is empty
                 setToasts(prev => [...prev, { notification_id: `synth-${Date.now()}`, title: 'New notification', message: 'Open notifications to view', url: null }]);
               }
+              playNotifSound();
             } else if (Notification.permission === 'granted') {
               fireBrowserNotif(
                 fresh[0]?.title ?? 'New notification',
