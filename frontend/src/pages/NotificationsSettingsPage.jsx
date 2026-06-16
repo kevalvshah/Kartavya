@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { api } from '../lib/api';
 import { ensureServiceWorkerRegistered, urlBase64ToUint8Array } from '../lib/push';
 import { PageHeader } from '../components/editorial';
-import { NOTIF_SOUNDS, getNotifSoundId, setNotifSoundId, playNotifSound } from '../lib/notifSound';
+import { NOTIF_SOUND_GROUPS, getNotifSoundId, setNotifSoundId, playNotifSound } from '../lib/notifSound';
 import { getTimeFormat, setTimeFormat } from '../lib/timeFormat';
 
 export default function NotificationsSettingsPage() {
@@ -124,25 +124,34 @@ export default function NotificationsSettingsPage() {
           </div>
         </div>
         <div className="k-card__body">
-          <p style={{ fontSize: 13, color: 'var(--ink-3)', marginBottom: 14 }}>
+          <p style={{ fontSize: 13, color: 'var(--ink-3)', marginBottom: 18 }}>
             Plays when an in-app reminder or notification toast appears while Kartavya is open.
           </p>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            {NOTIF_SOUNDS.map(s => (
-              <button
-                key={s.id}
-                type="button"
-                onClick={() => chooseSound(s.id)}
-                className="k-btn k-btn--sm"
-                style={{
-                  border: `1.5px solid ${soundId === s.id ? 'var(--k-primary)' : 'var(--rule)'}`,
-                  background: soundId === s.id ? 'color-mix(in srgb, var(--k-primary) 12%, transparent)' : 'transparent',
-                  color: soundId === s.id ? 'var(--k-primary)' : 'var(--ink-2)',
-                  fontWeight: soundId === s.id ? 700 : 400,
-                }}
-              >
-                {s.label} <span style={{ fontFamily: 'var(--font-hindi)', fontWeight: 400, opacity: 0.7 }}>{s.hi}</span>
-              </button>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            {NOTIF_SOUND_GROUPS.map(g => (
+              <div key={g.group}>
+                <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--ink-3)', marginBottom: 8 }}>
+                  {g.group}{g.hi && <span style={{ fontFamily: 'var(--font-hindi)', fontWeight: 400, marginLeft: 6, textTransform: 'none', letterSpacing: 0 }}>{g.hi}</span>}
+                </div>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {g.sounds.map(s => (
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={() => chooseSound(s.id)}
+                      className="k-btn k-btn--sm"
+                      style={{
+                        border: `1.5px solid ${soundId === s.id ? 'var(--k-primary)' : 'var(--rule)'}`,
+                        background: soundId === s.id ? 'color-mix(in srgb, var(--k-primary) 12%, transparent)' : 'transparent',
+                        color: soundId === s.id ? 'var(--k-primary)' : 'var(--ink-2)',
+                        fontWeight: soundId === s.id ? 700 : 400,
+                      }}
+                    >
+                      {s.label}{s.hi && <span style={{ fontFamily: 'var(--font-hindi)', fontWeight: 400, opacity: 0.7, marginLeft: 4 }}>{s.hi}</span>}
+                    </button>
+                  ))}
+                </div>
+              </div>
             ))}
           </div>
         </div>
