@@ -60,7 +60,7 @@ export default function KanbanCard({ task, onClick, dragging = false, draggable 
 
       {/* Footer: due chip + meta icons + avatars */}
       <div className="k-bcard__foot">
-        {due && (
+        {due && !(due.tone === 'overdue' && (task.status === 'done' || task.status === 'approved')) && (
           <span style={{ fontSize: 11, color: DUE_COLORS[due.tone] || 'var(--ink-3)', fontWeight: due.tone === 'overdue' ? 700 : 400 }}>
             {due.tone === 'overdue' && '⚠ '}{due.label}
           </span>

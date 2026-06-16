@@ -14,8 +14,12 @@ function relDue(iso) {
   return { label: `${d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}${time}`, tone: 'muted' };
 }
 
-export default function DueChip({ date, flush }) {
+const DONE_STATUSES = new Set(['done', 'approved']);
+
+export default function DueChip({ date, flush, status }) {
   const { label, tone } = relDue(date);
+  // Hide overdue badge if task is already completed
+  if (tone === 'danger' && DONE_STATUSES.has(status)) return null;
   return (
     <span className={`k-due k-due--${tone}${flush ? ' k-due--flush' : ''}`}>
       {label}
