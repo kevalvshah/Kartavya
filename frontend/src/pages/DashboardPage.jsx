@@ -61,12 +61,11 @@ export default function DashboardPage({ teams = [] }) {
     }).catch(logger.error).finally(() => setLoading(false));
   }, []);
 
-  // ── Fetch activity when team resolves ─────────────────────────────────────
+  // ── Fetch activity across all teams ────────────────────────────────────────
   useEffect(() => {
-    const tid = teams?.[0]?.team_id;
-    if (!tid) return;
-    setTeamId(tid);
-    api.get(`/activity/team/${tid}`, { params: { limit: 6 } })
+    if (!teams?.length) return;
+    setTeamId(teams[0]?.team_id);
+    api.get('/activity/feed', { params: { limit: 6 } })
        .then(r => setActivity(r.data || []))
        .catch(() => {});
   }, [teams]);

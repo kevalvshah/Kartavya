@@ -84,6 +84,58 @@ async def team_activity(
         raise HTTPException(500, "Activity fetch error") from exc
 
 
+@router.get("/feed")
+async def feed_activity(
+    limit: int = Query(50, le=200),
+    offset: int = 0,
+    actor_id: Optional[str] = None,
+    event_type: Optional[str] = None,
+    pool=Depends(get_pool),
+    user=Depends(require_user),
+):
+    """Return paginated activity events across all teams the user belongs to."""
+    try:
+        if user.get("role") == "admin":
+            team_ids = [r["team_id"] for r in await pool.fetch("SELECT team_id FROM teams")]
+        else:
+            rows = await pool.fetch(
+                """
+                SELECT team_id FROM team_members WHERE user_id=$1 AND status='active'
+                UNION
+                SELECT team_id FROM project_assignments WHERE user_id=$1
+                """,
+                user["user_id"],
+            )
+            team_ids = [r["team_id"] for r in rows]
+
+        if not team_ids:
+            return []
+
+        filters, vals = ["ae.team_id = ANY($1::text[])"], [team_ids]
+        if actor_id:   filters.append(f"ae.actor_id=${len(vals)+1}"); vals.append(actor_id)
+        if event_type: filters.append(f"ae.type=${len(vals)+1}");     vals.append(event_type)
+        where = " AND ".join(filters)
+        limit_idx  = len(vals) + 1
+        offset_idx = len(vals) + 2
+        rows = await pool.fetch(f"""
+            SELECT ae.*,
+                   COALESCE(u.full_name, u.name, u.email) AS actor_name,
+                   t.title AS task_title,
+                   tm.name AS team_name
+            FROM activity_events ae
+            LEFT JOIN users u ON u.user_id = ae.actor_id
+            LEFT JOIN tasks t ON t.task_id = ae.task_id
+            LEFT JOIN teams tm ON tm.team_id = ae.team_id
+            WHERE {where}
+            ORDER BY ae.created_at DESC
+            LIMIT ${limit_idx} OFFSET ${offset_idx}
+        """, *vals, limit, offset)
+        return _normalize(rows)
+    except Exception as exc:
+        logger.error("Feed activity fetch failed: %s", exc, exc_info=True)
+        raise HTTPException(500, "Activity fetch error") from exc
+
+
 @router.get("/task/{task_id}")
 async def task_activity(
     task_id: str,
