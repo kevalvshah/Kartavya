@@ -411,7 +411,7 @@ export default function TasksListPage() {
                         case 'due':
                           return (
                             <div key="due" className="k-trow__cell k-c-due">
-                              <DueChip date={t.due_at} status={t.status} />
+                              <DueChip date={t.due_at} status={t.status} completedAt={t.completed_at} />
                             </div>
                           );
                         case 'updated':

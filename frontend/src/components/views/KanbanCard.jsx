@@ -31,6 +31,8 @@ export default function KanbanCard({ task, onClick, dragging = false, draggable 
   const assignees = task.assignee_user_ids || [];
   const names     = task.assignee_names || [];
   const approvalPending = task.approval_status === 'pending' || task.approval_status === 'pending_client';
+  const isDone = task.status === 'done' || task.status === 'approved';
+  const completedOnTime = isDone && task.completed_at && task.due_at && new Date(task.completed_at) <= new Date(task.due_at);
 
   const DUE_COLORS = { overdue: 'var(--k-danger)', today: '#d97706', soon: '#d97706', normal: 'var(--ink-3)', muted: 'var(--ink-3)' };
 
@@ -60,7 +62,9 @@ export default function KanbanCard({ task, onClick, dragging = false, draggable 
 
       {/* Footer: due chip + meta icons + avatars */}
       <div className="k-bcard__foot">
-        {due && !(due.tone === 'overdue' && (task.status === 'done' || task.status === 'approved')) && (
+        {completedOnTime ? (
+          <span style={{ fontSize: 11, color: '#16a34a', fontWeight: 600 }}>✓ Done on time</span>
+        ) : due && !isDone && (
           <span style={{ fontSize: 11, color: DUE_COLORS[due.tone] || 'var(--ink-3)', fontWeight: due.tone === 'overdue' ? 700 : 400 }}>
             {due.tone === 'overdue' && '⚠ '}{due.label}
           </span>

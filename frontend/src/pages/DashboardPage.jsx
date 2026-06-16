@@ -184,7 +184,7 @@ export default function DashboardPage({ teams = [] }) {
                     <span className="k-taskrow__id">KAR-{String(i+100)}</span>
                     <span className="k-taskrow__title">{t.title}</span>
                     {t.team_name && <ProjectTag name={t.team_name} dense />}
-                    <DueChip date={t.due_at} status={t.status} />
+                    <DueChip date={t.due_at} status={t.status} completedAt={t.completed_at} />
                     <AvatarStack users={assignees} size={20} max={3} />
                   </button>
                 );
@@ -237,7 +237,7 @@ export default function DashboardPage({ teams = [] }) {
                   const assignees = (t.assignee_names || []).map((name, j) => ({ name, color: AVATAR_COLORS[j % AVATAR_COLORS.length] }));
                   return (
                     <button key={t.task_id} className="k-upcoming__row" onClick={() => navigate('/tasks')}>
-                      <DueChip date={t.due_at} flush status={t.status} />
+                      <DueChip date={t.due_at} flush status={t.status} completedAt={t.completed_at} />
                       <div className="k-upcoming__body">
                         <div className="k-upcoming__title">{t.title}</div>
                         {t.team_name && <div className="k-upcoming__meta"><ProjectTag name={t.team_name} dense /></div>}

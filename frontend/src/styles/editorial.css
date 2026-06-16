@@ -368,6 +368,7 @@ input, textarea, select { font-family: inherit; color: inherit; }
 .k-due--warn   { color: var(--warn);   border-color: color-mix(in srgb, var(--warn) 30%, var(--rule));   background: color-mix(in srgb, var(--warn) 8%, var(--surface)); }
 .k-due--normal { color: var(--ink-2); }
 .k-due--muted  { color: var(--ink-3); border-color: var(--rule); }
+.k-due--done   { color: #16a34a; border-color: color-mix(in srgb, #16a34a 30%, var(--rule)); background: color-mix(in srgb, #16a34a 8%, var(--surface)); font-weight: 600; }
 .k-due--flush  { border: 0; background: transparent; padding: 0; }
 
 /* Status chip */
