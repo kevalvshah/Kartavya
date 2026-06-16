@@ -24,7 +24,7 @@ const ALL_COLS = [
   { key: 'project',    label: 'Project',      defaultW: 180, min: 100, fixed: false },
   { key: 'assignees',  label: 'Assignees',    defaultW: 200, min: 120, fixed: false },
   { key: 'category',   label: 'Category',     defaultW: 140, min: 90,  fixed: false },
-  { key: 'due',        label: 'Due',          defaultW: 100, min: 80,  fixed: false },
+  { key: 'due',        label: 'Due',          defaultW: 150, min: 120, fixed: false },
   { key: 'updated',    label: 'Last Updated', defaultW: 130, min: 100, fixed: false },
   { key: 'status',     label: 'Status',       defaultW: 130, min: 90,  fixed: false },
 ];
