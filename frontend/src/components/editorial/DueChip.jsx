@@ -32,18 +32,24 @@ const DONE_STATUSES = new Set(['done', 'approved']);
 export default function DueChip({ date, flush, status, completedAt }) {
   const { label, tone } = relDue(date);
 
-  // Done within due date → green "Done X ago" pill
   if (DONE_STATUSES.has(status) && completedAt && date) {
     const onTime = new Date(completedAt) <= new Date(date);
     if (onTime) {
+      // Completed on time → green pill
       return (
         <span className={`k-due k-due--done${flush ? ' k-due--flush' : ''}`}>
           ✓ Done {relCompleted(completedAt)}
         </span>
       );
     }
-    // Completed late — hide overdue, show nothing
-    return null;
+    // Completed late → red pill showing how late
+    const lateDays = Math.round((new Date(completedAt) - new Date(date)) / 86400000);
+    const lateLabel = lateDays <= 0 ? 'same day late' : `${lateDays}d late`;
+    return (
+      <span className={`k-due k-due--danger${flush ? ' k-due--flush' : ''}`}>
+        ✓ Done · {lateLabel}
+      </span>
+    );
   }
 
   // Done but no due date — hide badge

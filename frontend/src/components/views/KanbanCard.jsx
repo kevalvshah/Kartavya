@@ -64,6 +64,10 @@ export default function KanbanCard({ task, onClick, dragging = false, draggable 
       <div className="k-bcard__foot">
         {completedOnTime ? (
           <span style={{ fontSize: 11, color: '#16a34a', fontWeight: 600 }}>✓ Done on time</span>
+        ) : isDone && task.completed_at && task.due_at ? (
+          <span style={{ fontSize: 11, color: 'var(--k-danger)', fontWeight: 600 }}>
+            {`✓ Done · ${Math.max(1, Math.round((new Date(task.completed_at) - new Date(task.due_at)) / 86400000))}d late`}
+          </span>
         ) : due && !isDone && (
           <span style={{ fontSize: 11, color: DUE_COLORS[due.tone] || 'var(--ink-3)', fontWeight: due.tone === 'overdue' ? 700 : 400 }}>
             {due.tone === 'overdue' && '⚠ '}{due.label}
