@@ -316,6 +316,9 @@ export default function AdminPage() {
   const { pushToast } = useToast();
   const [users,     setUsers]     = useState([]);
   const [invites,   setInvites]   = useState([]);
+  const [teams,     setTeams]     = useState([]);
+  const [teamFilter, setTeamFilter] = useState('');
+  const [copiedFolder, setCopiedFolder] = useState(null);
   const [invite,      setInvite]      = useState(EMPTY_INVITE);
   const [sending,     setSending]     = useState(false);
   const [copiedId,    setCopiedId]    = useState(null);
@@ -330,6 +333,7 @@ export default function AdminPage() {
   const load = () => Promise.all([
     api.get('/admin/users').then(r => setUsers(Array.isArray(r.data) ? r.data : [])).catch(() => {}),
     api.get('/admin/invites').then(r => setInvites(Array.isArray(r.data) ? r.data : [])).catch(() => {}),
+    api.get('/admin/teams').then(r => setTeams(Array.isArray(r.data) ? r.data : [])).catch(() => {}),
   ]);
 
   useEffect(() => { load(); }, []);
@@ -361,6 +365,12 @@ export default function AdminPage() {
     navigator.clipboard.writeText(link);
     setCopiedId(id);
     setTimeout(() => setCopiedId(null), 2000);
+  };
+
+  const copyFolder = (folder, id) => {
+    navigator.clipboard.writeText(folder);
+    setCopiedFolder(id);
+    setTimeout(() => setCopiedFolder(null), 2000);
   };
 
   const revokeInvite = (id) => {
@@ -406,6 +416,11 @@ export default function AdminPage() {
 
   const pendingInvites  = invites.filter(i => !i.accepted_at && new Date(i.expires_at) > new Date());
   const roleCounts      = users.reduce((acc, u) => { acc[u.role] = (acc[u.role] || 0) + 1; return acc; }, {});
+  const filteredTeams   = teamFilter.trim()
+    ? teams.filter(t =>
+        t.name.toLowerCase().includes(teamFilter.toLowerCase()) ||
+        t.team_id.toLowerCase().includes(teamFilter.toLowerCase()))
+    : teams;
 
   const labelSt = { fontSize: 11, fontWeight: 700, color: 'var(--ink-3)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 5, display: 'block' };
 
@@ -632,6 +647,43 @@ export default function AdminPage() {
           );
         })}
       </div>
+      {/* ── R2 Folder Map ── */}
+      <div className="k-card" style={{ padding: 0, overflow: 'hidden', marginTop: 'var(--sp-5)' }}>
+        <div style={{ padding: '12px 20px', borderBottom: '1px solid var(--rule-soft)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+          <div>
+            <span style={{ fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 600, color: 'var(--ink)' }}>R2 Folder Map</span>
+            <span style={{ fontSize: 11, color: 'var(--ink-3)', marginLeft: 8 }}>परियोजना फ़ोल्डर</span>
+          </div>
+          <input
+            className="k-input"
+            style={{ maxWidth: 220 }}
+            placeholder="Search project or team_id…"
+            value={teamFilter}
+            onChange={e => setTeamFilter(e.target.value)}
+          />
+        </div>
+
+        <p style={{ margin: 0, padding: '10px 20px', fontSize: 12, color: 'var(--ink-3)', borderBottom: '1px dashed var(--rule-soft)' }}>
+          Cloudflare R2 stores each project's attachments under <code style={{ fontFamily: 'var(--font-mono)' }}>projects/&#123;team_id&#125;/</code> — use this table to identify which folder belongs to which project.
+        </p>
+
+        {filteredTeams.length === 0 ? (
+          <div style={{ padding: '20px', textAlign: 'center', color: 'var(--ink-faint)', fontSize: 13, fontStyle: 'italic' }}>
+            {teams.length === 0 ? 'No projects yet' : 'No projects match your search'}
+          </div>
+        ) : filteredTeams.map(t => (
+          <div key={t.team_id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 20px', borderBottom: '1px dashed var(--rule-soft)' }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--ink)' }}>{t.name}</div>
+              <div style={{ fontSize: 11, color: 'var(--ink-3)', fontFamily: 'var(--font-mono)', wordBreak: 'break-all' }}>{t.r2_folder}</div>
+            </div>
+            <button className="k-btn k-btn--ghost k-btn--sm" onClick={() => copyFolder(t.r2_folder, t.team_id)}>
+              {copiedFolder === t.team_id ? '✓ Copied!' : 'Copy path'}
+            </button>
+          </div>
+        ))}
+      </div>
+
       <ConfirmDialog state={confirmState} onClose={() => setConfirmState(null)} />
     </div>
   );

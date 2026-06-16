@@ -375,3 +375,25 @@ async def admin_send_reset_link(user_id: str, pool=Depends(get_pool), admin=Depe
 async def revoke_invite(invite_id: str, pool=Depends(get_pool), admin=Depends(require_admin)):
     await pool.execute("DELETE FROM invites WHERE invite_id=$1", invite_id)
     return {"ok": True}
+
+
+# ── R2 folder map ───────────────────────────────────────────────────────────
+
+class TeamFolderOut(BaseModel):
+    team_id: str
+    name: str
+    r2_folder: str   # path prefix this project's files are stored under in R2
+
+
+@router.get("/teams", response_model=List[TeamFolderOut])
+async def list_team_folders(pool=Depends(get_pool), admin=Depends(require_admin)):
+    """team_id → project name lookup, so an admin can identify R2 folders
+    (which are keyed by team_id, e.g. projects/{team_id}/...) without
+    needing direct database access."""
+    rows = await pool.fetch(
+        "SELECT team_id, name FROM teams WHERE deleted_at IS NULL ORDER BY name"
+    )
+    return [
+        TeamFolderOut(team_id=r["team_id"], name=r["name"], r2_folder=f"projects/{r['team_id']}/")
+        for r in rows
+    ]
