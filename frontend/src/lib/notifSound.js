@@ -1,15 +1,14 @@
-/**
- * notifSound.js — Indian-classical-instrument notification chimes.
- * Procedurally synthesized cues (see scripts/gen_notif_sounds.py), not
- * licensed recordings. Selection persists per-browser in localStorage.
- */
 export const NOTIF_SOUNDS = [
-  { id: 'none',    label: 'Silent',  hi: 'मौन',      url: null },
-  { id: 'tabla',   label: 'Tabla',   hi: 'तबला',     url: '/sounds/tabla.wav' },
-  { id: 'bansuri', label: 'Bansuri', hi: 'बांसुरी', url: '/sounds/bansuri.wav' },
-  { id: 'sitar',   label: 'Sitar',   hi: 'सितार',    url: '/sounds/sitar.wav' },
-  { id: 'tanpura', label: 'Tanpura', hi: 'तानपुरा',  url: '/sounds/tanpura.wav' },
-  { id: 'ghanta',  label: 'Temple bell', hi: 'घंटा', url: '/sounds/ghanta.wav' },
+  { id: 'none',    label: 'Silent',       hi: 'मौन',      url: null },
+  { id: 'tabla',   label: 'Tabla',        hi: 'तबला',     url: '/sounds/tabla.mp3' },
+  { id: 'sitar',   label: 'Sitar',        hi: 'सितार',    url: '/sounds/sitar.mp3' },
+  { id: 'dhol',    label: 'Dhol',         hi: 'ढोल',      url: '/sounds/dhol.mp3' },
+  { id: 'salute',  label: 'Salute',       hi: 'सलामी',    url: '/sounds/salute.mp3' },
+  { id: 'jump',    label: 'Jump',         hi: 'कूद',      url: '/sounds/jump.mp3' },
+  { id: 'mario',   label: 'Mario',        hi: 'मारियो',   url: '/sounds/mario.mp3' },
+  { id: 'minion',  label: 'Minion',       hi: 'मिनियन',   url: '/sounds/minion.mp3' },
+  { id: 'rooster', label: 'Rooster',      hi: 'मुर्गा',   url: '/sounds/rooster.mp3' },
+  { id: 'train',   label: 'Train',        hi: 'रेलगाड़ी', url: '/sounds/train.mp3' },
 ];
 
 const STORAGE_KEY = 'kv_notif_sound';
