@@ -220,11 +220,23 @@ const PRAISE_SOUNDS = [
   '/sounds/praise/en_legendary.mp3',
   '/sounds/praise/en_nailed_it.mp3',
   '/sounds/praise/en_you_beast.mp3',
+  '/sounds/praise/en_you_the_og.mp3',
+  '/sounds/praise/en_the_goat.mp3',
+  '/sounds/praise/en_yeh_champion.mp3',
   // English — female
   '/sounds/praise/en_f_on_fire.mp3',
   '/sounds/praise/en_f_amazing_work.mp3',
   '/sounds/praise/en_f_killing_it.mp3',
   '/sounds/praise/en_f_proud_of_you.mp3',
+  '/sounds/praise/en_f_you_the_og.mp3',
+  '/sounds/praise/en_f_the_goat.mp3',
+  '/sounds/praise/en_f_yeh_champion.mp3',
+  // English — slang (reused from notif sounds)
+  '/sounds/en_lets_gooo.mp3',
+  '/sounds/en_sheesh.mp3',
+  '/sounds/en_not_bad.mp3',
+  '/sounds/en_absolute_legend.mp3',
+  '/sounds/en_w_move.mp3',
 ];
 
 export function playPraiseSound() {
