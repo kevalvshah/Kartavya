@@ -19,9 +19,9 @@ import logging
 import os
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
-from auth_router import require_admin
+from auth_router import require_admin, require_user, security
 from db import get_pool
 from utils import now_utc, log_safe as _log_safe
 from services.web_push_service import send_web_push
@@ -33,20 +33,31 @@ router = APIRouter(prefix="/api/task-reminders", tags=["task-reminders"])
 DISPATCH_SECRET = os.environ.get("TASK_REMINDER_DISPATCH_SECRET", "")
 if not DISPATCH_SECRET:
     logger.warning(
-        "TASK_REMINDER_DISPATCH_SECRET is not set — dispatch endpoint is protected by admin auth only. "
-        "Set this env var in production to add a second layer of protection."
+        "TASK_REMINDER_DISPATCH_SECRET is not set — dispatch endpoint will require an "
+        "authenticated admin session instead. Set this env var so the cron caller "
+        "(which has no session cookie) can authenticate with the secret alone."
     )
 
 
 @router.post("/dispatch")
 async def dispatch_reminders(
-    request_secret: str = Query(""),
+    request: Request,
     pool = Depends(get_pool),
-    _caller = Depends(require_admin),
+    request_secret: str = Query(""),
 ):
-    """Called every few minutes by an external cron. Sends all due task reminders."""
-    if DISPATCH_SECRET and request_secret != DISPATCH_SECRET:
-        raise HTTPException(403, "Invalid dispatch secret")
+    """Called every few minutes by an external cron. Sends all due task reminders.
+
+    Auth: if TASK_REMINDER_DISPATCH_SECRET is set, a matching ?request_secret=
+    is sufficient on its own (the cron caller has no session cookie to send).
+    Only falls back to requiring an authenticated admin session when the
+    secret env var isn't configured at all.
+    """
+    if DISPATCH_SECRET:
+        if request_secret != DISPATCH_SECRET:
+            raise HTTPException(403, "Invalid dispatch secret")
+    else:
+        creds = await security(request)
+        await require_admin(await require_user(request, creds))
 
     now = now_utc()
     due = await pool.fetch("""
