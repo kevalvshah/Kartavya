@@ -75,6 +75,19 @@ export default function AppShell() {
   useEffect(() => {
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('/sw.js').catch(() => {});
+
+      // Auto-reload once when a new service worker takes control. Without this,
+      // a tab can stay pinned to the JS/CSS bundle it first loaded with even
+      // after a fresh deploy activates a new SW in the background — this is
+      // what caused the UI to look different between a normal refresh (still
+      // on the old controller) and a hard refresh (forced past it). Every
+      // user gets this automatically; no manual cache-clearing needed.
+      let reloadedForNewSW = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (reloadedForNewSW) return;
+        reloadedForNewSW = true;
+        window.location.reload();
+      });
     }
     const t = setTimeout(() => {
       if (!('Notification' in window)) return;
