@@ -48,8 +48,15 @@ self.addEventListener('fetch', (e) => {
   // normal refresh, not just a hard refresh. Cache is only a fallback for when
   // the network request fails (offline) — never the primary source, otherwise
   // stale JS/CSS bundles get served forever after every deploy.
+  // Navigation requests (HTML) and unhashed root assets must bypass the
+  // browser's own HTTP cache too, not just our Cache Storage — otherwise a
+  // stale disk-cached index.html can satisfy fetch() without ever reaching
+  // the network, even though our handler is "network-first" in name.
+  const bypassHttpCache = e.request.mode === 'navigate' || e.request.url.endsWith('/index.html');
+  const networkReq = bypassHttpCache ? new Request(e.request, { cache: 'no-store' }) : e.request;
+
   e.respondWith(
-    fetch(e.request).then((res) => {
+    fetch(networkReq).then((res) => {
       if (res.status === 200 && res.type === 'basic') {
         const clone = res.clone();
         caches.open(CACHE).then((c) => c.put(e.request, clone));
