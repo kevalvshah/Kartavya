@@ -22,8 +22,6 @@ export const NOTIF_SOUND_GROUPS = [
     sounds: [
       { id: 'rickshaw_horn',      label: 'Rickshaw horn',      hi: 'रिक्शा',   url: '/sounds/rickshaw_horn.mp3' },
       { id: 'shehnai_gone_wrong', label: 'Shehnai gone wrong', hi: 'शहनाई',    url: '/sounds/shehnai_gone_wrong.mp3' },
-      { id: 'bollywood_suspense', label: 'Bollywood suspense', hi: 'बॉलीवुड',  url: '/sounds/bollywood_suspense.mp3' },
-      { id: 'indian_train_horn',  label: 'Train horn',         hi: 'रेलगाड़ी', url: '/sounds/indian_train_horn.mp3' },
     ],
   },
   {
@@ -31,10 +29,7 @@ export const NOTIF_SOUND_GROUPS = [
     hi: 'ગુજ્જુ',
     sounds: [
       { id: 'garba_dhol',     label: 'Garba dhol',     hi: 'ગરબા',   url: '/sounds/garba_dhol.mp3' },
-      { id: 'dandiya_sticks', label: 'Dandiya sticks', hi: 'ડાંડિયા', url: '/sounds/dandiya_sticks.mp3' },
-      { id: 'thali_ding',     label: 'Thali ding',     hi: 'થાળી',   url: '/sounds/thali_ding.mp3' },
       { id: 'kem_cho',        label: 'Kem cho (tone)', hi: 'કેમ છો',  url: '/sounds/kem_cho.mp3' },
-      { id: 'fafda_crunch',   label: 'Fafda crunch',   hi: 'ફાફડા',  url: '/sounds/fafda_crunch.mp3' },
     ],
   },
   {
@@ -89,7 +84,6 @@ export const NOTIF_SOUND_GROUPS = [
     group: 'Scary',
     hi: 'डरावना',
     sounds: [
-      { id: 'horror_sting',    label: 'Horror sting',    hi: 'भयावह',   url: '/sounds/horror_sting.mp3' },
       { id: 'halloween_organ', label: 'Halloween organ', hi: 'हैलोवीन', url: '/sounds/halloween_organ.mp3' },
       { id: 'heartbeat',       label: 'Heartbeat',       hi: 'दिल',     url: '/sounds/heartbeat.mp3' },
       { id: 'clock_alarm',     label: 'Clock alarm',     hi: 'अलार्म',  url: '/sounds/clock_alarm.mp3' },
