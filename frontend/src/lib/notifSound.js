@@ -27,6 +27,17 @@ export const NOTIF_SOUND_GROUPS = [
     ],
   },
   {
+    group: 'Gujju',
+    hi: 'ગુજ્જુ',
+    sounds: [
+      { id: 'garba_dhol',     label: 'Garba dhol',      hi: 'ગરબા',   url: '/sounds/garba_dhol.mp3' },
+      { id: 'dandiya_sticks', label: 'Dandiya sticks',  hi: 'ડાંડિયા', url: '/sounds/dandiya_sticks.mp3' },
+      { id: 'thali_ding',     label: 'Thali ding',      hi: 'થાળી',   url: '/sounds/thali_ding.mp3' },
+      { id: 'kem_cho',        label: 'Kem cho 🙏',      hi: 'કેમ છો',  url: '/sounds/kem_cho.mp3' },
+      { id: 'fafda_crunch',   label: 'Fafda crunch',    hi: 'ફાફડા',  url: '/sounds/fafda_crunch.mp3' },
+    ],
+  },
+  {
     group: 'Funny',
     hi: 'हास्य',
     sounds: [
