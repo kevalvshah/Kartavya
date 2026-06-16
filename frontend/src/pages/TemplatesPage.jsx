@@ -10,9 +10,10 @@ import { PageHeader } from '../components/editorial';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
 
 const ICONS = ['📋','✅','🎨','📹','📸','📊','💡','🔖','⚡','🚀','📝','🎯','🔧','📦','🌐'];
+const COLOR_PRESETS = ['#0082c6','#05b7aa','#8b5cf6','#ec4899','#f59e0b','#10b981','#6366f1','#ef4444','#64748b','#0ea5e9'];
 const EMPTY_TASK_TMPL = {
   name: '', icon: '📋', is_default: false, team_id: '',
-  config: { title: '', description: '', priority: 'medium', subtasks: [], attachments: [], tags: [], custom_fields: {} }
+  config: { title: '', description: '', priority: 'medium', color: '', subtasks: [], attachments: [], tags: [], custom_fields: {} }
 };
 
 const KICKER_COLORS = ['#0082c6','#05b7aa','#8b5cf6','#ec4899','#f59e0b','#10b981','#6366f1'];
@@ -51,6 +52,8 @@ export default function TemplatesPage() {
   const [savingTask,       setSavingTask]       = useState(false);
   const [newSubtask,       setNewSubtask]       = useState('');
   const [showIconPicker,   setShowIconPicker]   = useState(false);
+  const [tmplUploading,    setTmplUploading]    = useState(false);
+  const tmplFileRef = useRef(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -154,7 +157,7 @@ export default function TemplatesPage() {
           <div className="k-tmpl-grid">
             {currentTemplates.map((t, idx) => {
               const cfg     = typeof t.config === 'string' ? JSON.parse(t.config) : (t.config || {});
-              const color   = KICKER_COLORS[idx % KICKER_COLORS.length];
+              const color   = cfg.color || KICKER_COLORS[idx % KICKER_COLORS.length];
               const sans    = KICKER_SANS[idx % KICKER_SANS.length];
               const kicker  = getKicker(t, idx);
               const cols    = (cfg.columns || []).length;
@@ -431,6 +434,36 @@ export default function TemplatesPage() {
                     </div>
                   </div>
 
+                  {/* Color picker */}
+                  <div>
+                    <label className="k-label">Card color · रंग</label>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                      {COLOR_PRESETS.map(c => (
+                        <button key={c} onClick={() => setcfg('color', cfg.color === c ? '' : c)}
+                          title={c}
+                          style={{
+                            width: 26, height: 26, borderRadius: '50%', background: c, border: 'none',
+                            cursor: 'pointer', flexShrink: 0,
+                            outline: cfg.color === c ? `3px solid ${c}` : '2px solid transparent',
+                            outlineOffset: 2, transition: 'outline .12s',
+                          }} />
+                      ))}
+                      <label title="Custom color" style={{ position: 'relative', width: 26, height: 26, borderRadius: '50%', border: '2px dashed var(--rule-strong)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, overflow: 'hidden' }}>
+                        <span style={{ fontSize: 14, color: 'var(--ink-3)', lineHeight: 1 }}>+</span>
+                        <input type="color" value={cfg.color && !COLOR_PRESETS.includes(cfg.color) ? cfg.color : '#000000'}
+                          onChange={e => setcfg('color', e.target.value)}
+                          style={{ position: 'absolute', opacity: 0, width: '100%', height: '100%', cursor: 'pointer' }} />
+                      </label>
+                      {cfg.color && (
+                        <span style={{ fontSize: 12, color: 'var(--ink-3)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span style={{ width: 14, height: 14, borderRadius: '50%', background: cfg.color, display: 'inline-block', flexShrink: 0 }} />
+                          {cfg.color}
+                          <button onClick={() => setcfg('color', '')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-faint)', fontSize: 14, lineHeight: 1, padding: 0 }}>×</button>
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
                   {/* Subtasks */}
                   <div>
                     <label className="k-label">Subtasks · उप-कार्य</label>
@@ -463,20 +496,55 @@ export default function TemplatesPage() {
                     </div>
                   </div>
 
-                  {/* Attached files */}
+                  {/* Attached files + URLs */}
                   <div>
-                    <label className="k-label">Pre-attached files · संलग्न</label>
-                    <div style={{ fontSize: 12, color: 'var(--ink-faint)', marginBottom: 8 }}>
-                      Paste public file URLs (Google Drive, Figma, brand kit) — they auto-attach when this template is used.
+                    <label className="k-label">Pre-attached files & links · संलग्न</label>
+                    <div style={{ fontSize: 12, color: 'var(--ink-faint)', marginBottom: 10 }}>
+                      Upload files or paste URLs (Google Drive, Figma, brand kit) — all auto-attach when this template is used.
                     </div>
-                    {(cfg.attachments || []).map((a, i) => (
-                      <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, padding: '6px 10px', background: 'var(--bg-soft)', borderRadius: 'var(--r-md)', border: '1px solid var(--rule-soft)' }}>
-                        <span style={{ fontSize: 12, flex: 1, color: 'var(--k-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.name}</span>
-                        <button onClick={() => setcfg('attachments', cfg.attachments.filter((_, j) => j !== i))}
-                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-faint)', fontSize: 16 }}>×</button>
+                    {(cfg.attachments || []).length > 0 && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 12 }}>
+                        {(cfg.attachments || []).map((a, i) => (
+                          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', background: 'var(--bg-soft)', borderRadius: 'var(--r-md)', border: '1px solid var(--rule-soft)' }}>
+                            {a.key ? (
+                              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="var(--k-primary)" strokeWidth="1.5"><path d="M9 1H4a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V5L9 1z"/><path d="M9 1v4h4"/></svg>
+                            ) : (
+                              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="var(--k-primary)" strokeWidth="1.5"><path d="M2 8a6 6 0 1 0 12 0A6 6 0 0 0 2 8z"/><path d="M8 5v3l2 2"/></svg>
+                            )}
+                            <a href={a.url} target="_blank" rel="noreferrer" style={{ flex: 1, fontSize: 12, color: 'var(--k-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textDecoration: 'none' }}>{a.name}</a>
+                            <button onClick={() => setcfg('attachments', cfg.attachments.filter((_, j) => j !== i))}
+                              style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-faint)', fontSize: 16, lineHeight: 1, padding: 0 }}>×</button>
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                    <AttachFileRow onAdd={(item) => setcfg('attachments', [...(cfg.attachments || []), item])} />
+                    )}
+                    <input ref={tmplFileRef} type="file" multiple
+                      accept=".jpg,.jpeg,.png,.gif,.heic,.heif,.pdf,.doc,.docx,.xls,.xlsx,.csv,.ppt,.pptx,.txt"
+                      style={{ display: 'none' }}
+                      onChange={async (e) => {
+                        const picked = Array.from(e.target.files);
+                        if (!picked.length) return;
+                        setTmplUploading(true);
+                        try {
+                          for (const file of picked) {
+                            const fd = new FormData();
+                            fd.append('file', file);
+                            const res = await api.post('/upload', fd);
+                            setcfg('attachments', [...(cfg.attachments || []), { name: file.name, url: res.data.url, key: res.data.key || null }]);
+                          }
+                        } catch (_) {}
+                        finally { setTmplUploading(false); e.target.value = ''; }
+                      }}
+                    />
+                    <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+                      <button className="k-btn k-btn--ghost k-btn--sm" disabled={tmplUploading}
+                        onClick={() => tmplFileRef.current?.click()}
+                        style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M8 12V4M4 8l4-4 4 4"/><path d="M2 14h12"/></svg>
+                        {tmplUploading ? 'Uploading…' : 'Upload file'}
+                      </button>
+                    </div>
+                    <AttachUrlRow onAdd={(item) => setcfg('attachments', [...(cfg.attachments || []), item])} />
                   </div>
 
                   <div style={{ display: 'flex', gap: 10, paddingTop: 4, borderTop: '1px solid var(--rule-soft)' }}>
@@ -579,24 +647,26 @@ export default function TemplatesPage() {
   );
 }
 
-function AttachFileRow({ onAdd }) {
+function AttachUrlRow({ onAdd }) {
   const [name, setName] = useState('');
   const [url,  setUrl]  = useState('');
   const add = () => {
-    if (!name.trim() || !url.trim()) return;
-    onAdd({ name: name.trim(), url: url.trim(), key: null });
+    if (!url.trim()) return;
+    const label = name.trim() || url.trim().split('/').pop().split('?')[0] || url.trim();
+    onAdd({ name: label, url: url.trim(), key: null });
     setName(''); setUrl('');
   };
   return (
     <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
       <div style={{ flex: 1 }}>
-        <input className="k-input" value={name} onChange={e => setName(e.target.value)}
-          placeholder="File name (e.g. Brand Kit.pdf)" style={{ marginBottom: 6 }} />
         <input className="k-input" value={url} onChange={e => setUrl(e.target.value)}
-          placeholder="URL (Google Drive, Figma, etc.)"
-          onKeyDown={e => e.key === 'Enter' && add()} />
+          placeholder="Paste URL (Google Drive, Figma, Notion…)"
+          onKeyDown={e => e.key === 'Enter' && add()}
+          style={{ marginBottom: 6 }} />
+        <input className="k-input" value={name} onChange={e => setName(e.target.value)}
+          placeholder="Label (optional — e.g. Brand Kit, Figma Mockup)" />
       </div>
-      <button className="k-btn k-btn--ghost k-btn--sm" onClick={add} style={{ marginBottom: 0 }}>+ Attach</button>
+      <button className="k-btn k-btn--ghost k-btn--sm" onClick={add}>+ Add URL</button>
     </div>
   );
 }
