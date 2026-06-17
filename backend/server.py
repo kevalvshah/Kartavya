@@ -44,8 +44,12 @@ from routers.dashboards  import router as dashboards_router
 from routers.templates   import router as templates_router
 from routers.time_entries import router as time_router
 from routers.uploads     import router as uploads_router   # R2-backed upload
-from routers.reports     import router as reports_router
+from routers.reports        import router as reports_router
 from routers.task_reminders import router as task_reminders_router
+from routers.messaging          import router as messaging_router
+from routers.whatsapp_settings   import router as whatsapp_router
+from routers.whatsapp_webhook    import router as whatsapp_webhook_router
+from routers.whatsapp_templates  import router as whatsapp_templates_router
 from services.gita            import get_verse_of_the_day
 from services.web_push_service import (
     is_configured as wp_is_configured,
@@ -1668,12 +1672,20 @@ async def update_task(task_id:str,payload:TaskUpdate,pool=Depends(get_db),user=D
     updates.append(f"updated_at=${len(vals)+1}"); vals.append(now_utc()); vals.append(task_id)
     row=await pool.fetchrow(f"UPDATE tasks SET {', '.join(updates)} WHERE task_id=${len(vals)} RETURNING *",*vals)
     new_status=row["status"]; new_assignees=list(row.get("assignee_user_ids") or [])
-    from services.activity_logger import log_event, log_assigned
+    from services.activity_logger import log_event, log_assigned, log_field_changed
     if old_status!=new_status:
         await log_event(pool,task_id=task_id,actor_id=user["user_id"],event_type="status_changed",data={"from":old_status,"to":new_status})
         await _notify_status_changed(pool, row, existing, old_status, new_status, user, task_id)
         from services.automation_engine import fire_automations
         _bg(fire_automations(pool,"status_changed",{"task":{"task_id":task_id,"team_id":existing["team_id"]},"team_id":existing["team_id"],"from":old_status,"to":new_status}), label="fire_automations")
+    for _field in ["title","description","priority"]:
+        if _field in data and data[_field] != existing.get(_field):
+            await log_field_changed(pool,task_id=task_id,actor_id=user["user_id"],field_name=_field,from_val=existing.get(_field),to_val=data[_field])
+    if "due_at" in data:
+        old_due = str(existing.get("due_at") or "")
+        new_due = str(parse_dt(data["due_at"]) or "")
+        if old_due != new_due:
+            await log_field_changed(pool,task_id=task_id,actor_id=user["user_id"],field_name="due_at",from_val=old_due or None,to_val=new_due or None)
     if "assignee_user_ids" in data:
         added=[u for u in new_assignees if u not in old_assignees]
         removed=[u for u in old_assignees if u not in new_assignees]
@@ -1960,6 +1972,10 @@ app.include_router(time_router)
 app.include_router(uploads_router)   # R2-backed file upload (replaces old base64 /api/upload)
 app.include_router(reports_router)
 app.include_router(task_reminders_router)
+app.include_router(messaging_router)
+app.include_router(whatsapp_router)
+app.include_router(whatsapp_templates_router)
+app.include_router(whatsapp_webhook_router)  # public — no auth, HMAC verified internally
 
 
 # ── Verse of the day (public) ────────────────────────────────────────────────
@@ -2133,10 +2149,10 @@ async def _run_startup_migrations():
         """)
         await pool.execute("CREATE INDEX IF NOT EXISTS idx_report_sched_team ON report_schedules(team_id)")
         await pool.execute("CREATE INDEX IF NOT EXISTS idx_report_sched_next ON report_schedules(next_run_at) WHERE is_active=TRUE")
-        # Custom task reminders (multi-offset, multi-channel)
+        # Task reminders (multi-offset, multi-channel)
         await pool.execute("""
             CREATE TABLE IF NOT EXISTS task_reminders (
-                reminder_id     TEXT PRIMARY KEY DEFAULT ('trm_' || substr(md5(random()::text),1,12)),
+                reminder_id     TEXT PRIMARY KEY DEFAULT ('tr_' || substr(md5(random()::text),1,12)),
                 task_id         TEXT NOT NULL REFERENCES tasks(task_id) ON DELETE CASCADE,
                 offset_minutes  INTEGER NOT NULL,
                 channel_inapp   BOOLEAN NOT NULL DEFAULT TRUE,
