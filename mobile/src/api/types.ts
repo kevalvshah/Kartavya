@@ -127,6 +127,65 @@ export interface NotifPrefsResponse {
   quiet_end:   string;  // "07:00"
 }
 
+export interface Channel {
+  channel_id:       string;
+  type:             'project' | 'general' | 'dm';
+  name?:            string;
+  project_id?:      string;
+  project_name?:    string;
+  unread_count:     number;
+  last_message?:    string;
+  last_message_at?: string;
+}
+
+export interface MessageReaction {
+  emoji:     string;
+  user_id:   string;
+  user_name: string;
+}
+
+export interface Message {
+  message_id:    string;
+  channel_id:    string;
+  sender_id:     string;
+  sender_name:   string;
+  sender_avatar?: string;
+  body:          string | null;
+  deleted:       boolean;
+  parent_id?:    string;
+  metadata?:     Record<string, unknown>;
+  edited_at?:    string;
+  created_at:    string;
+  reactions:     MessageReaction[];
+  reply_count:   number;
+}
+
+export interface TaskTemplate {
+  template_id: string;
+  name:        string;
+  icon?:       string;
+  is_default:  boolean;
+  team_id?:    string;
+  config: {
+    title?:       string;
+    description?: string;
+    priority?:    string;
+    subtasks?:    { title: string; is_done: boolean }[];
+    attachments?: { name: string; url: string; key?: string }[];
+  };
+}
+
+export interface WhatsAppSettings {
+  opted_in:            boolean;
+  verified:            boolean;
+  opted_out?:          boolean;
+  phone?:              string;
+  notify_approvals?:   boolean;
+  notify_mentions?:    boolean;
+  notify_assignments?: boolean;
+  notify_dms?:         boolean;
+}
+
 export interface MutationQueueItem {
   id:           string;
   method:       'POST' | 'PUT' | 'PATCH' | 'DELETE';
