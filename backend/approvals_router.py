@@ -74,18 +74,12 @@ async def get_task_with_permission(pool, task_id: str, user_id: str):
 
 
 async def is_project_owner(pool, team_id: str, user_id: str) -> bool:
-    """Return True if the user is an owner or admin of the given team (via either membership table)."""
+    """Return True if the user is an active owner or admin of the given team."""
     member = await pool.fetchrow("""
         SELECT role FROM team_members
         WHERE team_id=$1 AND user_id=$2 AND status='active'
     """, team_id, user_id)
-    if member and member["role"] in ("owner", "admin"):
-        return True
-    pa = await pool.fetchrow("""
-        SELECT role FROM project_assignments
-        WHERE team_id=$1 AND user_id=$2 AND role IN ('owner','admin')
-    """, team_id, user_id)
-    return bool(pa)
+    return member and member["role"] in ("owner", "admin")
 
 
 async def _notify(pool, task_id: str, task_title: str, recipient_id: str,
@@ -108,8 +102,7 @@ async def _notify(pool, task_id: str, task_title: str, recipient_id: str,
 
 async def send_approval_notification(pool, task_id: str, task_title: str,
                                      recipient_id: str, notification_type: str,
-                                     notes: Optional[str] = None, team_id: Optional[str] = None,
-                                     requester_name: Optional[str] = None):
+                                     notes: Optional[str] = None, team_id: Optional[str] = None):
     """Send a DB notification, email, and push notification for an approval event."""
     user = await pool.fetchrow(
         "SELECT email, COALESCE(full_name,name) AS name FROM users WHERE user_id=$1", recipient_id
@@ -117,15 +110,36 @@ async def send_approval_notification(pool, task_id: str, task_title: str,
     if user:
         await _notify(pool, task_id, task_title, recipient_id, notification_type, notes, team_id=team_id)
         try:
-            from email_service import send_approval_notification_email
-            send_approval_notification_email(
-                user["email"], user["name"] or user["email"],
-                task_title, notification_type, notes,
-                task_id=task_id,
-                requester_name=requester_name,
-            )
+            from email_service import send_approval_request_email, send_approval_decision_email
+            if notification_type == "request":
+                send_approval_request_email(
+                    user["email"], user["name"] or user["email"],
+                    "Your team",           # requester placeholder — caller should use send_approval_request_email directly for full context
+                    task_title, notes=notes,
+                )
+            elif notification_type in ("approved", "rejected"):
+                send_approval_decision_email(
+                    user["email"], user["name"] or user["email"],
+                    "The reviewer", task_title, task_id or "", notification_type, notes
+                )
         except Exception as exc:
             import logging; logging.getLogger(__name__).warning("approval email failed: %s", exc)
+
+        # WhatsApp notification
+        try:
+            from services.whatsapp_service import send_approval_request, send_approval_decision
+            if notification_type == "request":
+                asyncio.ensure_future(send_approval_request(
+                    pool, recipient_id, task_id, task_title,
+                    requester_name="Team member", notes=notes or ""
+                ))
+            elif notification_type in ("approved", "rejected"):
+                asyncio.ensure_future(send_approval_decision(
+                    pool, recipient_id, task_id, task_title,
+                    reviewer_name="Reviewer", decision=notification_type, reason=notes or ""
+                ))
+        except Exception as exc:
+            import logging; logging.getLogger(__name__).warning("wa approval notif failed: %s", exc)
 
         try:
             from services.push_service import send_push
@@ -163,50 +177,44 @@ async def request_approval(task_id: str, payload: ApprovalRequest,
     if not task["team_id"]:
         raise HTTPException(400, "Cannot request approval for personal tasks")
 
-    owner = await pool.fetchrow("""
-        SELECT user_id FROM team_members
-        WHERE team_id=$1 AND role IN ('owner','admin') AND status='active'
-        ORDER BY CASE role WHEN 'owner' THEN 0 ELSE 1 END LIMIT 1
-    """, task["team_id"])
-    if not owner:
-        raise HTTPException(400, "No project owner or admin found to approve")
+    # Notify all owners + admins on this project
+    owners = await pool.fetch("""
+        SELECT DISTINCT u.user_id, u.email, COALESCE(u.full_name, u.name, u.email) AS name
+        FROM team_members tm
+        JOIN users u ON u.user_id = tm.user_id
+        WHERE tm.team_id=$1 AND tm.role IN ('owner','admin') AND tm.status='active'
+          AND tm.user_id != $2
+        UNION
+        SELECT DISTINCT u.user_id, u.email, COALESCE(u.full_name, u.name, u.email) AS name
+        FROM project_assignments pa
+        JOIN users u ON u.user_id = pa.user_id
+        WHERE pa.team_id=$1 AND pa.role IN ('owner','admin') AND pa.user_id != $2
+    """, task["team_id"], user["user_id"])
+    if not owners:
+        raise HTTPException(400, "No project owner or admin found")
 
-    requester = await pool.fetchrow(
-        "SELECT COALESCE(full_name, name, email) AS name FROM users WHERE user_id=$1",
-        user["user_id"]
-    )
-    requester_name = requester["name"] if requester else "A team member"
+    requester_name = user.get("full_name") or user.get("name") or user.get("email", "Team member")
 
-    # Move task into the Approval column automatically
-    approval_col = await pool.fetchrow(
-        "SELECT column_id FROM project_columns WHERE team_id=$1 AND name ILIKE '%approval%' ORDER BY sort_order LIMIT 1",
-        task["team_id"]
-    )
+    await pool.execute("""
+        UPDATE tasks
+        SET approval_status='pending', approval_requested_at=NOW(),
+            approval_notes=$1, updated_at=NOW()
+        WHERE task_id=$2
+    """, payload.notes, task_id)
 
-    if approval_col:
-        await pool.execute("""
-            UPDATE tasks
-            SET approval_status='pending', approval_requested_at=NOW(),
-                approval_notes=$1, column_id=$2, updated_at=NOW()
-            WHERE task_id=$3
-        """, payload.notes, approval_col["column_id"], task_id)
-    else:
-        await pool.execute("""
-            UPDATE tasks
-            SET approval_status='pending', approval_requested_at=NOW(),
-                approval_notes=$1, updated_at=NOW()
-            WHERE task_id=$2
-        """, payload.notes, task_id)
+    for owner in owners:
+        await _notify(pool, task_id, task["title"], owner["user_id"], "request", payload.notes, team_id=task["team_id"])
+        try:
+            from email_service import send_approval_request_email
+            send_approval_request_email(
+                owner["email"], owner["name"],
+                requester_name, task["title"],
+                notes=payload.notes,
+            )
+        except Exception as exc:
+            import logging; logging.getLogger(__name__).warning("approval req email failed: %s", exc)
 
-    await send_approval_notification(
-        pool, task_id, task["title"], owner["user_id"], "request",
-        payload.notes, team_id=task["team_id"], requester_name=requester_name
-    )
-    return {
-        "message": "Approval requested",
-        "approval_status": "pending",
-        "column_id": approval_col["column_id"] if approval_col else None,
-    }
+    return {"message": "Approval requested", "approval_status": "pending"}
 
 
 @router.post("/tasks/{task_id}/approve")
@@ -222,39 +230,30 @@ async def approve_task(task_id: str, payload: ApprovalRequest,
         if not user_data or user_data["role"] != "admin":
             raise HTTPException(403, "Only project owner or admin can approve")
 
-    all_cols = await pool.fetch(
-        "SELECT * FROM project_columns WHERE team_id=$1 ORDER BY sort_order ASC", task["team_id"]
+    current_col = await pool.fetchrow(
+        "SELECT * FROM project_columns WHERE column_id=$1", task["column_id"]
     )
-    # Prefer a column explicitly named "Approved"; fall back to next col after current; then last col
-    approved_col = next((c for c in all_cols if "approved" in (c["name"] or "").lower()
-                         and "approval" not in (c["name"] or "").lower().replace("approved","")), None)
-    if approved_col:
-        new_col_id = approved_col["column_id"]
-        new_status  = "done" if approved_col["is_done"] else "in_progress"
+    if current_col:
+        next_col = await pool.fetchrow("""
+            SELECT * FROM project_columns
+            WHERE team_id=$1 AND sort_order > $2
+            ORDER BY sort_order ASC LIMIT 1
+        """, task["team_id"], current_col["sort_order"])
+        new_col_id = next_col["column_id"] if next_col else task["column_id"]
+        new_status = "done" if (next_col and next_col["is_done"]) else "in_progress"
     else:
-        current_col = next((c for c in all_cols if c["column_id"] == task["column_id"]), None)
-        next_col = next((c for c in all_cols if current_col and c["sort_order"] > current_col["sort_order"]), None)
-        if next_col:
-            new_col_id = next_col["column_id"]
-            new_status  = "done" if next_col["is_done"] else "in_progress"
-        elif all_cols:
-            # No next col — use last column and mark done
-            new_col_id = all_cols[-1]["column_id"]
-            new_status  = "done"
-        else:
-            new_col_id, new_status = task["column_id"], "in_progress"
+        new_col_id, new_status = task["column_id"], "in_progress"
 
-    updated = await pool.fetchrow("""
+    await pool.execute("""
         UPDATE tasks
         SET approval_status='approved', approved_by=$1, approval_notes=$2,
             approval_decided_at=NOW(), column_id=$3, status=$4, updated_at=NOW()
         WHERE task_id=$5
-        RETURNING *
     """, user["user_id"], payload.notes, new_col_id, new_status, task_id)
 
     await send_approval_notification(pool, task_id, task["title"],
                                      task["created_by_user_id"], "approved", payload.notes, team_id=task["team_id"])
-    return {"message": "Task approved", "approval_status": "approved", "new_column_id": new_col_id, "status": new_status}
+    return {"message": "Task approved", "approval_status": "approved", "new_column_id": new_col_id}
 
 
 @router.post("/tasks/{task_id}/reject")
@@ -273,31 +272,16 @@ async def reject_task(task_id: str, payload: ApprovalRequest,
     if not payload.notes or not payload.notes.strip():
         raise HTTPException(400, _REJECTION_REQUIRED)
 
-    # Move task back to a "Rejected" column if one exists, else the first "In Progress" col, else keep current
-    fallback_col_id = task["column_id"]
-    fallback_status = "in_progress"
-    if task["team_id"]:
-        all_cols = await pool.fetch(
-            "SELECT * FROM project_columns WHERE team_id=$1 ORDER BY sort_order ASC", task["team_id"]
-        )
-        rejected_col = next((c for c in all_cols if "reject" in (c["name"] or "").lower()), None)
-        inprog_col   = next((c for c in all_cols if "progress" in (c["name"] or "").lower()
-                             or "doing" in (c["name"] or "").lower()), None)
-        target = rejected_col or inprog_col
-        if target:
-            fallback_col_id = target["column_id"]
-            fallback_status = "done" if target["is_done"] else "in_progress"
-
     await pool.execute("""
         UPDATE tasks
         SET approval_status='rejected', approved_by=$1, approval_notes=$2,
-            approval_decided_at=NOW(), column_id=$3, status=$4, updated_at=NOW()
-        WHERE task_id=$5
-    """, user["user_id"], payload.notes, fallback_col_id, fallback_status, task_id)
+            approval_decided_at=NOW(), updated_at=NOW()
+        WHERE task_id=$3
+    """, user["user_id"], payload.notes, task_id)
 
     await send_approval_notification(pool, task_id, task["title"],
                                      task["created_by_user_id"], "rejected", payload.notes, team_id=task["team_id"])
-    return {"message": "Task rejected", "approval_status": "rejected", "status": fallback_status}
+    return {"message": "Task rejected", "approval_status": "rejected"}
 
 
 @router.get("/tasks/pending-approval", response_model=List[dict])
