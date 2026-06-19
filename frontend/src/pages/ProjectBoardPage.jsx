@@ -81,6 +81,8 @@ import { PageHeader, AvatarStack } from '../components/editorial';
 import AutomationsPage from './AutomationsPage';
 
 import { useToast } from '../components/ui/toast';
+import { useMessages } from '../hooks/useMessages';
+import MessageThread   from '../components/messaging/MessageThread';
 
 
 
@@ -142,7 +144,6 @@ export default function ProjectBoardPage() {
 
   const [loading,       setLoading]       = useState(true);
 
-  const [showArchived,  setShowArchived]  = useState(false);
   const [showFieldMgr,     setShowFieldMgr]     = useState(false);
 
   const [showAutomations,  setShowAutomations]  = useState(false);
@@ -158,6 +159,8 @@ export default function ProjectBoardPage() {
   const { defs: fieldDefs, createField, deleteField } = useFields(projectId);
 
   const { pushToast } = useToast();
+  const [chatOpen,    setChatOpen]    = useState(false);
+  const [chatChannel, setChatChannel] = useState(null);
 
   const { savedViews, saveView }                = useViews(projectId);
 
@@ -179,7 +182,7 @@ export default function ProjectBoardPage() {
 
   // ── Initial data load ────────────────────────────────────────────────────
 
-  const load = useCallback(async (archived = false) => {
+  const load = useCallback(async () => {
 
     if (!projectId) return;
 
@@ -193,7 +196,7 @@ export default function ProjectBoardPage() {
 
         api.get(`/projects/${projectId}/columns`),
 
-        api.get('/tasks', { params: { team_id: projectId, ...(archived ? { archived: true } : {}) } }),
+        api.get('/tasks', { params: { team_id: projectId } }),
 
       ]);
 
@@ -204,6 +207,12 @@ export default function ProjectBoardPage() {
       setRawTasks(Array.isArray(taskR.data) ? taskR.data : []);     // seeds useRealtimeTasks
 
       setTeamMembers(projR.data.members || []);
+      // Load project channel for sidebar chat
+      try {
+        const chR = await api.get('/channels');
+        const ch = chR.data.find(c => c.type === 'project' && c.project_id === projectId);
+        if (ch) setChatChannel(ch.channel_id);
+      } catch (_) {}
 
     } catch (e) {
 
@@ -219,12 +228,7 @@ export default function ProjectBoardPage() {
 
 
 
-  useEffect(() => {
-    load(false);
-    api.post('/tasks/auto-archive').catch(() => {});
-  }, [projectId]); // eslint-disable-line
-
-  useEffect(() => { load(showArchived); }, [showArchived]); // eslint-disable-line
+  useEffect(() => { load(); }, [projectId]); // eslint-disable-line
 
 
 
@@ -267,14 +271,6 @@ export default function ProjectBoardPage() {
   };
 
 
-
-  const unarchiveTask = async (taskId) => {
-    try {
-      await api.patch(`/tasks/${taskId}/unarchive`);
-      setRawTasks(prev => prev.filter(t => t.task_id !== taskId));
-      pushToast({ type: 'success', title: 'Task restored' });
-    } catch { pushToast({ type: 'error', title: 'Could not restore task' }); }
-  };
 
   const addField = async () => {
 
@@ -384,6 +380,16 @@ export default function ProjectBoardPage() {
 
             </button>
 
+            {chatChannel && (
+              <button
+                className={'k-btn k-btn--ghost k-btn--sm' + (chatOpen ? ' is-active' : '')}
+                onClick={() => setChatOpen(v => !v)}
+                style={chatOpen ? { background: 'var(--bg-soft)', color: 'var(--ink)' } : {}}
+              >
+                💬 Chat
+              </button>
+            )}
+
             <button className="k-link" onClick={() => navigate('/projects')}>
 
               ← Projects
@@ -425,13 +431,6 @@ export default function ProjectBoardPage() {
             </button>
 
           ))}
-          <button
-            className={'k-segctrl__btn k-segctrl__btn--archive' + (showArchived ? ' is-active' : '')}
-            onClick={() => setShowArchived(v => !v)}
-          >
-            <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="1" y="4" width="14" height="3" rx="1"/><path d="M2 7v6a1 1 0 001 1h10a1 1 0 001-1V7"/><path d="M6 10h4"/></svg>
-            Archived
-          </button>
 
         </div>
 
@@ -609,26 +608,9 @@ export default function ProjectBoardPage() {
 
 
 
-      {/* Archived mode banner */}
-      {showArchived && (
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: 10, padding: '8px 16px',
-          background: 'color-mix(in srgb, var(--ink-3) 8%, var(--surface))',
-          border: '1px solid var(--rule)', borderRadius: 'var(--r-md)',
-          marginBottom: 8, fontSize: 12, color: 'var(--ink-3)',
-        }}>
-          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="1" y="4" width="14" height="3" rx="1"/><path d="M2 7v6a1 1 0 001 1h10a1 1 0 001-1V7"/><path d="M6 10h4"/></svg>
-          Showing archived tasks — open any task to restore it.
-          <button
-            className="k-btn k-btn--ghost k-btn--sm"
-            onClick={() => setShowArchived(false)}
-            style={{ marginLeft: 'auto', fontSize: 11 }}
-          >
-            ← Back to active
-          </button>
-        </div>
-      )}
-
+      {/* ── Board + Chat layout ───────────────────────────────────────── */}
+      <div style={{ display: "flex", flex: 1, minHeight: 0, overflow: "hidden" }}>
+        <div style={{ flex: 1, minWidth: 0, overflowY: "auto" }}>
       {/* ── Board views ──────────────────────────────────────────────── */}
 
       {view === 'kanban' && (
@@ -715,7 +697,12 @@ export default function ProjectBoardPage() {
 
       )}
 
+        </div>{/* end board content */}
 
+        {chatOpen && (
+          <ChatSidePanel channelId={chatChannel} onClose={() => setChatOpen(false)} />
+        )}
+      </div>{/* end flex layout */}
 
       {/* ── Task editor (new task from column button) ─────────────── */}
 
@@ -759,3 +746,43 @@ export default function ProjectBoardPage() {
 
 // labelSt and inputSt are no longer needed but harmless to leave
 
+// ── Chat sidebar panel (project board) ───────────────────────────────────────
+function ChatSidePanel({ channelId, onClose }) {
+  const { messages, loading, hasMore, send, loadMore, react, deleteMsg } = useMessages(channelId);
+  return (
+    <div style={{
+      width: 320, flexShrink: 0, borderLeft: "1px solid var(--rule-soft)",
+      background: "var(--surface)", display: "flex", flexDirection: "column",
+      height: "100%",
+    }}>
+      {/* Header */}
+      <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--rule-soft)",
+        display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
+        <div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: "var(--ink)" }}>Project Chat</div>
+          <div style={{ fontSize: 11, color: "var(--ink-3)", fontFamily: "var(--font-hindi)" }}>परियोजना संवाद</div>
+        </div>
+        <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer",
+          fontSize: 18, color: "var(--ink-3)", lineHeight: 1, padding: 4 }}>✕</button>
+      </div>
+      {/* Messages */}
+      {!channelId ? (
+        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center",
+          padding: 24, textAlign: "center", color: "var(--ink-faint)", fontSize: 13 }}>
+          No channel found for this project yet.
+        </div>
+      ) : (
+        <MessageThread
+          channelId={channelId}
+          messages={messages}
+          loading={loading}
+          hasMore={hasMore}
+          onLoadMore={loadMore}
+          onSend={send}
+          onReact={react}
+          onDelete={deleteMsg}
+        />
+      )}
+    </div>
+  );
+}

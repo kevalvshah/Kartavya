@@ -49,8 +49,9 @@ const NAV_FULL = [
   {
     section: 'team', sans: 'दल',
     items: [
-      { to: '/teams',  icon: 'teams', en: 'Team',  hi: 'सहयोगी' },
-      { to: '/inbox',  icon: 'inbox', en: 'Inbox', hi: 'सन्देश', badge: 'unread' },
+      { to: '/teams',    icon: 'teams',    en: 'Team',     hi: 'सहयोगी' },
+      { to: '/messages', icon: 'inbox',    en: 'Messages', hi: 'संवाद', badge: 'messages' },
+      { to: '/inbox',    icon: 'inbox',    en: 'Inbox',    hi: 'सन्देश', badge: 'unread' },
     ],
   },
   {

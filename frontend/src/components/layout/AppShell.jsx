@@ -18,7 +18,6 @@ import Sidebar from './Sidebar';
 import Topbar  from './Topbar';
 import { NotifToastContainer, NotifPermissionPrompt } from './NotifToast';
 import { urlBase64ToUint8Array } from '../../lib/push';
-import { playNotifSound } from '../../lib/notifSound';
 import { Bell, Menu, X } from 'lucide-react';
 
 async function subscribeToPush() {
@@ -63,8 +62,9 @@ function fireBrowserNotif(title, body) {
 export default function AppShell() {
   const [notifOpen,    setNotifOpen]    = useState(false);
   const [newTaskOpen,  setNewTaskOpen]  = useState(false);
-  const [unread,       setUnread]       = useState(0);
-  const [sidebarOpen,  setSidebarOpen]  = useState(false);
+  const [unread,         setUnread]         = useState(0);
+  const [msgUnread,      setMsgUnread]      = useState(0);
+  const [sidebarOpen,    setSidebarOpen]    = useState(false);
   const [teams,        setTeams]        = useState([]);
   const [teamsLoaded,  setTeamsLoaded]  = useState(false);
   const [notifPrompt,  setNotifPrompt]  = useState(false);
@@ -76,19 +76,6 @@ export default function AppShell() {
   useEffect(() => {
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('/sw.js').catch(() => {});
-
-      // Auto-reload once when a new service worker takes control. Without this,
-      // a tab can stay pinned to the JS/CSS bundle it first loaded with even
-      // after a fresh deploy activates a new SW in the background — this is
-      // what caused the UI to look different between a normal refresh (still
-      // on the old controller) and a hard refresh (forced past it). Every
-      // user gets this automatically; no manual cache-clearing needed.
-      let reloadedForNewSW = false;
-      navigator.serviceWorker.addEventListener('controllerchange', () => {
-        if (reloadedForNewSW) return;
-        reloadedForNewSW = true;
-        window.location.reload();
-      });
     }
     const t = setTimeout(() => {
       if (!('Notification' in window)) return;
@@ -99,16 +86,8 @@ export default function AppShell() {
   }, []);
 
   useEffect(() => {
-    // Stale-while-revalidate: show cached teams instantly, then refresh in background.
-    const cached = localStorage.getItem('kv_teams_cache');
-    if (cached) {
-      try { setTeams(JSON.parse(cached)); setTeamsLoaded(true); } catch (_) {}
-    }
     api.get('/teams')
-      .then(r => {
-        setTeams(r.data);
-        try { localStorage.setItem('kv_teams_cache', JSON.stringify(r.data)); } catch (_) {}
-      })
+      .then(r => setTeams(r.data))
       .catch(() => {})
       .finally(() => setTeamsLoaded(true));
   }, []);
@@ -130,7 +109,6 @@ export default function AppShell() {
                 // Fallback synthetic toast if fresh list is empty
                 setToasts(prev => [...prev, { notification_id: `synth-${Date.now()}`, title: 'New notification', message: 'Open notifications to view', url: null }]);
               }
-              playNotifSound();
             } else if (Notification.permission === 'granted') {
               fireBrowserNotif(
                 fresh[0]?.title ?? 'New notification',
@@ -148,6 +126,20 @@ export default function AppShell() {
     return () => { live = false; clearInterval(id); };
   }, []);
 
+  // Poll message unread count every 30s
+  useEffect(() => {
+    let live = true;
+    const tick = async () => {
+      try {
+        const r = await api.get('/messages/unread-count');
+        if (live) setMsgUnread(r.data.count ?? 0);
+      } catch (_) {}
+    };
+    tick();
+    const id = setInterval(tick, 30_000);
+    return () => { live = false; clearInterval(id); };
+  }, []);
+
   useEffect(() => { setSidebarOpen(false); }, [location.pathname]);
 
   // FIX #3: null until loaded — child pages guard on null to avoid empty requests.
@@ -158,14 +150,14 @@ export default function AppShell() {
     <div data-testid="app-shell" className="k-app">
       {/* Sidebar — hidden on mobile via CSS */}
       <div className="k-app__sidebar">
-        <Sidebar inboxCount={unread} />
+        <Sidebar inboxCount={unread} messagesCount={msgUnread} />
       </div>
 
       {/* Mobile overlay drawer */}
       {sidebarOpen && (
         <div className="k-app__mob-overlay" onClick={() => setSidebarOpen(false)}>
           <div className="k-app__mob-drawer" onClick={e => e.stopPropagation()}>
-            <Sidebar inboxCount={unread} />
+            <Sidebar inboxCount={unread} messagesCount={msgUnread} />
           </div>
         </div>
       )}

@@ -25,7 +25,16 @@ async def process_mentions(pool, comment_id: str, body: str, task_id: str, actor
             """
             SELECT user_id, email, COALESCE(full_name,name,email) AS display
             FROM users
-            WHERE LOWER(email)=LOWER($1) OR LOWER(name)=LOWER($1) OR LOWER(full_name)=LOWER($1)
+            WHERE LOWER(email)=LOWER($1)
+               OR LOWER(name)=LOWER($1)
+               OR LOWER(full_name)=LOWER($1)
+               OR LOWER(split_part(COALESCE(full_name,name,''), ' ', 1))=LOWER($1)
+               OR LOWER(REPLACE(COALESCE(full_name,name,''), ' ', '.'))=LOWER($1)
+            ORDER BY
+              CASE WHEN LOWER(email)=LOWER($1) THEN 0
+                   WHEN LOWER(name)=LOWER($1) OR LOWER(full_name)=LOWER($1) THEN 1
+                   ELSE 2 END
+            LIMIT 1
             """,
             handle,
         )
