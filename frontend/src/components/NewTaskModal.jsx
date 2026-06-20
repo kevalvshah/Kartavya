@@ -14,6 +14,8 @@ import { AVATAR_COLORS, userInitials, logger } from '../lib/utils';
 
 import { currentUser } from '../lib/auth';
 
+import ReminderPicker, { DEFAULT_REMINDERS } from './ReminderPicker';
+
 
 
 const PRIORITY_DOTS = {
@@ -60,6 +62,7 @@ export default function NewTaskModal({ open, onClose, onCreated }) {
 
   const [titleError,  setTitleError]  = useState(false);
 
+  const [reminders,          setReminders]          = useState([]);
   const [assigneeOpen,       setAssigneeOpen]       = useState(false);
   const [templates,          setTemplates]          = useState([]);
   const [showTemplatePicker, setShowTemplatePicker] = useState(false);
@@ -81,7 +84,7 @@ export default function NewTaskModal({ open, onClose, onCreated }) {
 
     setTitle(''); setProjectId(''); setStatus('todo'); setPriority('medium');
 
-    setDueAt(''); setDescription(''); setAssignees([]); setFiles([]);
+    setDueAt(''); setReminders([]); setDescription(''); setAssignees([]); setFiles([]);
 
     setTitleError(false); setAssigneeOpen(false); setTemplates([]); setSubtasks([]); setShowTemplatePicker(false);
 
@@ -117,6 +120,7 @@ export default function NewTaskModal({ open, onClose, onCreated }) {
     if (cfg.title)       setTitle(cfg.title);
     if (cfg.description) setDescription(cfg.description);
     if (cfg.priority)    setPriority(cfg.priority);
+    if (cfg.reminders?.length)   setReminders(cfg.reminders);
     if (cfg.subtasks?.length)    setSubtasks(cfg.subtasks.map(s => ({ ...s, is_done: false })));
     if (cfg.attachments?.length) setFiles(prev => [
       ...prev, ...cfg.attachments.map(a => ({ name: a.name, url: a.url, key: a.key || null }))
@@ -209,7 +213,16 @@ export default function NewTaskModal({ open, onClose, onCreated }) {
 
       if (projectId)        payload.team_id           = projectId;
 
-      if (dueAt)            payload.due_at             = new Date(dueAt).toISOString();
+      if (dueAt) {
+        // date-only input ("2026-06-20") → treat as 16:00 IST (UTC+5:30)
+        payload.due_at = new Date(dueAt + 'T16:00:00+05:30').toISOString();
+        if (reminders.length) {
+          payload.reminders = reminders.map(r => ({
+            offset_minutes: r.offset_minutes,
+            channels: Object.entries(r.channels).filter(([, v]) => v).map(([k]) => k),
+          }));
+        }
+      }
 
       if (assignees.length) payload.assignee_user_ids  = assignees;
 
@@ -479,7 +492,23 @@ export default function NewTaskModal({ open, onClose, onCreated }) {
 
               <FieldLabel>DUE · नियत तिथि</FieldLabel>
 
-              <input type="date" className="k-input" style={{ width: '100%' }} value={dueAt} onChange={e => setDueAt(e.target.value)} />
+              <input
+                type="date"
+                className="k-input"
+                style={{ width: '100%' }}
+                value={dueAt}
+                onChange={e => {
+                  const val = e.target.value;
+                  setDueAt(val);
+                  if (!val) setReminders([]);
+                  else if (reminders.length === 0) setReminders(DEFAULT_REMINDERS);
+                }}
+              />
+              {dueAt && (
+                <div style={{ marginTop: 8 }}>
+                  <ReminderPicker value={reminders} onChange={setReminders} disabled={!dueAt} />
+                </div>
+              )}
 
             </div>
 

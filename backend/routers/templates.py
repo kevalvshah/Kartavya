@@ -4,7 +4,7 @@ templates.py — Project and task templates (CRUD + apply)
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from typing import Optional
-import uuid
+import uuid, json
 
 from auth_router import require_user
 from db import get_pool
@@ -13,6 +13,35 @@ router = APIRouter(prefix="/api/templates", tags=["templates"])
 
 _TEMPLATE_NOT_FOUND = "Template not found"
 
+
+# ── Shared helpers ───────────────────────────────────────────────────────────────
+
+async def _is_team_member(pool, team_id: str, user_id: str) -> bool:
+    row = await pool.fetchrow("""
+        SELECT 1 FROM team_members WHERE team_id=$1 AND user_id=$2 AND status='active'
+        UNION
+        SELECT 1 FROM project_assignments WHERE team_id=$1 AND user_id=$2
+    """, team_id, user_id)
+    return row is not None
+
+
+async def _assert_team_member(pool, team_id: str, user_id: str):
+    if not await _is_team_member(pool, team_id, user_id):
+        raise HTTPException(403, "Not a member of this team")
+
+
+async def _assert_can_modify(pool, tmpl, user):
+    """Raise 403 if user may not edit/delete the template row."""
+    if user.get("role") == "admin":
+        return
+    if tmpl["team_id"]:
+        await _assert_team_member(pool, tmpl["team_id"], user["user_id"])
+    else:
+        if tmpl["created_by"] != user["user_id"]:
+            raise HTTPException(403, "Not authorised")
+
+
+# ── Models ───────────────────────────────────────────────────────────────────────
 
 class ProjectTemplateCreate(BaseModel):
     name: str
@@ -26,29 +55,35 @@ class TaskTemplateCreate(BaseModel):
     config: dict  # {title_pattern, description, priority, default_assignees, ...}
 
 
+class TaskTemplateBody(BaseModel):
+    name: str
+    team_id: Optional[str] = None
+    icon: str = "📋"
+    is_default: bool = False
+    config: dict  # title, description, priority, subtasks[], attachments[], tags[], category_id, custom_fields{}
+
+
+# ── Project templates ─────────────────────────────────────────────────────────────
+
 @router.get("/projects")
 async def list_project_templates(pool=Depends(get_pool), user=Depends(require_user)):
-    """Return all available project templates."""
     rows = await pool.fetch("SELECT * FROM project_templates ORDER BY created_at DESC")
     return [dict(r) for r in rows]
 
 
 @router.post("/projects")
 async def create_project_template(body: ProjectTemplateCreate, pool=Depends(get_pool), user=Depends(require_user)):
-    """Create a new project template."""
     tid = f"ptmpl_{uuid.uuid4().hex[:10]}"
-    import json
-    await pool.execute(
-        "INSERT INTO project_templates (template_id, name, description, config, created_by) VALUES ($1,$2,$3,$4::jsonb,$5)",
+    row = await pool.fetchrow(
+        "INSERT INTO project_templates (template_id, name, description, config, created_by) "
+        "VALUES ($1,$2,$3,$4::jsonb,$5) RETURNING *",
         tid, body.name, body.description, json.dumps(body.config), user["user_id"]
     )
-    row = await pool.fetchrow("SELECT * FROM project_templates WHERE template_id=$1", tid)
     return dict(row)
 
 
 @router.delete("/projects/{template_id}")
 async def delete_project_template(template_id: str, pool=Depends(get_pool), user=Depends(require_user)):
-    """Delete a project template; only the creator or an admin may do so."""
     tmpl = await pool.fetchrow("SELECT created_by FROM project_templates WHERE template_id=$1", template_id)
     if not tmpl:
         raise HTTPException(404, _TEMPLATE_NOT_FOUND)
@@ -63,28 +98,12 @@ async def apply_project_template(
     template_id: str, team_id: str,
     pool=Depends(get_pool), user=Depends(require_user)
 ):
-    """Create columns and sample tasks from template into existing team.
-
-    Requires the caller to be an active member or owner of the target team,
-    preventing template application into arbitrary third-party projects.
-    """
-    # Verify the caller belongs to the target team
+    """Create columns and sample tasks from template into existing team."""
     if user.get("role") != "admin":
-        access = await pool.fetchrow(
-            """
-            SELECT 1 FROM team_members        WHERE team_id=$1 AND user_id=$2 AND status='active'
-            UNION ALL
-            SELECT 1 FROM project_assignments WHERE team_id=$1 AND user_id=$2
-            LIMIT 1
-            """,
-            team_id, user["user_id"],
-        )
-        if not access:
-            raise HTTPException(403, "You are not a member of this project")
+        await _assert_team_member(pool, team_id, user["user_id"])
     tmpl = await pool.fetchrow("SELECT config FROM project_templates WHERE template_id=$1", template_id)
     if not tmpl:
         raise HTTPException(404, _TEMPLATE_NOT_FOUND)
-    import json
     cfg = tmpl["config"] if isinstance(tmpl["config"], dict) else json.loads(tmpl["config"])
     created = {"columns": 0, "fields": 0, "tasks": 0}
 
@@ -122,34 +141,13 @@ async def apply_project_template(
 
 # ── Task templates ───────────────────────────────────────────────────────────────
 
-class TaskTemplateBody(BaseModel):
-    name: str
-    team_id: Optional[str] = None
-    icon: str = "📋"
-    is_default: bool = False
-    config: dict  # title, description, priority, subtasks[], attachments[], tags[], category_id, custom_fields{}
-
-
 @router.get("/tasks")
 async def list_task_templates(team_id: Optional[str] = None, pool=Depends(get_pool), user=Depends(require_user)):
-    """Return task templates visible to the caller.
-
-    - Admin: any team's templates (or all global ones when no team_id given).
-    - Others: must supply team_id and must be a member of that team.
-      Global (team_id IS NULL) templates are always included.
-    """
     is_admin = user.get("role") == "admin"
 
     if team_id:
-        # Non-admins must be a member of the requested team
         if not is_admin:
-            member = await pool.fetchrow("""
-                SELECT 1 FROM team_members WHERE team_id=$1 AND user_id=$2 AND status='active'
-                UNION
-                SELECT 1 FROM project_assignments WHERE team_id=$1 AND user_id=$2
-            """, team_id, user["user_id"])
-            if not member:
-                raise HTTPException(403, "Not a member of this team")
+            await _assert_team_member(pool, team_id, user["user_id"])
         rows = await pool.fetch("""
             SELECT * FROM task_templates
             WHERE team_id=$1 OR team_id IS NULL
@@ -157,7 +155,6 @@ async def list_task_templates(team_id: Optional[str] = None, pool=Depends(get_po
         """, team_id)
     else:
         if not is_admin:
-            # Return only global templates + templates for teams the user belongs to
             rows = await pool.fetch("""
                 SELECT DISTINCT tt.* FROM task_templates tt
                 LEFT JOIN (
@@ -178,97 +175,74 @@ async def get_task_template(template_id: str, pool=Depends(get_pool), user=Depen
     row = await pool.fetchrow("SELECT * FROM task_templates WHERE template_id=$1", template_id)
     if not row:
         raise HTTPException(404, _TEMPLATE_NOT_FOUND)
-    # Global templates are readable by all; team templates only by members
     if row["team_id"] and user.get("role") != "admin":
-        member = await pool.fetchrow("""
-            SELECT 1 FROM team_members WHERE team_id=$1 AND user_id=$2 AND status='active'
-            UNION SELECT 1 FROM project_assignments WHERE team_id=$1 AND user_id=$2
-        """, row["team_id"], user["user_id"])
-        if not member:
-            raise HTTPException(403, "Not a member of this team")
+        await _assert_team_member(pool, row["team_id"], user["user_id"])
     return dict(row)
 
 
 @router.post("/tasks")
 async def create_task_template(body: TaskTemplateBody, pool=Depends(get_pool), user=Depends(require_user)):
-    """Create a new task template. Caller must belong to the team if scoped."""
-    import json
-    if body.team_id and user.get("role") != "admin":
-        member = await pool.fetchrow("""
-            SELECT 1 FROM team_members WHERE team_id=$1 AND user_id=$2 AND status='active'
-            UNION SELECT 1 FROM project_assignments WHERE team_id=$1 AND user_id=$2
-        """, body.team_id, user["user_id"])
-        if not member:
-            raise HTTPException(403, "Not a member of this team")
+    is_admin = user.get("role") == "admin"
+    if not body.team_id and not is_admin:
+        raise HTTPException(403, "Only admins can create org-wide templates")
+    if body.team_id and not is_admin:
+        await _assert_team_member(pool, body.team_id, user["user_id"])
     tid = f"ttmpl_{uuid.uuid4().hex[:10]}"
     if body.is_default and body.team_id:
-        await pool.execute(
-            "UPDATE task_templates SET is_default=FALSE WHERE team_id=$1", body.team_id
-        )
-    await pool.execute(
+        await pool.execute("UPDATE task_templates SET is_default=FALSE WHERE team_id=$1", body.team_id)
+    row = await pool.fetchrow(
         """INSERT INTO task_templates (template_id, team_id, name, icon, is_default, config, created_by)
-           VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7)""",
+           VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7) RETURNING *""",
         tid, body.team_id, body.name, body.icon, body.is_default,
         json.dumps(body.config), user["user_id"]
     )
-    row = await pool.fetchrow("SELECT * FROM task_templates WHERE template_id=$1", tid)
     return dict(row)
 
 
 @router.patch("/tasks/{template_id}")
 async def update_task_template(template_id: str, body: TaskTemplateBody, pool=Depends(get_pool), user=Depends(require_user)):
-    """Update an existing task template."""
-    import json
     tmpl = await pool.fetchrow("SELECT created_by, team_id FROM task_templates WHERE template_id=$1", template_id)
     if not tmpl:
         raise HTTPException(404, _TEMPLATE_NOT_FOUND)
-    if tmpl["created_by"] != user["user_id"] and user.get("role") != "admin":
-        raise HTTPException(403, "Not authorised")
+    await _assert_can_modify(pool, tmpl, user)
     if body.is_default and tmpl["team_id"]:
         await pool.execute(
             "UPDATE task_templates SET is_default=FALSE WHERE team_id=$1 AND template_id!=$2",
             tmpl["team_id"], template_id
         )
-    await pool.execute("""
+    row = await pool.fetchrow("""
         UPDATE task_templates
         SET name=$1, icon=$2, is_default=$3, config=$4::jsonb, updated_at=NOW()
-        WHERE template_id=$5
+        WHERE template_id=$5 RETURNING *
     """, body.name, body.icon, body.is_default, json.dumps(body.config), template_id)
-    row = await pool.fetchrow("SELECT * FROM task_templates WHERE template_id=$1", template_id)
     return dict(row)
 
 
 @router.post("/tasks/{template_id}/set-default")
 async def set_default_template(template_id: str, pool=Depends(get_pool), user=Depends(require_user)):
-    """Set this template as the default for its team. Requires membership or admin."""
-    tmpl = await pool.fetchrow("SELECT team_id, created_by FROM task_templates WHERE template_id=$1", template_id)
+    tmpl = await pool.fetchrow("SELECT team_id FROM task_templates WHERE template_id=$1", template_id)
     if not tmpl:
         raise HTTPException(404, _TEMPLATE_NOT_FOUND)
     if user.get("role") != "admin":
-        member = await pool.fetchrow("""
-            SELECT role FROM team_members WHERE team_id=$1 AND user_id=$2 AND status='active'
-            UNION SELECT role FROM project_assignments WHERE team_id=$1 AND user_id=$2
-            LIMIT 1
-        """, tmpl["team_id"], user["user_id"])
+        member = await pool.fetchrow(
+            "SELECT role FROM team_members WHERE team_id=$1 AND user_id=$2 AND status='active' LIMIT 1",
+            tmpl["team_id"], user["user_id"]
+        )
         if not member or member["role"] not in ("owner", "admin"):
             raise HTTPException(403, "Only team owners/admins can change the default template")
     if tmpl["team_id"]:
         await pool.execute(
-            "UPDATE task_templates SET is_default=FALSE WHERE team_id=$1", tmpl["team_id"]
+            "UPDATE task_templates SET is_default=(template_id=$1) WHERE team_id=$2",
+            template_id, tmpl["team_id"]
         )
-    await pool.execute(
-        "UPDATE task_templates SET is_default=TRUE WHERE template_id=$1", template_id
-    )
     return {"ok": True}
 
 
 @router.delete("/tasks/{template_id}")
 async def delete_task_template(template_id: str, pool=Depends(get_pool), user=Depends(require_user)):
-    """Delete a task template."""
-    tmpl = await pool.fetchrow("SELECT created_by FROM task_templates WHERE template_id=$1", template_id)
+    tmpl = await pool.fetchrow("SELECT created_by, team_id FROM task_templates WHERE template_id=$1", template_id)
     if not tmpl:
         raise HTTPException(404, _TEMPLATE_NOT_FOUND)
-    if tmpl["created_by"] != user["user_id"] and user.get("role") != "admin":
-        raise HTTPException(403, "Not authorised")
+    await _assert_can_modify(pool, tmpl, user)
     await pool.execute("DELETE FROM task_templates WHERE template_id=$1", template_id)
     return {"ok": True}
