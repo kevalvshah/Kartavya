@@ -60,14 +60,25 @@ async def dispatch_reminders(
         await require_admin(await require_user(request, creds))
 
     now = now_utc()
-    due = await pool.fetch("""
-        SELECT tr.reminder_id, tr.task_id, tr.channel_inapp, tr.channel_push, tr.channel_email,
-               t.title, t.team_id, t.user_id, t.assignee_user_ids, t.due_at
-        FROM task_reminders tr
-        JOIN tasks t ON t.task_id = tr.task_id
-        WHERE tr.sent_at IS NULL AND tr.fire_at <= $1
-          AND t.status != 'done' AND t.archived_at IS NULL
-    """, now)
+
+    # Claim due reminders atomically — FOR UPDATE SKIP LOCKED prevents double-fire
+    # when multiple Railway instances run the cron simultaneously.
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            due = await conn.fetch("""
+                SELECT tr.reminder_id, tr.task_id, tr.channel_inapp, tr.channel_push, tr.channel_email,
+                       t.title, t.team_id, t.user_id, t.assignee_user_ids, t.due_at
+                FROM task_reminders tr
+                JOIN tasks t ON t.task_id = tr.task_id
+                WHERE tr.sent_at IS NULL AND tr.fire_at <= $1
+                  AND t.status != 'done' AND t.archived_at IS NULL
+                FOR UPDATE OF tr SKIP LOCKED
+            """, now)
+            if due:
+                await conn.execute(
+                    "UPDATE task_reminders SET sent_at=$1 WHERE reminder_id=ANY($2::text[])",
+                    now, [r["reminder_id"] for r in due]
+                )
 
     sent, errors = 0, []
     for r in due:
@@ -96,7 +107,6 @@ async def dispatch_reminders(
                             send_task_reminder_email(recipient["email"], recipient["name"] or recipient["email"], r["title"], r["task_id"], due_str)
                     except Exception as e:
                         logger.warning("reminder email failed for %s: %s", _log_safe(r["task_id"]), _log_safe(e))
-            await pool.execute("UPDATE task_reminders SET sent_at=$1 WHERE reminder_id=$2", now, r["reminder_id"])
             sent += 1
         except Exception as exc:
             logger.error("Reminder dispatch failed for %s: %s", _log_safe(r["reminder_id"]), _log_safe(exc), exc_info=True)

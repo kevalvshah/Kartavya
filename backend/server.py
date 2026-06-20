@@ -61,8 +61,8 @@ from utils import SQL_USER_ROLE
 # ── Shared constants ──────────────────────────────────────
 _NOT_TEAM_MEMBER  = "Not a team member"
 _SQL_USER_ROLE    = SQL_USER_ROLE          # local alias kept for backward compat
-_SQL_GET_SUBTASKS = "SELECT subtasks FROM tasks WHERE task_id=$1"
-_SQL_SET_SUBTASKS = "UPDATE tasks SET subtasks=$1,updated_at=NOW() WHERE task_id=$2 RETURNING *"
+_SQL_GET_SUBTASKS = "SELECT subtasks,team_id FROM tasks WHERE task_id=$1 AND team_id=ANY($2::text[])"
+_SQL_SET_SUBTASKS = "UPDATE tasks SET subtasks=$1,updated_at=NOW() WHERE task_id=$2 AND team_id=ANY($3::text[]) RETURNING *"
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env")
@@ -236,23 +236,29 @@ async def create_notification(pool, user_id, notif_type, title, message, task_id
 async def _replace_task_reminders(pool, task_id: str, due_dt, reminders: List["ReminderIn"]) -> List["ReminderOut"]:
     """Delete unsent reminders for a task and insert the new set, computed off due_dt.
 
+    Wrapped in a transaction so a failed INSERT rolls back the DELETE — reminders
+    are never left in a partially-written state.
     Reminders whose offset isn't in REMINDER_OFFSETS, whose channels aren't a
     recognized subset, or whose computed fire_at has already passed are skipped.
     """
-    await pool.execute("DELETE FROM task_reminders WHERE task_id=$1 AND sent_at IS NULL", task_id)
-    if not due_dt or not reminders: return []
+    if not due_dt or not reminders:
+        await pool.execute("DELETE FROM task_reminders WHERE task_id=$1 AND sent_at IS NULL", task_id)
+        return []
     now = now_utc(); out = []
-    for r in reminders:
-        if r.offset_minutes not in REMINDER_OFFSETS: continue
-        channels = [c for c in r.channels if c in REMINDER_CHANNELS] or ["in_app"]
-        fire_at = due_dt - timedelta(minutes=r.offset_minutes)
-        if fire_at <= now: continue
-        row = await pool.fetchrow(
-            """INSERT INTO task_reminders (task_id,offset_minutes,channel_inapp,channel_push,channel_email,fire_at)
-               VALUES ($1,$2,$3,$4,$5,$6) RETURNING *""",
-            task_id, r.offset_minutes, "in_app" in channels, "push" in channels, "email" in channels, fire_at,
-        )
-        out.append(_reminder_row_to_out(row))
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            await conn.execute("DELETE FROM task_reminders WHERE task_id=$1 AND sent_at IS NULL", task_id)
+            for r in reminders:
+                if r.offset_minutes not in REMINDER_OFFSETS: continue
+                channels = [c for c in r.channels if c in REMINDER_CHANNELS] or ["in_app"]
+                fire_at = due_dt - timedelta(minutes=r.offset_minutes)
+                if fire_at <= now: continue
+                row = await conn.fetchrow(
+                    """INSERT INTO task_reminders (task_id,offset_minutes,channel_inapp,channel_push,channel_email,fire_at)
+                       VALUES ($1,$2,$3,$4,$5,$6) RETURNING *""",
+                    task_id, r.offset_minutes, "in_app" in channels, "push" in channels, "email" in channels, fire_at,
+                )
+                out.append(_reminder_row_to_out(row))
     return out
 
 def _reminder_row_to_out(row) -> "ReminderOut":
@@ -645,6 +651,8 @@ async def remove_client_from_task(task_id:str,target_user_id:str,pool=Depends(ge
 @api_router.post("/client/tasks/request", response_model=TaskOut)
 async def client_request_task(payload:TaskCreate,pool=Depends(get_db),user=Depends(require_user)):
     """Create a task request from a client user, pending team approval."""
+    if user.get("role") != "client":
+        raise HTTPException(403, "Only client users can submit task requests")
     if not payload.team_id: raise HTTPException(400,"team_id required")
     assignment=await pool.fetchrow("SELECT role FROM project_assignments WHERE team_id=$1 AND user_id=$2",payload.team_id,user["user_id"])
     if not assignment: raise HTTPException(403,"Not a project member")
@@ -1035,12 +1043,13 @@ async def delete_comment(task_id:str,comment_id:str,pool=Depends(get_db),user=De
 @api_router.post("/tasks/{task_id}/subtasks",response_model=TaskOut)
 async def add_subtask(task_id:str,body:Subtask,pool=Depends(get_db),user=Depends(require_user)):
     """Append a new subtask to a task's subtask list."""
-    task=await pool.fetchrow(_SQL_GET_SUBTASKS,task_id)
+    team_ids=await get_visible_team_ids(pool,user["user_id"],_user_dict=user)
+    task=await pool.fetchrow(_SQL_GET_SUBTASKS,task_id,team_ids)
     if not task: raise HTTPException(404)
     subtasks=json.loads(task["subtasks"] or "[]")
     new_sub={"subtask_id":f"sub_{uuid.uuid4().hex[:12]}","title":body.title,"is_done":False,"order":len(subtasks)}
     subtasks.append(new_sub)
-    row=await pool.fetchrow(_SQL_SET_SUBTASKS,json.dumps(subtasks),task_id)
+    row=await pool.fetchrow(_SQL_SET_SUBTASKS,json.dumps(subtasks),task_id,team_ids)
     if not row: raise HTTPException(404, "Task not found")
     try:
         from services.activity_logger import log_event
@@ -1051,24 +1060,26 @@ async def add_subtask(task_id:str,body:Subtask,pool=Depends(get_db),user=Depends
 @api_router.patch("/tasks/{task_id}/subtasks/{subtask_id}",response_model=TaskOut)
 async def toggle_subtask(task_id:str,subtask_id:str,pool=Depends(get_db),user=Depends(require_user)):
     """Toggle the is_done flag on a subtask."""
-    task=await pool.fetchrow(_SQL_GET_SUBTASKS,task_id)
+    team_ids=await get_visible_team_ids(pool,user["user_id"],_user_dict=user)
+    task=await pool.fetchrow(_SQL_GET_SUBTASKS,task_id,team_ids)
     if not task: raise HTTPException(404)
     subtasks=json.loads(task["subtasks"] or "[]")
     for s in subtasks:
         if s["subtask_id"]==subtask_id: s["is_done"]=not s.get("is_done",False)
-    row=await pool.fetchrow(_SQL_SET_SUBTASKS,json.dumps(subtasks),task_id)
+    row=await pool.fetchrow(_SQL_SET_SUBTASKS,json.dumps(subtasks),task_id,team_ids)
     if not row: raise HTTPException(404, "Task not found")
     return row_to_task(row)
 
 @api_router.delete("/tasks/{task_id}/subtasks/{subtask_id}",response_model=TaskOut)
 async def delete_subtask(task_id:str,subtask_id:str,pool=Depends(get_db),user=Depends(require_user)):
     """Remove a subtask from a task's subtask list by its ID."""
-    task=await pool.fetchrow(_SQL_GET_SUBTASKS,task_id)
+    team_ids=await get_visible_team_ids(pool,user["user_id"],_user_dict=user)
+    task=await pool.fetchrow(_SQL_GET_SUBTASKS,task_id,team_ids)
     if not task: raise HTTPException(404)
     subtasks=json.loads(task["subtasks"] or "[]")
     removed=[s for s in subtasks if s["subtask_id"]==subtask_id]
     subtasks=[s for s in subtasks if s["subtask_id"]!=subtask_id]
-    row=await pool.fetchrow(_SQL_SET_SUBTASKS,json.dumps(subtasks),task_id)
+    row=await pool.fetchrow(_SQL_SET_SUBTASKS,json.dumps(subtasks),task_id,team_ids)
     if not row: raise HTTPException(404, "Task not found")
     try:
         from services.activity_logger import log_event
@@ -1084,14 +1095,22 @@ class SubtaskPatch(BaseModel):
 @api_router.put("/tasks/{task_id}/subtasks/{subtask_id}",response_model=TaskOut)
 async def update_subtask(task_id:str,subtask_id:str,body:SubtaskPatch,pool=Depends(get_db),user=Depends(require_user)):
     """Update the title or assignee of an existing subtask."""
-    task=await pool.fetchrow(_SQL_GET_SUBTASKS,task_id)
+    team_ids=await get_visible_team_ids(pool,user["user_id"],_user_dict=user)
+    task=await pool.fetchrow(_SQL_GET_SUBTASKS,task_id,team_ids)
     if not task: raise HTTPException(404)
     subtasks=json.loads(task["subtasks"] or "[]")
     for s in subtasks:
         if s["subtask_id"]==subtask_id:
-            if body.assignee_user_id is not None: s["assignee_user_id"]=body.assignee_user_id
+            if body.assignee_user_id is not None:
+                # Validate the assignee belongs to this task's team
+                member=await pool.fetchrow(
+                    "SELECT 1 FROM project_assignments WHERE team_id=$1 AND user_id=$2 UNION SELECT 1 FROM team_members WHERE team_id=$1 AND user_id=$2 AND status='active' LIMIT 1",
+                    task["team_id"], body.assignee_user_id
+                )
+                if not member: raise HTTPException(400,"Assignee is not a member of this project")
+                s["assignee_user_id"]=body.assignee_user_id
             if body.title is not None: s["title"]=body.title
-    row=await pool.fetchrow(_SQL_SET_SUBTASKS,json.dumps(subtasks),task_id)
+    row=await pool.fetchrow(_SQL_SET_SUBTASKS,json.dumps(subtasks),task_id,team_ids)
     if not row: raise HTTPException(404, "Task not found")
     return row_to_task(row)
 
@@ -1293,6 +1312,8 @@ async def purge_team(team_id:str,pool=Depends(get_db),user=Depends(require_admin
 @api_router.patch("/teams/{team_id}/color")
 async def set_team_color(team_id:str,body:dict,pool=Depends(get_db),user=Depends(require_user)):
     """Set project colour (hex string). Any project member can update."""
+    mem=await is_project_member(pool,team_id,user)
+    if not mem: raise HTTPException(403,"Not a project member")
     color = body.get("color")
     if not color or not isinstance(color, str) or not color.startswith("#"):
         raise HTTPException(400, "color must be a hex string e.g. #05b7aa")

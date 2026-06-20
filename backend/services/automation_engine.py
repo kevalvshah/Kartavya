@@ -87,11 +87,16 @@ async def run_automation(automation: dict, context: dict, pool) -> dict:
     return {"action_results": results}
 
 
-async def fire_automations(pool, event_type: str, context: dict):
+async def fire_automations(pool, event_type: str, context: dict, _depth: int = 0):
     """
     Called from routers after mutations. Finds matching automations and runs them.
     Non-blocking: swallows all errors.
+    _depth guards against infinite recursion when a change_status automation
+    triggers another status_changed event (max 3 levels deep).
     """
+    if _depth > 3:
+        logger.warning("fire_automations: max recursion depth reached, aborting chain")
+        return
     try:
         team_id = context.get("team_id") or context.get("task", {}).get("team_id")
         if not team_id:

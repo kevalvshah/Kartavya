@@ -120,11 +120,9 @@ async def accept_invite(body: AcceptInviteBody):
     if not invite:
         raise HTTPException(status_code=400, detail="Invite link is invalid or has expired")
 
-    # If the invite was already accepted (e.g. double-submit), try to log the user in
+    # Invite already accepted — never verify the password here (brute-force oracle).
+    # Direct the user to the login page instead.
     if invite["accepted_at"] is not None:
-        user = await pool.fetchrow("SELECT * FROM users WHERE email=$1", invite["email"])
-        if user and _verify_password(body.password, user["salt"], user["password_hash"]):
-            return {"token": _create_token(user["user_id"]), "user": _safe_user(dict(user))}
         raise HTTPException(status_code=400, detail="Account already activated — please sign in.")
 
     if invite["expires_at"].replace(tzinfo=timezone.utc) < datetime.now(timezone.utc):
