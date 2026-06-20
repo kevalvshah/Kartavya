@@ -305,6 +305,7 @@ async def get_pending_approvals(pool=Depends(get_pool), user=Depends(require_use
     """Return all tasks with approval_status='pending' that the user can action."""
     user_data = await pool.fetchrow(_SQL_USER_ROLE, user["user_id"])
     if user_data and user_data["role"] == "admin":
+        # Admins see only teams they are actually a member of — no cross-team data leak.
         tasks = await pool.fetch("""
             SELECT t.*, u.name AS created_by_name, u.email AS created_by_email,
                    tm.name AS team_name
@@ -312,8 +313,12 @@ async def get_pending_approvals(pool=Depends(get_pool), user=Depends(require_use
             JOIN users u ON u.user_id = t.created_by_user_id
             LEFT JOIN teams tm ON tm.team_id = t.team_id
             WHERE t.approval_status = 'pending'
+              AND (
+                EXISTS (SELECT 1 FROM project_assignments pa WHERE pa.team_id=t.team_id AND pa.user_id=$1)
+                OR EXISTS (SELECT 1 FROM team_members tmem WHERE tmem.team_id=t.team_id AND tmem.user_id=$1 AND tmem.status='active')
+              )
             ORDER BY t.approval_requested_at DESC
-        """)
+        """, user["user_id"])
     else:
         tasks = await pool.fetch("""
             SELECT t.*, u.name AS created_by_name, u.email AS created_by_email,
@@ -441,8 +446,8 @@ async def client_approve_task(task_id: str, payload: ApprovalRequest,
                 await _notify(pool, task_id, task["title"], r["user_id"], "approved", payload.notes, team_id=task.get("team_id"))
             except Exception:
                 pass
-            asyncio.create_task(send_web_push(pool, user_id=r["user_id"], title=notif_title, body=notif_body, url=task_url))
-            asyncio.create_task(send_expo_push(pool, user_id=r["user_id"], title=notif_title, body=notif_body, url=task_url, task_id=task_id))
+            asyncio.ensure_future(send_web_push(pool, user_id=r["user_id"], title=notif_title, body=notif_body, url=task_url))
+            asyncio.ensure_future(send_expo_push(pool, user_id=r["user_id"], title=notif_title, body=notif_body, url=task_url, task_id=task_id))
     except Exception as exc:
         import logging; logging.getLogger(__name__).warning("team-sync fan-out failed: %s", exc)
 
@@ -542,8 +547,8 @@ async def approve_by_token(token: str, payload_body: ApprovalRequest, pool=Depen
                 await _notify(pool, task_id, task["title"], r["user_id"], "approved", payload_body.notes, team_id=task.get("team_id"))
             except Exception:
                 pass
-            asyncio.create_task(send_web_push(pool, user_id=r["user_id"], title=notif_title, body=notif_body, url=task_url))
-            asyncio.create_task(send_expo_push(pool, user_id=r["user_id"], title=notif_title, body=notif_body, url=task_url, task_id=task_id))
+            asyncio.ensure_future(send_web_push(pool, user_id=r["user_id"], title=notif_title, body=notif_body, url=task_url))
+            asyncio.ensure_future(send_expo_push(pool, user_id=r["user_id"], title=notif_title, body=notif_body, url=task_url, task_id=task_id))
     except Exception as exc:
         import logging; logging.getLogger(__name__).warning("team-sync fan-out failed: %s", exc)
     return {"message": "Task approved by client", "approval_status": "approved"}

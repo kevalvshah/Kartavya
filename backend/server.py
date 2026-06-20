@@ -81,7 +81,14 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 def _bg(coro, *, label: str = "background") -> asyncio.Task:
     """Schedule *coro* as a fire-and-forget background task.
     Any exception it raises is caught and logged rather than becoming an
-    unhandled asyncio exception that would silently pollute stderr."""
+    unhandled asyncio exception that would silently pollute stderr.
+
+    NOTE: asyncio tasks are in-process only. A Railway dyno restart drops all
+    pending _bg() tasks silently. For critical side-effects (approval emails,
+    automation triggers) that must survive restarts, persist the intent to a DB
+    queue table first, then process from a cron worker. This is a known
+    limitation — do not add new critical workflows as bare _bg() calls.
+    """
     async def _run() -> None:
         try:
             await coro
@@ -197,26 +204,34 @@ async def is_project_member(pool, team_id: str, user: dict) -> dict | None:
     )
 
 async def normalize_orders(pool, scope_col, scope_val, column_id):
-    """Re-sequence sort_order for all tasks in the given column, closing any gaps."""
+    """Re-sequence sort_order for all tasks in the given column, closing any gaps.
+
+    Holds a pg_advisory_xact_lock keyed on (scope_val, column_id) so concurrent
+    move operations on the same column don't interleave and corrupt sort_order.
+    """
     if scope_col not in _VALID_SCOPE_COLS:
         raise ValueError(f"Invalid scope_col: {scope_col!r}")
-    rows = await pool.fetch(
-        f"SELECT task_id FROM tasks WHERE {scope_col}=$1 AND column_id=$2 ORDER BY sort_order ASC, updated_at ASC",
-        scope_val, column_id,
-    )
-    if not rows:
-        return
-    # Bulk-update all sort_orders in a single query using a VALUES list
-    values_sql = ",".join(f"(${i*2+1}::int, ${i*2+2}::text)" for i in range(len(rows)))
-    params = []
-    for idx, row in enumerate(rows):
-        params.extend([idx, row["task_id"]])
-    await pool.execute(
-        f"UPDATE tasks SET sort_order=v.idx, updated_at=NOW() "
-        f"FROM (VALUES {values_sql}) AS v(idx, task_id) "
-        f"WHERE tasks.task_id=v.task_id",
-        *params,
-    )
+    import hashlib
+    lock_key = int(hashlib.md5(f"{scope_val}:{column_id}".encode()).hexdigest()[:15], 16) % (2**63)
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            await conn.execute("SELECT pg_advisory_xact_lock($1)", lock_key)
+            rows = await conn.fetch(
+                f"SELECT task_id FROM tasks WHERE {scope_col}=$1 AND column_id=$2 ORDER BY sort_order ASC, updated_at ASC",
+                scope_val, column_id,
+            )
+            if not rows:
+                return
+            values_sql = ",".join(f"(${i*2+1}::int, ${i*2+2}::text)" for i in range(len(rows)))
+            params = []
+            for idx, row in enumerate(rows):
+                params.extend([idx, row["task_id"]])
+            await conn.execute(
+                f"UPDATE tasks SET sort_order=v.idx, updated_at=NOW() "
+                f"FROM (VALUES {values_sql}) AS v(idx, task_id) "
+                f"WHERE tasks.task_id=v.task_id",
+                *params,
+            )
 
 async def create_notification(pool, user_id, notif_type, title, message, task_id=None, team_id=None, url=None, push=True):
     """Insert a notification row and fire a Web Push if the user has a subscription.
@@ -230,8 +245,8 @@ async def create_notification(pool, user_id, notif_type, title, message, task_id
     )
     if not push: return
     # Fire Web Push (browser) + Expo Push (mobile) — both non-blocking
-    asyncio.create_task(send_web_push(pool, user_id=user_id, title=title, body=message, url=url or "/"))
-    asyncio.create_task(send_expo_push(pool, user_id=user_id, title=title, body=message, url=url or "/", task_id=task_id))
+    _bg(send_web_push(pool, user_id=user_id, title=title, body=message, url=url or "/"), label="web_push")
+    _bg(send_expo_push(pool, user_id=user_id, title=title, body=message, url=url or "/", task_id=task_id), label="expo_push")
 
 async def _replace_task_reminders(pool, task_id: str, due_dt, reminders: List["ReminderIn"]) -> List["ReminderOut"]:
     """Delete unsent reminders for a task and insert the new set, computed off due_dt.
@@ -549,6 +564,8 @@ async def reorder_columns(team_id:str,body:dict,pool=Depends(get_db),user=Depend
     mem=await is_project_member(pool,team_id,user)
     if not mem or mem["role"] not in ("owner","admin"): raise HTTPException(403)
     ordered_ids = body.get("ordered_ids", [])
+    if not isinstance(ordered_ids, list): raise HTTPException(400,"ordered_ids must be a list")
+    if len(ordered_ids) > 100: raise HTTPException(400,"Too many columns in reorder request")
     if ordered_ids:
         values_sql = ",".join(f"(${i*2+1}::int, ${i*2+2}::text)" for i in range(len(ordered_ids)))
         params = []
