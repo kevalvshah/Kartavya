@@ -655,7 +655,7 @@ export default function ProjectBoardPage() {
 
           showRequested={me?.role === 'admin' || me?.role === 'owner'}
 
-          showClientApproval={me?.role === 'admin' || me?.role === 'owner'}
+          showClientApproval
 
           currentUserId={me?.user_id}
 
