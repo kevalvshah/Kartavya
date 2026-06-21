@@ -67,7 +67,13 @@ class TaskTemplateBody(BaseModel):
 
 @router.get("/projects")
 async def list_project_templates(pool=Depends(get_pool), user=Depends(require_user)):
-    rows = await pool.fetch("SELECT * FROM project_templates ORDER BY created_at DESC")
+    if user.get("role") == "admin":
+        rows = await pool.fetch("SELECT * FROM project_templates ORDER BY created_at DESC")
+    else:
+        rows = await pool.fetch(
+            "SELECT * FROM project_templates WHERE created_by=$1 ORDER BY created_at DESC",
+            user["user_id"],
+        )
     return [dict(r) for r in rows]
 
 

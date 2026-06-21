@@ -127,6 +127,27 @@ export interface NotifPrefsResponse {
   quiet_end:   string;  // "07:00"
 }
 
+export interface TaskTemplateConfig {
+  title?:       string;
+  description?: string;
+  priority?:    Priority;
+  subtasks?:    { title: string }[];
+  attachments?: { name: string; url: string; key?: string }[];
+  tags?:        string[];
+}
+
+export interface TaskTemplate {
+  template_id: string;
+  team_id?:    string | null;
+  name:        string;
+  icon?:       string;
+  is_default:  boolean;
+  config:      TaskTemplateConfig;
+  created_by:  string;
+  created_at:  string;
+  updated_at?: string;
+}
+
 export interface MutationQueueItem {
   id:           string;
   method:       'POST' | 'PUT' | 'PATCH' | 'DELETE';

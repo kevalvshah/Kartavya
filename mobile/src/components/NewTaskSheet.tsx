@@ -136,7 +136,11 @@ export default function NewTaskSheet({ visible, onClose }: Props) {
         description: description.trim() || null,
       };
       if (projectId)           payload.team_id           = projectId;
-      if (dueAt)               payload.due_at             = dueAt.toISOString();
+      if (dueAt) {
+        // Extract date in IST then anchor to 16:00 IST to avoid midnight-rollback off-by-one
+        const dateStr = dueAt.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+        payload.due_at = new Date(dateStr + 'T16:00:00+05:30').toISOString();
+      }
       if (assignees.length)    payload.assignee_user_ids  = assignees;
       if (attachments.length)  payload.attachments        = attachments;
 

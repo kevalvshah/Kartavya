@@ -100,7 +100,8 @@ export default function NewTaskModal({ open, onClose, onCreated }) {
 
   useEffect(() => {
 
-    if (!projectId) { setMembers([]); setTemplates([]); return; }
+    if (!projectId) { setMembers([]); setTemplates([]); setAssignees([]); return; }
+    setAssignees([]);
 
     api.get(`/teams/${projectId}`)
       .then(r => setMembers(Array.isArray(r.data?.members) ? r.data.members : []))
@@ -219,7 +220,7 @@ export default function NewTaskModal({ open, onClose, onCreated }) {
         if (reminders.length) {
           payload.reminders = reminders.map(r => ({
             offset_minutes: r.offset_minutes,
-            channels: Object.entries(r.channels).filter(([, v]) => v).map(([k]) => k),
+            channels: Object.entries(r.channels || {}).filter(([, v]) => v).map(([k]) => k),
           }));
         }
       }
