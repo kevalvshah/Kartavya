@@ -168,7 +168,11 @@ async def remove_user(user_id: str, reassign_to: Optional[str] = None, pool=Depe
     else: await run("DELETE FROM time_entries                  WHERE user_id=$1",   user_id)
 
     # ── Comments (try both table/column name variants) ────────────────────────
+    # Allowlist guards against future drift — never add entries with user-controlled values.
+    _ALLOWED_COMMENT_TABLES = frozenset({("task_comments", "user_id"), ("comments", "author_id")})
     for tbl, col in [("task_comments", "user_id"), ("comments", "author_id")]:
+        if (tbl, col) not in _ALLOWED_COMMENT_TABLES:
+            continue
         if r: await run(f"UPDATE {tbl} SET {col}=$1 WHERE {col}=$2", r, user_id)
         else: await run(f"DELETE FROM {tbl}          WHERE {col}=$1",    user_id)
 

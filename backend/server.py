@@ -23,12 +23,17 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import asyncpg
+import sentry_sdk
 from dotenv import load_dotenv
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request, UploadFile, File
 from pydantic import BaseModel, ConfigDict, Field
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 from starlette.middleware.cors import CORSMiddleware
 
 from auth_router import require_user, require_admin, JWT_SECRET as _JWT_SECRET
+from limiter import limiter
 from auth_router import router as auth_router
 from invite_router import router as invite_router
 from approvals_router import router as approvals_router
@@ -98,7 +103,18 @@ def _bg(coro, *, label: str = "background") -> asyncio.Task:
             logger.warning("background task '%s' failed: %s", label, exc)
     return asyncio.create_task(_run())
 
+_SENTRY_DSN = os.environ.get("SENTRY_DSN")
+if _SENTRY_DSN:
+    sentry_sdk.init(
+        dsn=_SENTRY_DSN,
+        traces_sample_rate=0.1,
+        environment=os.environ.get("RAILWAY_ENVIRONMENT", "production"),
+    )
+
 app = FastAPI(title="Kartavya API v2", description="Team task management by Aekam Inc")
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_middleware(SlowAPIMiddleware)
 api_router = APIRouter(prefix="/api")
 
 # ── CORS ──────────────────────────────────────────
@@ -1379,6 +1395,7 @@ async def delete_category(category_id:str,pool=Depends(get_db),user=Depends(requ
 async def list_tasks(status:Optional[str]=None,category_id:Optional[str]=None,q:Optional[str]=None,
                      team_id:Optional[str]=None,assigned_to_me:Optional[bool]=None,
                      archived:Optional[bool]=False,
+                     limit:Optional[int]=500,offset:Optional[int]=0,
                      pool=Depends(get_db),user=Depends(require_user)):
     """Return all tasks visible to the user, with optional filters for status, category, team, and search."""
     team_ids=await get_visible_team_ids(pool,user["user_id"],_user_dict=user)
@@ -1395,6 +1412,10 @@ async def list_tasks(status:Optional[str]=None,category_id:Optional[str]=None,q:
     if category_id:    conditions.append(f"t.category_id=${len(vals)+1}");   vals.append(category_id)
     if q:              conditions.append(f"t.title ILIKE ${len(vals)+1}");    vals.append(f"%{q}%")
     if assigned_to_me: conditions.append(f"${len(vals)+1}=ANY(t.assignee_user_ids)"); vals.append(user["user_id"])
+    _lim = min(limit if limit is not None else 500, 500)
+    _off = max(offset if offset is not None else 0, 0)
+    _lim_idx = len(vals) + 1
+    _off_idx = len(vals) + 2
     rows=await pool.fetch(f"""
         SELECT t.*,
                COALESCE(cu.full_name,cu.name,cu.email) AS created_by_name,
@@ -1410,7 +1431,8 @@ async def list_tasks(status:Optional[str]=None,category_id:Optional[str]=None,q:
         LEFT JOIN project_columns pc ON pc.column_id=t.column_id
         WHERE {' AND '.join(conditions)}
         ORDER BY t.sort_order ASC
-    """,*vals)
+        LIMIT ${_lim_idx} OFFSET ${_off_idx}
+    """,*vals, _lim, _off)
     return [row_to_task(r) for r in rows]
 
 

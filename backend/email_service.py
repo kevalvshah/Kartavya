@@ -301,7 +301,7 @@ def send_email(to_email: str, subject: str, html_content: str,
         else:
             logger.info("[EMAIL-DEV] To:%s | Subject:%s", to_email, subject)
 
-    threading.Thread(target=_send, daemon=True).start()
+    threading.Thread(target=_send).start()
     return True
 
 
@@ -1073,7 +1073,7 @@ def send_report_email(
         except Exception as exc:
             logger.error("❌ Report email failed → %s: %s", to_email, exc)
 
-    threading.Thread(target=_send, daemon=True).start()
+    threading.Thread(target=_send).start()
     return True
 
 

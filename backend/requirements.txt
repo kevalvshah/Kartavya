@@ -16,3 +16,6 @@ weasyprint==68.0
 openpyxl==3.1.5
 pywebpush==2.0.0
 cryptography==44.0.3
+slowapi==0.1.9
+limits==3.14.0
+sentry-sdk[fastapi]==2.22.0

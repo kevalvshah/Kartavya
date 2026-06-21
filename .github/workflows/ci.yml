@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches: [main, feat/**]
+  pull_request:
+    branches: [main]
+
+jobs:
+  backend:
+    name: Backend smoke test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Import smoke test
+        run: python -c "import auth_router, invite_router, approvals_router, limiter"
+        env:
+          JWT_SECRET: ci-test-secret-minimum-32-chars-long
+          REPORT_DISPATCH_SECRET: ci-test-dispatch-secret-minimum-32-chars
+
+  mobile-types:
+    name: Mobile TypeScript check
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - run: npm ci
+      - run: npx tsc --noEmit
