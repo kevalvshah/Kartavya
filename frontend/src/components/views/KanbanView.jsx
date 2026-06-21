@@ -1,4 +1,5 @@
 import React, { useState, useRef, useCallback, useMemo } from 'react';
+import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 
 import { api } from '../../lib/api';
 
@@ -79,13 +80,9 @@ export default function KanbanView({
 
   const { pushToast } = useToast();
 
-  const [dragging, setDragging]         = useState(null);
-
-  const [over, setOver]                 = useState(null);
+  const [draggingId, setDraggingId]     = useState(null);
 
   const [drawerTaskId, setDrawerTaskId] = useState(null);
-
-  const dragIdx = useRef(null);
 
 
 
@@ -345,23 +342,21 @@ export default function KanbanView({
 
 
 
-  const handleDragStart = (taskId, colId, idx) => {
-    setDragging({ taskId, srcColId: colId });
-    dragIdx.current = idx;
-  };
+  const handleDragEnd = useCallback(async (result) => {
+    setDraggingId(null);
+    const { draggableId: taskId, source, destination } = result;
+    if (!destination) return;
+    const srcColId    = source.droppableId;
+    const targetColId = destination.droppableId;
+    if (targetColId === '__requested__' || targetColId === '__pending_client__') return;
+    if (targetColId === srcColId && destination.index === source.index) return;
 
-  const handleDrop = useCallback(async (targetColId, targetIdx) => {
-    if (!dragging || targetColId === '__requested__' || targetColId === '__pending_client__') return;
-    const { taskId, srcColId } = dragging;
-    if (targetColId === srcColId) { setDragging(null); setOver(null); return; }
-
-    const order = targetIdx ?? (byCol[targetColId]?.length ?? 0);
+    const order = destination.index;
 
     // Optimistic UI — move card instantly before API responds
     onTasksChange?.(prev => prev.map(t =>
       t.task_id === taskId ? { ...t, column_id: targetColId, sort_order: order } : t
     ));
-    setDragging(null); setOver(null);
 
     try {
       const res = await api.patch(`/tasks/${taskId}/move`, { column_id: targetColId, order });
@@ -375,7 +370,7 @@ export default function KanbanView({
         t.task_id === taskId ? { ...t, column_id: srcColId } : t
       ));
     }
-  }, [dragging, byCol, visibleColumns, onTasksChange, pushToast]);
+  }, [byCol, onTasksChange, pushToast]);
 
 
 
@@ -383,27 +378,26 @@ export default function KanbanView({
 
     <>
 
+      <DragDropContext
+        onDragStart={start => setDraggingId(start.draggableId)}
+        onDragEnd={handleDragEnd}
+      >
+
       <div className="k-board">
 
         {visibleColumns.map(col => {
 
           const colTasks = byCol[col.column_id] || [];
 
-          const isOver   = over === col.column_id && canDrop(col);
-
           const isSynth  = col._synthetic;
+
+          const droppable = canDrop(col);
 
           return (
 
             <div key={col.column_id}
 
-              className={`k-bcol${isOver ? ' is-over' : ''}${isSynth ? ' k-bcol--requested' : ''}`}
-
-              onDragOver={e => { if (canDrop(col)) { e.preventDefault(); setOver(col.column_id); } }}
-
-              onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget)) setOver(o => o === col.column_id ? null : o); }}
-
-              onDrop={() => canDrop(col) && handleDrop(col.column_id, null)}
+              className={`k-bcol${isSynth ? ' k-bcol--requested' : ''}`}
 
             >
 
@@ -493,49 +487,57 @@ export default function KanbanView({
 
               </div>
 
-              <div className="k-bcol__body">
+              <Droppable droppableId={col.column_id} isDropDisabled={!droppable}>
+                {(provided, snapshot) => (
+                  <div
+                    className={`k-bcol__body${snapshot.isDraggingOver && droppable ? ' is-over' : ''}`}
+                    ref={provided.innerRef}
+                    {...provided.droppableProps}
+                  >
 
-                {colTasks.map((task, idx) => {
+                    {colTasks.map((task, idx) => {
 
-                  const draggable = canDrag(task);
+                      const isDraggable = canDrag(task);
 
-                  return (
+                      return (
 
-                    <div key={task.task_id}>
+                        <Draggable key={task.task_id} draggableId={task.task_id} index={idx} isDragDisabled={!isDraggable}>
+                          {(dragProvided, dragSnapshot) => (
+                            <div
+                              ref={dragProvided.innerRef}
+                              {...dragProvided.draggableProps}
+                              {...dragProvided.dragHandleProps}
+                            >
+                              <KanbanCard task={task} fieldDefs={fieldDefs || []} fieldValues={fieldValueMap?.[task.task_id] || {}}
 
-                      <KanbanCard task={task} fieldDefs={fieldDefs || []} fieldValues={fieldValueMap?.[task.task_id] || {}}
+                                dragging={dragSnapshot.isDragging}
 
-                        dragging={dragging?.taskId === task.task_id}
+                                onClick={() => !draggingId && setDrawerTaskId(task.task_id)} />
+                            </div>
+                          )}
+                        </Draggable>
 
-                        draggable={draggable}
+                      );
 
-                        onDragStart={draggable ? (e) => { e.dataTransfer.effectAllowed = 'move'; handleDragStart(task.task_id, col.column_id, idx); } : undefined}
+                    })}
 
-                        onDragEnd={draggable ? () => { setDragging(null); setOver(null); } : undefined}
+                    {provided.placeholder}
 
-                        onClick={() => !dragging && setDrawerTaskId(task.task_id)} />
+                    {!readOnly && !isSynth && (
 
-                    </div>
+                      <button
 
-                  );
+                        style={{ width: '100%', background: 'transparent', border: '1px dashed var(--rule)', borderRadius: 'var(--r-md)', padding: '7px 0', cursor: 'pointer', color: 'var(--ink-3)', fontSize: 13, fontFamily: 'inherit', marginTop: 4 }}
 
-                })}
+                        onClick={() => onColumnChange?.('new_task', col.column_id)}
 
-                {isOver && dragging && <div className="k-bdrop-placeholder" />}
+                      >+ Add task</button>
 
-                {!readOnly && !isSynth && (
+                    )}
 
-                  <button
-
-                    style={{ width: '100%', background: 'transparent', border: '1px dashed var(--rule)', borderRadius: 'var(--r-md)', padding: '7px 0', cursor: 'pointer', color: 'var(--ink-3)', fontSize: 13, fontFamily: 'inherit', marginTop: 4 }}
-
-                    onClick={() => onColumnChange?.('new_task', col.column_id)}
-
-                  >+ Add task</button>
-
+                  </div>
                 )}
-
-              </div>
+              </Droppable>
 
             </div>
 
@@ -624,6 +626,8 @@ export default function KanbanView({
         )}
 
       </div>
+
+      </DragDropContext>
 
       <TaskDrawer taskId={drawerTaskId} open={!!drawerTaskId} onClose={() => setDrawerTaskId(null)}
         teamMembers={teamMembers}

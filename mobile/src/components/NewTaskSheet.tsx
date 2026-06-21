@@ -94,7 +94,7 @@ export default function NewTaskSheet({ visible, onClose }: Props) {
       for (const f of toUpload) {
         const fd = new FormData();
         fd.append('file', { uri: f.uri, name: f.name, type: f.type } as unknown as Blob);
-        const res = await apiClient.post('/upload', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+        const res = await apiClient.post('/upload', fd);
         uploaded.push({ name: f.name, url: res.data.url, key: res.data.key ?? null });
       }
       setAttachments(prev => [...prev, ...uploaded]);

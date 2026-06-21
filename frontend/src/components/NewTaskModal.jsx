@@ -6,13 +6,13 @@ import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../lib/api';
 import ReminderPicker, { DEFAULT_REMINDERS } from './ReminderPicker';
 import { formatDueDateTime } from '../lib/timeFormat';
-import { AVATAR_COLORS, userInitials, logger } from '../lib/utils';import { currentUser } from '../lib/auth';
+import { AVATAR_COLORS, PRIORITY_COLOR, userInitials, logger } from '../lib/utils';import { currentUser } from '../lib/auth';
 
 const PRIORITY_DOTS = {
-  low:    { color: '#10b981', label: 'Low',    hi: 'लघु' },
-  medium: { color: '#3b82f6', label: 'Medium', hi: 'मध्यम' },
-  high:   { color: '#f59e0b', label: 'High',   hi: 'उच्च' },
-  urgent: { color: '#dc2626', label: 'Urgent', hi: 'अत्यावश्यक' },
+  low:    { color: PRIORITY_COLOR.low,    label: 'Low',    hi: 'लघु' },
+  medium: { color: PRIORITY_COLOR.medium, label: 'Medium', hi: 'मध्यम' },
+  high:   { color: PRIORITY_COLOR.high,   label: 'High',   hi: 'उच्च' },
+  urgent: { color: PRIORITY_COLOR.urgent, label: 'Urgent', hi: 'अत्यावश्यक' },
 };
 
 export default function NewTaskModal({ open, onClose, onCreated }) {  const isClient = currentUser()?.role === 'client';

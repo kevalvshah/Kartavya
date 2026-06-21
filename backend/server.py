@@ -60,6 +60,8 @@ from utils import SQL_USER_ROLE
 
 # ── Shared constants ──────────────────────────────────────
 _NOT_TEAM_MEMBER  = "Not a team member"
+# Single definition for the COALESCE name expression used across all queries.
+_COALESCE_NAME    = "COALESCE(full_name, name, email)"
 _SQL_USER_ROLE    = SQL_USER_ROLE          # local alias kept for backward compat
 _SQL_GET_SUBTASKS = "SELECT subtasks,team_id FROM tasks WHERE task_id=$1 AND team_id=ANY($2::text[])"
 _SQL_SET_SUBTASKS = "UPDATE tasks SET subtasks=$1,updated_at=NOW() WHERE task_id=$2 AND team_id=ANY($3::text[]) RETURNING *"
@@ -151,6 +153,10 @@ async def clear_request_cache(request, call_next):
 # caching (_team_ids_request_cache) that the utils version does not have.
 
 from utils import now_utc, parse_dt, get_db  # noqa: E402 — after FastAPI imports
+
+def actor_display(user: dict, fallback: str = "Someone") -> str:
+    """Return the best display name for a user dict. Prefers full_name > name > email."""
+    return user.get("full_name") or user.get("name") or user.get("email") or fallback
 
 async def get_visible_team_ids(pool, user_id, role=None, _user_dict=None):
     """Return team IDs visible to user_id.
@@ -682,7 +688,7 @@ async def client_request_task(payload:TaskCreate,pool=Depends(get_db),user=Depen
     column_id=first_col["column_id"] if first_col else None
     max_row=await pool.fetchrow("SELECT MAX(sort_order) AS mo FROM tasks WHERE team_id=$1 AND column_id=$2",payload.team_id,column_id)
     next_order=(max_row["mo"] or -1)+1; task_id=f"task_{uuid.uuid4().hex[:12]}"
-    actor_name=user.get("full_name") or user.get("name") or user.get("email","")
+    actor_name=actor_display(user)
     atts_json=json.dumps([a.model_dump() for a in (payload.attachments or [])])
     row=await pool.fetchrow("""
         INSERT INTO tasks (task_id,team_id,column_id,created_by_user_id,created_by_name,
@@ -844,7 +850,7 @@ async def _approve_task_send_client(
     )
     try:
         from email_service import send_approval_request_email
-        approver_name = user.get("full_name") or user.get("name") or user.get("email", "Team")
+        approver_name = actor_display(user, "Team")
         send_approval_request_email(
             client_email, client["name"] or client_email,
             approver_name, task["title"],
@@ -959,7 +965,7 @@ async def _review_approval_inner(approval_id:str,body:dict,pool,user):
                     "SELECT email, COALESCE(full_name, name, email) AS name FROM users WHERE user_id=$1",
                     approval["requested_by"]
                 )
-                reviewer_name = user.get("full_name") or user.get("name") or user.get("email", "")
+                reviewer_name = actor_display(user, "")
                 if requester and requester["email"]:
                     from email_service import send_request_approved_email
                     send_request_approved_email(
@@ -1001,7 +1007,7 @@ async def add_comment(task_id:str,body:CommentCreate,pool=Depends(get_db),user=D
             for c in cr:
                 if c["user_id"]!=user["user_id"]: recipients.add(c["user_id"])
             preview=body.body[:140]+("…" if len(body.body)>140 else "")
-            actor_name=user.get("full_name") or user.get("name") or user.get("email","")
+            actor_name=actor_display(user)
             for rid in recipients:
                 await create_notification(pool,rid,"comment",f"New comment on {task['title']}",f"{actor_name}: {preview}",task_id,task["team_id"],"/tasks")
             if recipients:
@@ -1025,7 +1031,7 @@ async def add_comment(task_id:str,body:CommentCreate,pool=Depends(get_db),user=D
             await log_event(pool,task_id=task_id,actor_id=user["user_id"],event_type="commented",data={"preview":preview[:80]})
     except Exception as e:
         logger.warning("comment fan-out failed: %s", e)
-    actor_name=user.get("full_name") or user.get("name") or user.get("email","")
+    actor_name=actor_display(user)
     return CommentOut(comment_id=row["comment_id"],task_id=row["task_id"],user_id=row["user_id"],user_name=actor_name,body=row["body"],created_at=row["created_at"])
 
 @api_router.put("/tasks/{task_id}/comments/{comment_id}",response_model=CommentOut)
@@ -1040,7 +1046,7 @@ async def edit_comment(task_id:str,comment_id:str,body:CommentCreate,pool=Depend
         from services.activity_logger import log_event
         await log_event(pool,task_id=task_id,actor_id=user["user_id"],event_type="comment_edited",data={"preview":body.body[:80]})
     except Exception as _e: logger.debug("activity log failed (comment_edited): %s", _e)
-    actor_name=user.get("full_name") or user.get("name") or user.get("email","")
+    actor_name=actor_display(user)
     return CommentOut(comment_id=updated["comment_id"],task_id=updated["task_id"],user_id=updated["user_id"],user_name=actor_name,body=updated["body"],created_at=updated["created_at"])
 
 @api_router.delete("/tasks/{task_id}/comments/{comment_id}")
@@ -1480,7 +1486,7 @@ async def create_task(payload:TaskCreate,pool=Depends(get_db),user=Depends(requi
     reminder_dt=parse_dt(payload.reminder_at) or (due_dt-timedelta(hours=2) if due_dt else None)
     max_row=await pool.fetchrow(f"SELECT MAX(sort_order) AS mo FROM tasks WHERE {scope_col}=$1 AND column_id=$2",scope_val,column_id)
     next_order=(max_row["mo"] or -1)+1; task_id=f"task_{uuid.uuid4().hex[:12]}"
-    actor_name=user.get("full_name") or user.get("name") or user.get("email","")
+    actor_name=actor_display(user)
     row=await pool.fetchrow("""
         INSERT INTO tasks (task_id,user_id,team_id,column_id,created_by_user_id,assigned_by_user_id,
            created_by_name,title,description,status,priority,category_id,tags,assignee_user_ids,assignee_emails,
@@ -1520,7 +1526,7 @@ async def create_task(payload:TaskCreate,pool=Depends(get_db),user=Depends(requi
 
 async def _notify_status_changed(pool, row, existing, old_status: str, new_status: str, actor: dict, task_id: str):
     """Fan-out in-app + email notifications after a task status change."""
-    actor_name   = actor.get("full_name") or actor.get("name") or actor.get("email", "Someone")
+    actor_name   = actor_display(actor, "Someone")
     actor_id     = actor["user_id"]
     assignees    = list(row.get("assignee_user_ids") or [])
     creator_id   = existing["created_by_user_id"]
@@ -1728,7 +1734,7 @@ async def update_task(task_id:str,payload:TaskUpdate,pool=Depends(get_db),user=D
         if added:
             try:
                 from services.push_service import fan_out_push
-                actor_name=user.get("full_name") or user.get("name") or user.get("email","Someone")
+                actor_name=actor_display(user, "Someone")
                 asyncio.create_task(fan_out_push(
                     pool,
                     recipient_ids=[u for u in added if u!=user["user_id"]],

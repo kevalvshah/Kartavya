@@ -1716,7 +1716,8 @@ input, textarea, select { font-family: inherit; color: inherit; }
   position: fixed; top: 50%; left: 50%;
   transform: translate(-50%, -50%);
   width: min(640px, 94vw);
-  max-height: min(90vh, 760px);
+  /* svh = small viewport height — shrinks when the virtual keyboard opens */
+  max-height: min(90svh, 760px);
   background: var(--surface);
   border: 1px solid var(--rule);
   border-radius: var(--r-xl);
