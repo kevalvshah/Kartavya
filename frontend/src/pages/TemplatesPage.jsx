@@ -530,7 +530,8 @@ export default function TemplatesPage() {
                             const fd = new FormData();
                             fd.append('file', file);
                             const res = await api.post('/upload', fd);
-                            setcfg('attachments', [...(cfg.attachments || []), { name: file.name, url: res.data.url, key: res.data.key || null }]);
+                            const item = { name: file.name, url: res.data.url, key: res.data.key || null };
+                            setTaskTmplForm(f => ({ ...f, config: { ...f.config, attachments: [...(f.config.attachments || []), item] } }));
                           }
                         } catch (_) {}
                         finally { setTmplUploading(false); e.target.value = ''; }

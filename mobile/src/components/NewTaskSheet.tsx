@@ -137,8 +137,10 @@ export default function NewTaskSheet({ visible, onClose }: Props) {
       };
       if (projectId)           payload.team_id           = projectId;
       if (dueAt) {
-        // Extract date in IST then anchor to 16:00 IST to avoid midnight-rollback off-by-one
-        const dateStr = dueAt.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+        // Extract date in IST (+5:30) via arithmetic — avoids relying on ICU/Intl timezone data
+        // which is not guaranteed on Hermes/Android without full ICU bundle.
+        const istMs = dueAt.getTime() + 5.5 * 60 * 60 * 1000;
+        const dateStr = new Date(istMs).toISOString().slice(0, 10); // "YYYY-MM-DD" in IST
         payload.due_at = new Date(dateStr + 'T16:00:00+05:30').toISOString();
       }
       if (assignees.length)    payload.assignee_user_ids  = assignees;
