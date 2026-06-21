@@ -8,12 +8,13 @@ import { useToast } from '../components/ui/toast';
 import { useNavigate } from 'react-router-dom';
 import { PageHeader } from '../components/editorial';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
+import BrandColorPicker from '../components/BrandColorPicker';
 import { AVATAR_COLORS } from '../lib/utils';
 
 const ICONS = ['📋','✅','🎨','📹','📸','📊','💡','🔖','⚡','🚀','📝','🎯','🔧','📦','🌐'];
 const EMPTY_TASK_TMPL = {
   name: '', icon: '📋', is_default: false, team_id: '',
-  config: { title: '', description: '', priority: 'medium', colors: [], subtasks: [], attachments: [], tags: [], custom_fields: {} }
+  config: { title: '', description: '', priority: 'medium', subtasks: [], attachments: [], tags: [], custom_fields: {} }
 };
 const KICKER_SANS   = ['राज्यस्व', 'स्वागत', 'विपणन', 'कार्यालय', 'विधि', 'सेवा', 'परियोजना'];
 
@@ -51,8 +52,6 @@ export default function TemplatesPage() {
   const [newSubtask,       setNewSubtask]       = useState('');
   const [showIconPicker,   setShowIconPicker]   = useState(false);
   const [tmplUploading,    setTmplUploading]    = useState(false);
-  const [newColorHex,      setNewColorHex]      = useState('#000000');
-  const [newColorName,     setNewColorName]     = useState('');
   const tmplFileRef = useRef(null);
 
   const load = useCallback(async () => {
@@ -224,13 +223,6 @@ export default function TemplatesPage() {
                           <span style={{ fontSize: 11, color: 'var(--ink-3)' }}>{cfg?.priority || 'medium'} priority</span>
                           {(cfg?.subtasks || []).length > 0 && (
                             <span style={{ fontSize: 11, color: 'var(--ink-faint)' }}>· {cfg.subtasks.length} subtasks</span>
-                          )}
-                          {(cfg?.colors || []).length > 0 && (
-                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
-                              {cfg.colors.slice(0, 4).map((c, ci) => (
-                                <span key={ci} title={c.name || c.hex} style={{ width: 10, height: 10, borderRadius: '50%', background: c.hex, display: 'inline-block', border: '1px solid rgba(0,0,0,.1)' }} />
-                              ))}
-                            </span>
                           )}
                           {t.is_default && (
                             <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--k-primary)', background: 'color-mix(in srgb, var(--k-primary) 12%, transparent)', padding: '1px 5px', borderRadius: 99 }}>DEFAULT</span>
@@ -447,52 +439,13 @@ export default function TemplatesPage() {
                     </div>
                   </div>
 
-                  {/* Brand colors palette */}
+                  {/* Brand colors reference — managed org-wide in Admin → Brand Colors */}
                   <div>
                     <label className="k-label">Brand colors · ब्रांड रंग</label>
                     <div style={{ fontSize: 12, color: 'var(--ink-faint)', marginBottom: 10 }}>
-                      Add your brand's hex colors with names — team members can reference these when working on this template.
+                      Workspace palette — manage in <strong>Admin → Brand Colors</strong>.
                     </div>
-                    {(cfg.colors || []).length > 0 && (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 12 }}>
-                        {(cfg.colors || []).map((c, ci) => (
-                          <div key={ci} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 12px', background: 'var(--bg-soft)', borderRadius: 'var(--r-md)', border: '1px solid var(--rule-soft)' }}>
-                            <span style={{ width: 22, height: 22, borderRadius: 6, background: c.hex, flexShrink: 0, border: '1px solid rgba(0,0,0,.1)', display: 'inline-block' }} />
-                            <span style={{ fontFamily: 'var(--font-ui)', fontSize: 13, fontWeight: 600, color: 'var(--ink)', minWidth: 80 }}>{c.hex}</span>
-                            <span style={{ fontSize: 13, color: 'var(--ink-2)', flex: 1 }}>{c.name || <em style={{ color: 'var(--ink-faint)' }}>Unnamed</em>}</span>
-                            <button onClick={() => setcfg('colors', (cfg.colors || []).filter((_, j) => j !== ci))}
-                              style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-faint)', fontSize: 16, lineHeight: 1, padding: 0, flexShrink: 0 }}>×</button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
-                      <label style={{ position: 'relative', cursor: 'pointer', flexShrink: 0 }}>
-                        <span style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 12px', background: 'var(--bg-soft)', border: '1px solid var(--rule)', borderRadius: 'var(--r-md)', fontSize: 13, color: 'var(--ink-2)', cursor: 'pointer' }}>
-                          <span style={{ width: 20, height: 20, borderRadius: 5, background: newColorHex, border: '1px solid rgba(0,0,0,.15)', display: 'inline-block', flexShrink: 0 }} />
-                          {newColorHex}
-                        </span>
-                        <input type="color" value={newColorHex} onChange={e => setNewColorHex(e.target.value)}
-                          style={{ position: 'absolute', opacity: 0, width: 1, height: 1, top: 0, left: 0, pointerEvents: 'none' }} />
-                      </label>
-                      <input className="k-input" value={newColorName} onChange={e => setNewColorName(e.target.value)}
-                        placeholder="Name (e.g. Brand Pink, Logo Blue…)"
-                        onKeyDown={e => {
-                          if (e.key === 'Enter' && newColorHex) {
-                            setcfg('colors', [...(cfg.colors || []), { hex: newColorHex, name: newColorName.trim() }]);
-                            setNewColorName('');
-                          }
-                        }}
-                        style={{ flex: 1, minWidth: 160 }} />
-                      <button className="k-btn k-btn--ghost k-btn--sm"
-                        onClick={() => {
-                          if (!newColorHex) return;
-                          setcfg('colors', [...(cfg.colors || []), { hex: newColorHex, name: newColorName.trim() }]);
-                          setNewColorName('');
-                        }}>
-                        + Add
-                      </button>
-                    </div>
+                    <BrandColorPicker mode="display" />
                   </div>
 
                   {/* Subtasks */}

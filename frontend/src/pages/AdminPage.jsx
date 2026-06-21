@@ -8,6 +8,7 @@ import { api } from '../lib/api';
 import { useToast } from '../components/ui/toast';
 import { PageHeader, StatTile } from '../components/editorial';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
+import BrandColorPicker from '../components/BrandColorPicker';
 
 const ROLE_COLORS = { admin: '#0082c6', member: '#6E7B91', client: '#ec4899', owner: '#8b5cf6' };
 const AVATARS     = ['#0082c6','#05b7aa','#8b5cf6','#ec4899','#f59e0b','#10b981'];
@@ -647,6 +648,22 @@ export default function AdminPage() {
           );
         })}
       </div>
+      {/* ── Brand Colors ── */}
+      <div className="k-card" style={{ marginTop: 'var(--sp-5)' }}>
+        <div className="k-card__head">
+          <div className="k-card__titles">
+            <h3 className="k-card__title">Brand Colors</h3>
+            <span className="k-card__sans">ब्रांड रंग</span>
+          </div>
+        </div>
+        <div className="k-card__body">
+          <div style={{ fontSize: 13, color: 'var(--ink-3)', marginBottom: 16, lineHeight: 1.5 }}>
+            Save your workspace's hex colors with names. These appear as a reference palette everywhere in the app — templates, task drawers, project settings.
+          </div>
+          <BrandColorPicker mode="manage" />
+        </div>
+      </div>
+
       {/* ── R2 Folder Map ── */}
       <div className="k-card" style={{ padding: 0, overflow: 'hidden', marginTop: 'var(--sp-5)' }}>
         <div style={{ padding: '12px 20px', borderBottom: '1px solid var(--rule-soft)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>

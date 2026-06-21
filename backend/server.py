@@ -687,6 +687,28 @@ async def remove_client_from_task(task_id:str,target_user_id:str,pool=Depends(ge
     await pool.execute("DELETE FROM task_clients WHERE task_id=$1 AND user_id=$2",task_id,target_user_id)
     return {"ok":True}
 
+# ── Org settings ──────────────────────────────────────────────────────────────
+
+@api_router.get("/settings")
+async def get_org_settings(pool=Depends(get_db), user=Depends(require_user)):
+    """Return workspace-level settings (brand colors, etc.) — readable by all authenticated users."""
+    row = await pool.fetchrow("SELECT value FROM org_settings WHERE key = 'brand_colors'")
+    colors = list(row["value"]) if row else []
+    return {"brand_colors": colors}
+
+@api_router.put("/settings/brand-colors")
+async def update_brand_colors(body: dict, pool=Depends(get_db), user=Depends(require_user)):
+    """Persist the workspace brand color palette. Admin or owner only."""
+    if user.get("role") not in ("admin", "owner"):
+        raise HTTPException(status_code=403, detail="Admin access required")
+    colors = body.get("colors", [])
+    await pool.execute(
+        "INSERT INTO org_settings(key, value) VALUES('brand_colors', $1::jsonb) "
+        "ON CONFLICT(key) DO UPDATE SET value = EXCLUDED.value",
+        json.dumps(colors)
+    )
+    return {"brand_colors": colors}
+
 @api_router.post("/client/tasks/request", response_model=TaskOut)
 async def client_request_task(payload:TaskCreate,pool=Depends(get_db),user=Depends(require_user)):
     """Create a task request from a client user, pending team approval."""
@@ -2223,6 +2245,12 @@ async def _run_startup_migrations():
         """)
         await pool.execute("CREATE INDEX IF NOT EXISTS idx_task_reminders_due ON task_reminders(fire_at) WHERE sent_at IS NULL")
         await pool.execute("CREATE INDEX IF NOT EXISTS idx_task_reminders_task ON task_reminders(task_id)")
+        await pool.execute("""
+            CREATE TABLE IF NOT EXISTS org_settings (
+                key   TEXT PRIMARY KEY,
+                value JSONB NOT NULL DEFAULT '[]'
+            )
+        """)
         logger.info("Startup migrations OK")
     except Exception as e:
         logger.warning("Startup migration warning (non-fatal): %s", e)
