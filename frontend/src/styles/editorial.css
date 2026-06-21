@@ -2251,7 +2251,8 @@ input, textarea, select { font-family: inherit; color: inherit; }
 .k-tmpl-card__stat { display: flex; flex-direction: column; gap: 2px; }
 .k-tmpl-card__stat b { font-size: 18px; font-weight: 700; color: var(--ink); font-family: var(--font-display); }
 .k-tmpl-card__stat span { font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-faint); }
-.k-tmpl-card__foot { display: flex; align-items: center; gap: 8px; }
+.k-tmpl-card__foot { display: flex; flex-direction: column; gap: 0; }
+.k-tmpl-card__foot-row { display: flex; align-items: center; gap: 8px; width: 100%; }
 .k-tmpl-card__plus {
   font-size: 28px; color: var(--ink-faint); line-height: 1;
 }

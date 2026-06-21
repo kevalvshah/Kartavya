@@ -11,10 +11,9 @@ import ConfirmDialog from '../components/ui/ConfirmDialog';
 import { AVATAR_COLORS } from '../lib/utils';
 
 const ICONS = ['📋','✅','🎨','📹','📸','📊','💡','🔖','⚡','🚀','📝','🎯','🔧','📦','🌐'];
-const COLOR_PRESETS = ['#0082c6','#05b7aa','#8b5cf6','#ec4899','#f59e0b','#10b981','#6366f1','#ef4444','#64748b','#0ea5e9'];
 const EMPTY_TASK_TMPL = {
   name: '', icon: '📋', is_default: false, team_id: '',
-  config: { title: '', description: '', priority: 'medium', color: '', subtasks: [], attachments: [], tags: [], custom_fields: {} }
+  config: { title: '', description: '', priority: 'medium', colors: [], subtasks: [], attachments: [], tags: [], custom_fields: {} }
 };
 const KICKER_SANS   = ['राज्यस्व', 'स्वागत', 'विपणन', 'कार्यालय', 'विधि', 'सेवा', 'परियोजना'];
 
@@ -52,6 +51,8 @@ export default function TemplatesPage() {
   const [newSubtask,       setNewSubtask]       = useState('');
   const [showIconPicker,   setShowIconPicker]   = useState(false);
   const [tmplUploading,    setTmplUploading]    = useState(false);
+  const [newColorHex,      setNewColorHex]      = useState('#000000');
+  const [newColorName,     setNewColorName]     = useState('');
   const tmplFileRef = useRef(null);
 
   const load = useCallback(async () => {
@@ -183,7 +184,7 @@ export default function TemplatesPage() {
 
                   <div className="k-tmpl-card__foot">
                     {tab === 'project' ? (
-                      <>
+                      <div className="k-tmpl-card__foot-row">
                         <button
                           className="k-btn k-btn--primary k-btn--sm"
                           onClick={() => {
@@ -215,53 +216,66 @@ export default function TemplatesPage() {
                             <path d="M3 4h10M5 4V3h6v1M6 7v5M10 7v5M4 4l1 9h6l1-9"/>
                           </svg>
                         </button>
-                      </>
+                      </div>
                     ) : (
                       <>
-                        <span style={{ fontSize: 11, color: 'var(--ink-3)', display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <span style={{ fontWeight: 600 }}>{t.icon || '📋'}</span>
-                          {cfg?.priority || 'medium'} priority
-                          {(cfg?.subtasks || []).length > 0 && <span>· {cfg.subtasks.length} subtasks</span>}
+                        {/* Meta row */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
+                          <span style={{ fontSize: 11, color: 'var(--ink-3)' }}>{cfg?.priority || 'medium'} priority</span>
+                          {(cfg?.subtasks || []).length > 0 && (
+                            <span style={{ fontSize: 11, color: 'var(--ink-faint)' }}>· {cfg.subtasks.length} subtasks</span>
+                          )}
+                          {(cfg?.colors || []).length > 0 && (
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                              {cfg.colors.slice(0, 4).map((c, ci) => (
+                                <span key={ci} title={c.name || c.hex} style={{ width: 10, height: 10, borderRadius: '50%', background: c.hex, display: 'inline-block', border: '1px solid rgba(0,0,0,.1)' }} />
+                              ))}
+                            </span>
+                          )}
                           {t.is_default && (
                             <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--k-primary)', background: 'color-mix(in srgb, var(--k-primary) 12%, transparent)', padding: '1px 5px', borderRadius: 99 }}>DEFAULT</span>
                           )}
-                        </span>
-                        <button className="k-btn k-btn--ghost k-btn--sm"
-                          onClick={() => {
-                            setEditingTmplId(t.template_id);
-                            setTaskTmplForm({
-                              name: t.name, icon: t.icon || '📋',
-                              is_default: t.is_default || false,
-                              team_id: t.team_id || '',
-                              config: typeof t.config === 'string' ? JSON.parse(t.config) : (t.config || {}),
-                            });
-                            setShowTaskForm(true);
-                          }}>
-                          Edit
-                        </button>
-                        {!t.is_default && (
+                        </div>
+                        {/* Action row */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                           <button className="k-btn k-btn--ghost k-btn--sm"
-                            onClick={async () => {
-                              try {
-                                await api.post(`/templates/tasks/${t.template_id}/set-default`);
-                                load(); pushToast({ type: 'success', title: 'Set as default' });
-                              } catch { pushToast({ type: 'error', title: 'Could not set default' }); }
+                            onClick={() => {
+                              setEditingTmplId(t.template_id);
+                              setTaskTmplForm({
+                                name: t.name, icon: t.icon || '📋',
+                                is_default: t.is_default || false,
+                                team_id: t.team_id || '',
+                                config: typeof t.config === 'string' ? JSON.parse(t.config) : (t.config || {}),
+                              });
+                              setShowTaskForm(true);
                             }}>
-                            Set default
+                            Edit
                           </button>
-                        )}
-                        <button className="k-iconbtn" style={{ marginLeft: 'auto', color: 'var(--ink-faint)' }}
-                          onClick={() => setConfirmState({
-                            message: `Delete template "${t.name}"?`, confirmLabel: 'Delete',
-                            onConfirm: async () => {
-                              try {
-                                await api.delete(`/templates/tasks/${t.template_id}`);
-                                load();
-                              } catch { pushToast({ type: 'error', title: 'Could not delete template' }); }
-                            },
-                          })}>
-                          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4"><path d="M3 4h10M5 4V3h6v1M6 7v5M10 7v5M4 4l1 9h6l1-9"/></svg>
-                        </button>
+                          {!t.is_default && (
+                            <button className="k-btn k-btn--ghost k-btn--sm"
+                              onClick={async () => {
+                                try {
+                                  await api.post(`/templates/tasks/${t.template_id}/set-default`);
+                                  load(); pushToast({ type: 'success', title: 'Set as default' });
+                                } catch { pushToast({ type: 'error', title: 'Could not set default' }); }
+                              }}>
+                              Set default
+                            </button>
+                          )}
+                          <button className="k-iconbtn" style={{ marginLeft: 'auto', color: 'var(--ink-faint)' }}
+                            title="Delete"
+                            onClick={() => setConfirmState({
+                              message: `Delete template "${t.name}"?`, confirmLabel: 'Delete',
+                              onConfirm: async () => {
+                                try {
+                                  await api.delete(`/templates/tasks/${t.template_id}`);
+                                  load();
+                                } catch { pushToast({ type: 'error', title: 'Could not delete template' }); }
+                              },
+                            })}>
+                            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4"><path d="M3 4h10M5 4V3h6v1M6 7v5M10 7v5M4 4l1 9h6l1-9"/></svg>
+                          </button>
+                        </div>
                       </>
                     )}
                   </div>
@@ -433,33 +447,51 @@ export default function TemplatesPage() {
                     </div>
                   </div>
 
-                  {/* Color picker */}
+                  {/* Brand colors palette */}
                   <div>
-                    <label className="k-label">Card color · रंग</label>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                      {COLOR_PRESETS.map(c => (
-                        <button key={c} onClick={() => setcfg('color', cfg.color === c ? '' : c)}
-                          title={c}
-                          style={{
-                            width: 26, height: 26, borderRadius: '50%', background: c, border: 'none',
-                            cursor: 'pointer', flexShrink: 0,
-                            outline: cfg.color === c ? `3px solid ${c}` : '2px solid transparent',
-                            outlineOffset: 2, transition: 'outline .12s',
-                          }} />
-                      ))}
-                      <label title="Custom color" style={{ position: 'relative', width: 26, height: 26, borderRadius: '50%', border: '2px dashed var(--rule-strong)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, overflow: 'hidden' }}>
-                        <span style={{ fontSize: 14, color: 'var(--ink-3)', lineHeight: 1 }}>+</span>
-                        <input type="color" value={cfg.color && !COLOR_PRESETS.includes(cfg.color) ? cfg.color : '#000000'}
-                          onChange={e => setcfg('color', e.target.value)}
-                          style={{ position: 'absolute', opacity: 0, width: '100%', height: '100%', cursor: 'pointer' }} />
-                      </label>
-                      {cfg.color && (
-                        <span style={{ fontSize: 12, color: 'var(--ink-3)', display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <span style={{ width: 14, height: 14, borderRadius: '50%', background: cfg.color, display: 'inline-block', flexShrink: 0 }} />
-                          {cfg.color}
-                          <button onClick={() => setcfg('color', '')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-faint)', fontSize: 14, lineHeight: 1, padding: 0 }}>×</button>
+                    <label className="k-label">Brand colors · ब्रांड रंग</label>
+                    <div style={{ fontSize: 12, color: 'var(--ink-faint)', marginBottom: 10 }}>
+                      Add your brand's hex colors with names — team members can reference these when working on this template.
+                    </div>
+                    {(cfg.colors || []).length > 0 && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 12 }}>
+                        {(cfg.colors || []).map((c, ci) => (
+                          <div key={ci} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 12px', background: 'var(--bg-soft)', borderRadius: 'var(--r-md)', border: '1px solid var(--rule-soft)' }}>
+                            <span style={{ width: 22, height: 22, borderRadius: 6, background: c.hex, flexShrink: 0, border: '1px solid rgba(0,0,0,.1)', display: 'inline-block' }} />
+                            <span style={{ fontFamily: 'var(--font-ui)', fontSize: 13, fontWeight: 600, color: 'var(--ink)', minWidth: 80 }}>{c.hex}</span>
+                            <span style={{ fontSize: 13, color: 'var(--ink-2)', flex: 1 }}>{c.name || <em style={{ color: 'var(--ink-faint)' }}>Unnamed</em>}</span>
+                            <button onClick={() => setcfg('colors', (cfg.colors || []).filter((_, j) => j !== ci))}
+                              style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-faint)', fontSize: 16, lineHeight: 1, padding: 0, flexShrink: 0 }}>×</button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+                      <label style={{ position: 'relative', cursor: 'pointer', flexShrink: 0 }}>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 12px', background: 'var(--bg-soft)', border: '1px solid var(--rule)', borderRadius: 'var(--r-md)', fontSize: 13, color: 'var(--ink-2)', cursor: 'pointer' }}>
+                          <span style={{ width: 20, height: 20, borderRadius: 5, background: newColorHex, border: '1px solid rgba(0,0,0,.15)', display: 'inline-block', flexShrink: 0 }} />
+                          {newColorHex}
                         </span>
-                      )}
+                        <input type="color" value={newColorHex} onChange={e => setNewColorHex(e.target.value)}
+                          style={{ position: 'absolute', opacity: 0, width: 1, height: 1, top: 0, left: 0, pointerEvents: 'none' }} />
+                      </label>
+                      <input className="k-input" value={newColorName} onChange={e => setNewColorName(e.target.value)}
+                        placeholder="Name (e.g. Brand Pink, Logo Blue…)"
+                        onKeyDown={e => {
+                          if (e.key === 'Enter' && newColorHex) {
+                            setcfg('colors', [...(cfg.colors || []), { hex: newColorHex, name: newColorName.trim() }]);
+                            setNewColorName('');
+                          }
+                        }}
+                        style={{ flex: 1, minWidth: 160 }} />
+                      <button className="k-btn k-btn--ghost k-btn--sm"
+                        onClick={() => {
+                          if (!newColorHex) return;
+                          setcfg('colors', [...(cfg.colors || []), { hex: newColorHex, name: newColorName.trim() }]);
+                          setNewColorName('');
+                        }}>
+                        + Add
+                      </button>
                     </div>
                   </div>
 

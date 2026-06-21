@@ -118,14 +118,13 @@ export default function NewTaskModal({ open, onClose, onCreated }) {
     } catch {
       cfg = {};
     }
+    // Always replace all fields — don't append or conditionally skip
     if (cfg.title)       setTitle(cfg.title);
     if (cfg.description) setDescription(cfg.description);
     if (cfg.priority)    setPriority(cfg.priority);
-    if (cfg.reminders?.length)   setReminders(cfg.reminders);
-    if (cfg.subtasks?.length)    setSubtasks(cfg.subtasks.map(s => ({ ...s, is_done: false })));
-    if (cfg.attachments?.length) setFiles(prev => [
-      ...prev, ...cfg.attachments.map(a => ({ name: a.name, url: a.url, key: a.key || null }))
-    ]);
+    setReminders(cfg.reminders || []);
+    setSubtasks((cfg.subtasks || []).map(s => ({ ...s, is_done: false })));
+    setFiles((cfg.attachments || []).map(a => ({ name: a.name, url: a.url, key: a.key || null })));
     setShowTemplatePicker(false);
     setTimeout(() => titleRef.current?.focus(), 50);
   };

@@ -284,6 +284,7 @@ export default function BoardsPage() {
               currentUserId={me?.user_id}
               currentUserRole={me?.role}
               showRequested={me?.role !== 'client'}
+              showClientApproval={me?.role === 'admin' || me?.role === 'owner'}
               onTasksChange={handleTasksChange}
               onColumnChange={handleColumnChange}
               onColumnsChange={setColumns}
