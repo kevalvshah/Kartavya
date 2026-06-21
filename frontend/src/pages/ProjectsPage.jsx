@@ -8,8 +8,7 @@ import { currentUser } from '../lib/auth';
 import { useToast } from '../components/ui/toast';
 import { PageHeader, DueChip } from '../components/editorial';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
-
-const PROJECT_COLORS = ['#0082c6','#05b7aa','#8b5cf6','#ec4899','#f59e0b','#10b981','#6366f1'];
+import { AVATAR_COLORS } from '../lib/utils';
 
 // ── Delete confirmation modal ─────────────────────────────────────────────────
 function DeleteProjectModal({ project, onConfirm, onCancel }) {
@@ -269,7 +268,7 @@ export default function ProjectsPage() {
           </div>
         )}
         {projects.map((p, idx) => {
-          const color     = PROJECT_COLORS[idx % PROJECT_COLORS.length];
+          const color     = AVATAR_COLORS[idx % AVATAR_COLORS.length];
           const taskCount = p.task_count || 0;
           const doneCount = p.done_count || 0;
           const openCount = taskCount - doneCount;

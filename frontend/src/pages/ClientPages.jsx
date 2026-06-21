@@ -4,6 +4,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { api } from '../lib/api';
 import { K, KLogo, KWordmark } from '../lib/brand';
 import { apiLogout, currentUser } from '../lib/auth';
+import { relTime } from '../lib/utils';
 import { useToast } from '../components/ui/toast';
 import { PageHeader, StatTile } from '../components/editorial';
 import KanbanView from '../components/views/KanbanView';
@@ -14,13 +15,6 @@ import { useFields } from '../hooks/useFields';
 const STATUS_LABEL = { requested: 'Requested', todo: 'To Do', in_progress: 'In Progress', in_review: 'In Review', done: 'Done', rejected: 'Declined' };
 const STATUS_COLOR = { requested: '#f59e0b', todo: '#0082c6', in_progress: '#05b7aa', in_review: '#8b5cf6', done: '#10b981', rejected: '#ef4444' };
 
-function relTime(ts) {
-  if (!ts) return '';
-  const d = Math.round((Date.now() - new Date(ts)) / 60000);
-  if (d < 60) return `${d}m ago`;
-  if (d < 1440) return `${Math.round(d/60)}h ago`;
-  return `${Math.round(d/1440)}d ago`;
-}
 
 export function ClientProjectsPage() {
   const [projects,    setProjects]    = useState([]);

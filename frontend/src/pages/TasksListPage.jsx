@@ -8,15 +8,13 @@ import { useToast } from '../components/ui/toast';
 import TaskDrawer  from '../components/TaskDrawer';
 import NewTaskModal from '../components/NewTaskModal';
 import { PageHeader, DueChip, PriorityDot, StatusChip, ProjectTag } from '../components/editorial';
-import { AVATAR_COLORS, avatarColor, priorityColor } from '../lib/utils';
+import { AVATAR_COLORS, avatarColor, priorityColor, userInitials, relTime } from '../lib/utils';
+import { PRIORITY_LABELS, STATUS_LABELS, STATUS_COLORS } from '../components/drawer/constants';
 
 const PRIORITY_ORDER = ['urgent','high','medium','low'];
-const PRIORITY_LABEL = { urgent:'Urgent', high:'High', medium:'Medium', low:'Low' };
 const PRIORITY_HI    = { urgent:'अत्यावश्यक', high:'उच्च', medium:'मध्यम', low:'न्यून' };
 const STATUS_ORDER   = ['todo','in_progress','in_review','done','requested'];
-const STATUS_LABEL   = { todo:'To Do', in_progress:'In Progress', in_review:'In Review', done:'Done', requested:'Requested' };
 const STATUS_HI      = { todo:'कार्य', in_progress:'चालू', in_review:'समीक्षा', done:'सम्पन्न', requested:'अनुरोध' };
-const STATUS_COLOR   = { todo:'#94a3b8', in_progress:'#0082c6', in_review:'#a78bfa', done:'#05b7aa', requested:'#f59e0b' };
 
 // All available columns. 'task' is always visible and cannot be hidden.
 const ALL_COLS = [
@@ -31,22 +29,6 @@ const ALL_COLS = [
 
 const DEFAULT_VISIBLE = new Set(['task','project','assignees','due','status']);
 
-function initials(name) {
-  return (name || '?').split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
-}
-
-function relativeTime(dateStr) {
-  if (!dateStr) return '—';
-  const diff = Date.now() - new Date(dateStr).getTime();
-  const mins  = Math.floor(diff / 60000);
-  const hours = Math.floor(diff / 3600000);
-  const days  = Math.floor(diff / 86400000);
-  if (mins < 1)   return 'just now';
-  if (mins < 60)  return `${mins}m ago`;
-  if (hours < 24) return `${hours}h ago`;
-  if (days < 7)   return `${days}d ago`;
-  return new Date(dateStr).toLocaleDateString('en-IN', { day:'numeric', month:'short' });
-}
 
 function useResizableCols(cols) {
   const [widths, setWidths] = useState(() => Object.fromEntries(cols.map(c => [c.key, c.defaultW])));
@@ -196,7 +178,7 @@ export default function TasksListPage() {
   if (group === 'priority') {
     PRIORITY_ORDER.forEach(p => {
       const items = filtered.filter(t => t.priority === p);
-      if (items.length) groups.push({ key: p, title: PRIORITY_LABEL[p], sans: PRIORITY_HI[p], color: priorityColor(p), items });
+      if (items.length) groups.push({ key: p, title: PRIORITY_LABELS[p], sans: PRIORITY_HI[p], color: priorityColor(p), items });
     });
     const rest = filtered.filter(t => !PRIORITY_ORDER.includes(t.priority));
     if (rest.length) groups.push({ key: 'other', title: 'Other', sans: 'अन्य', color: '#94a3b8', items: rest });
@@ -210,7 +192,7 @@ export default function TasksListPage() {
   } else {
     STATUS_ORDER.forEach(s => {
       const items = filtered.filter(t => t.status === s);
-      if (items.length) groups.push({ key: s, title: STATUS_LABEL[s], sans: STATUS_HI[s], color: STATUS_COLOR[s], items });
+      if (items.length) groups.push({ key: s, title: STATUS_LABELS[s], sans: STATUS_HI[s], color: STATUS_COLORS[s], items });
     });
   }
 
@@ -388,7 +370,7 @@ export default function TasksListPage() {
                                 ? <span className="k-trow__empty">—</span>
                                 : assignees.slice(0, 3).map((a, j) => (
                                     <span key={j} className="k-assignee-pill" style={{ '--av-c': a.color }}>
-                                      <span className="k-assignee-pill__avatar">{initials(a.name)}</span>
+                                      <span className="k-assignee-pill__avatar">{userInitials(a.name)}</span>
                                       <span className="k-assignee-pill__name">{a.name}</span>
                                     </span>
                                   ))
@@ -417,7 +399,7 @@ export default function TasksListPage() {
                         case 'updated':
                           return (
                             <div key="updated" className="k-trow__cell k-c-updated">
-                              <span className="k-trow__meta">{relativeTime(t.updated_at)}</span>
+                              <span className="k-trow__meta">{relTime(t.updated_at) || '—'}</span>
                             </div>
                           );
                         case 'status':

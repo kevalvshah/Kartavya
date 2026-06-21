@@ -15,6 +15,7 @@ export function cn(...inputs) {
 }
 
 export const AVATAR_COLORS = ['#0082c6','#05b7aa','#8b5cf6','#ec4899','#f59e0b','#10b981','#6366f1'];
+export const PROJECT_COLORS = ['#ec4899','#6366f1','#0A7A6E','#B06A00','#0082c6','#10b981','#a855f7','#f59e0b','#14b8a6','#d97706'];
 
 /** Single source of truth for priority colours across all views. */
 export const PRIORITY_COLOR = {

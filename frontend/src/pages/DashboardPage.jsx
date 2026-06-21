@@ -11,12 +11,11 @@ import {
   Hero, StatTile, Card, DueChip, PriorityDot, ProjectTag, AvatarStack, Citation,
 } from '../components/editorial';
 import { AVATAR_COLORS, relTime, userInitials, logger } from '../lib/utils';
+import { STATUS_COLORS, STATUS_LABELS } from '../components/drawer/constants';
 
 const VIKRAM_MONTHS = ['Chaitra','Vaishākha','Jyēṣṭha','Āṣāḍha','Śrāvaṇa','Bhādra',
   'Āśvina','Kārtika','Mārgaśīrṣa','Pauṣa','Māgha','Phālguna'];
-const STATUS_COLOR  = { todo:'#94a3b8', in_progress:'#0082c6', in_review:'#a78bfa', done:'#05b7aa', requested:'#f59e0b' };
-const STATUS_LABEL  = { todo:'To Do', in_progress:'In Progress', in_review:'In Review', done:'Done', requested:'Requested' };
-const STATUS_HI     = { todo:'कार्य', in_progress:'चालू', in_review:'समीक्षा', done:'सम्पन्न', requested:'अनुरोध' };
+const STATUS_HI = { todo:'कार्य', in_progress:'चालू', in_review:'समीक्षा', done:'सम्पन्न', requested:'अनुरोध' };
 
 function vikramDate(now) {
   const year  = now.getFullYear() + 56 + (now.getMonth() >= 3 ? 1 : 0);
@@ -198,8 +197,8 @@ export default function DashboardPage({ teams = [] }) {
                   if (!count) return null;
                   return (
                     <div key={s} className="k-stackbar__seg"
-                      style={{ flex: count, background: STATUS_COLOR[s] }}
-                      title={`${STATUS_LABEL[s]}: ${count}`}
+                      style={{ flex: count, background: STATUS_COLORS[s] }}
+                      title={`${STATUS_LABELS[s]}: ${count}`}
                     />
                   );
                 })}
@@ -207,8 +206,8 @@ export default function DashboardPage({ teams = [] }) {
               <div className="k-statuslegend">
                 {statusOrder.map(s => (
                   <div key={s} className="k-statuslegend__row">
-                    <span className="k-statuslegend__dot" style={{ background: STATUS_COLOR[s] }} />
-                    <span className="k-statuslegend__lbl">{STATUS_LABEL[s]}</span>
+                    <span className="k-statuslegend__dot" style={{ background: STATUS_COLORS[s] }} />
+                    <span className="k-statuslegend__lbl">{STATUS_LABELS[s]}</span>
                     <span className="k-statuslegend__hi">{STATUS_HI[s]}</span>
                     <span className="k-statuslegend__count">{statusCounts[s] || 0}</span>
                   </div>

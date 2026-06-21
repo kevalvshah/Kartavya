@@ -8,6 +8,7 @@ import { useToast } from '../components/ui/toast';
 import { useNavigate } from 'react-router-dom';
 import { PageHeader } from '../components/editorial';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
+import { AVATAR_COLORS } from '../lib/utils';
 
 const ICONS = ['📋','✅','🎨','📹','📸','📊','💡','🔖','⚡','🚀','📝','🎯','🔧','📦','🌐'];
 const COLOR_PRESETS = ['#0082c6','#05b7aa','#8b5cf6','#ec4899','#f59e0b','#10b981','#6366f1','#ef4444','#64748b','#0ea5e9'];
@@ -15,8 +16,6 @@ const EMPTY_TASK_TMPL = {
   name: '', icon: '📋', is_default: false, team_id: '',
   config: { title: '', description: '', priority: 'medium', color: '', subtasks: [], attachments: [], tags: [], custom_fields: {} }
 };
-
-const KICKER_COLORS = ['#0082c6','#05b7aa','#8b5cf6','#ec4899','#f59e0b','#10b981','#6366f1'];
 const KICKER_SANS   = ['राज्यस्व', 'स्वागत', 'विपणन', 'कार्यालय', 'विधि', 'सेवा', 'परियोजना'];
 
 function getKicker(t, idx) {
@@ -157,7 +156,7 @@ export default function TemplatesPage() {
           <div className="k-tmpl-grid">
             {currentTemplates.map((t, idx) => {
               const cfg     = typeof t.config === 'string' ? JSON.parse(t.config) : (t.config || {});
-              const color   = cfg.color || KICKER_COLORS[idx % KICKER_COLORS.length];
+              const color   = cfg.color || AVATAR_COLORS[idx % AVATAR_COLORS.length];
               const sans    = KICKER_SANS[idx % KICKER_SANS.length];
               const kicker  = getKicker(t, idx);
               const cols    = (cfg.columns || []).length;

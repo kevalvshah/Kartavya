@@ -6,18 +6,14 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { api } from '../lib/api';
 import { PageHeader } from '../components/editorial';
+import { PROJECT_COLORS, userInitials } from '../lib/utils';
 
 const TODAY     = new Date().toISOString().slice(0, 10);
 const YESTERDAY = new Date(Date.now() - 1  * 864e5).toISOString().slice(0, 10);
 const WEEK_AGO  = new Date(Date.now() - 7  * 864e5).toISOString().slice(0, 10);
 const MONTH_AGO = new Date(Date.now() - 30 * 864e5).toISOString().slice(0, 10);
 
-const PROJECT_COLORS = [
-  '#ec4899','#6366f1','#0A7A6E','#B06A00','#0082c6',
-  '#10b981','#a855f7','#f59e0b','#14b8a6','#d97706',
-];
-const colorFor  = i => PROJECT_COLORS[i % PROJECT_COLORS.length];
-const initials  = n => (n || '?').split(' ').map(s => s[0]).slice(0, 2).join('').toUpperCase();
+const colorFor = i => PROJECT_COLORS[i % PROJECT_COLORS.length];
 const fmtDate   = iso => {
   try { return new Date(iso + 'T00:00:00').toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }); }
   catch { return iso || '—'; }
@@ -577,7 +573,7 @@ export default function ReportsPage({ teams: propTeams }) {
                     className={'gr__person' + (memberIds.includes(m.user_id) ? ' is-active' : '')}
                     onClick={() => toggleMember(m.user_id)}>
                     <span className="gr__person-av" style={{ background: colorFor(i) }}>
-                      {initials(m.display_name)}
+                      {userInitials(m.display_name)}
                     </span>
                     <span className="gr__person-name">{m.display_name}</span>
                   </button>

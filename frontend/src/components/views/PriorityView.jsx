@@ -4,23 +4,21 @@
  */
 import React, { useState, useMemo } from 'react';
 import TaskDrawer from '../TaskDrawer';
+import { AVATAR_COLORS, PRIORITY_COLOR, PRIORITY_LABELS } from '../../lib/utils';
+import { STATUS_COLORS, STATUS_LABELS } from '../drawer/constants';
 
 const PRIORITIES = [
-  { id: 'urgent', label: 'Urgent', sans: 'अत्यावश्यक', color: '#dc2626' },
-  { id: 'high',   label: 'High',   sans: 'उच्च',       color: '#ef4444' },
-  { id: 'medium', label: 'Medium', sans: 'मध्यम',      color: '#f59e0b' },
-  { id: 'low',    label: 'Low',    sans: 'लघु',        color: '#22c55e' },
+  { id: 'urgent', label: PRIORITY_LABELS.urgent, sans: 'अत्यावश्यक', color: PRIORITY_COLOR.urgent },
+  { id: 'high',   label: PRIORITY_LABELS.high,   sans: 'उच्च',       color: PRIORITY_COLOR.high   },
+  { id: 'medium', label: PRIORITY_LABELS.medium, sans: 'मध्यम',      color: PRIORITY_COLOR.medium },
+  { id: 'low',    label: PRIORITY_LABELS.low,    sans: 'लघु',        color: PRIORITY_COLOR.low    },
 ];
 
-const STATUS_COLOR = { todo: '#64748b', in_progress: '#0082c6', in_review: '#8b5cf6', done: '#16a34a', requested: '#9333ea' };
-const STATUS_LABEL = { todo: 'To do', in_progress: 'In progress', in_review: 'In review', done: 'Done', requested: 'Requested' };
-
 function Avatar({ uid, i }) {
-  const COLORS = ['#0082c6','#05b7aa','#8b5cf6','#ec4899','#f59e0b','#10b981','#6366f1'];
   return (
     <span title={uid} style={{
       width: 22, height: 22, borderRadius: '50%',
-      background: COLORS[i % COLORS.length], color: '#fff',
+      background: AVATAR_COLORS[i % AVATAR_COLORS.length], color: '#fff',
       display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
       fontSize: 9, fontWeight: 700, border: '2px solid var(--surface)',
       marginLeft: i > 0 ? -6 : 0, flexShrink: 0,
@@ -87,7 +85,7 @@ export default function PriorityView({ tasks = [], columns = [], teamMembers = [
                 {rows.map(t => {
                   const col = colMap[t.column_id];
                   const isOverdue = t.due_at && new Date(t.due_at) < now && t.status !== 'done';
-                  const sColor = STATUS_COLOR[t.status] || '#64748b';
+                  const sColor = STATUS_COLORS[t.status] || '#64748b';
                   return (
                     <div
                       key={t.task_id}
@@ -98,7 +96,7 @@ export default function PriorityView({ tasks = [], columns = [], teamMembers = [
                     >
                       {/* Status badge */}
                       <span style={{ fontSize: 11, fontWeight: 600, color: sColor, background: sColor + '18', borderRadius: 99, padding: '2px 9px', flexShrink: 0, whiteSpace: 'nowrap' }}>
-                        {STATUS_LABEL[t.status] || t.status}
+                        {STATUS_LABELS[t.status] || t.status}
                       </span>
 
                       {/* Title */}

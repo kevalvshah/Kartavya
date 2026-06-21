@@ -1,10 +1,5 @@
 import React from 'react';
-
-const COLORS = ['#0082c6', '#05b7aa', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#6366f1'];
-
-function initials(name) {
-  return (name || '?').split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
-}
+import { AVATAR_COLORS, userInitials } from '../../lib/utils';
 
 export default function AvatarStack({ users = [], max = 3, size = 22 }) {
   const shown = users.slice(0, max);
@@ -19,11 +14,11 @@ export default function AvatarStack({ users = [], max = 3, size = 22 }) {
             width: size,
             height: size,
             fontSize: Math.round(size * 0.4),
-            background: u.color || COLORS[i % COLORS.length],
+            background: u.color || AVATAR_COLORS[i % AVATAR_COLORS.length],
           }}
           title={u.name || ''}
         >
-          {u.initials || initials(u.name || '')}
+          {u.initials || userInitials(u.name || '')}
         </span>
       ))}
       {extra > 0 && (

@@ -3,13 +3,8 @@
  */
 import React, { useMemo, useState } from 'react';
 import TaskDrawer from '../TaskDrawer';
-import { priorityColor } from '../../lib/utils';
-const AVATAR_COLORS  = ['#0082c6','#05b7aa','#8b5cf6','#ec4899','#f59e0b','#10b981','#6366f1'];
-const STATUS_COLOR   = { todo: '#64748b', in_progress: '#0082c6', in_review: '#8b5cf6', done: '#16a34a', requested: '#9333ea' };
-
-function initials(name) {
-  return (name || '?').split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
-}
+import { priorityColor, AVATAR_COLORS, userInitials } from '../../lib/utils';
+import { STATUS_COLORS } from '../drawer/constants';
 
 export default function WorkloadView({ tasks = [], teamMembers = [] }) {
   const [drawer, setDrawer] = useState(null);
@@ -64,7 +59,7 @@ export default function WorkloadView({ tasks = [], teamMembers = [] }) {
         const isExp    = expanded[m.user_id];
         const barPct   = Math.min((open.length / maxLoad) * 100, 100);
         const barColor = open.length > maxLoad * 0.75 ? '#dc2626' : open.length > maxLoad * 0.5 ? '#f59e0b' : '#0082c6';
-        const avatarColor = m.user_id === '__unassigned__' ? '#94a3b8' : AVATAR_COLORS[mi % AVATAR_COLORS.length];
+        const memberBg = m.user_id === '__unassigned__' ? '#94a3b8' : AVATAR_COLORS[mi % AVATAR_COLORS.length];
         const name = m.display_name || m.full_name || m.email || m.user_id;
 
         return (
@@ -75,8 +70,8 @@ export default function WorkloadView({ tasks = [], teamMembers = [] }) {
               onClick={() => setExpanded(e => ({ ...e, [m.user_id]: !e[m.user_id] }))}
             >
               {/* Avatar */}
-              <span style={{ width: 36, height: 36, borderRadius: '50%', background: avatarColor, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700, flexShrink: 0 }}>
-                {initials(name)}
+              <span style={{ width: 36, height: 36, borderRadius: '50%', background: memberBg, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700, flexShrink: 0 }}>
+                {userInitials(name)}
               </span>
 
               {/* Name + bar */}
@@ -100,7 +95,7 @@ export default function WorkloadView({ tasks = [], teamMembers = [] }) {
                 {open.map(t => {
                   const isOv = t.due_at && new Date(t.due_at) < now;
                   const pColor = priorityColor(t.priority);
-                  const sColor = STATUS_COLOR[t.status] || '#64748b';
+                  const sColor = STATUS_COLORS[t.status] || '#64748b';
                   return (
                     <div key={t.task_id}
                       style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 20px 10px 76px', borderBottom: '1px solid var(--rule-soft)', cursor: 'pointer' }}

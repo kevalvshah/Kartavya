@@ -5,8 +5,7 @@ import React, { useMemo, useState } from 'react';
 import { currentUser } from '../../lib/auth';
 import TaskDrawer from '../TaskDrawer';
 import { priorityColor } from '../../lib/utils';
-const STATUS_COLOR   = { todo: '#64748b', in_progress: '#0082c6', in_review: '#8b5cf6', done: '#16a34a', requested: '#9333ea' };
-const STATUS_LABEL   = { todo: 'To do', in_progress: 'In progress', in_review: 'In review', done: 'Done', requested: 'Requested' };
+import { STATUS_COLORS, STATUS_LABELS } from '../drawer/constants';
 
 const GROUPS = [
   { id: 'overdue',  label: 'Overdue',   sans: 'विलंबित',  color: '#dc2626', border: '#dc2626' },
@@ -103,7 +102,7 @@ export default function MyTasksView({ tasks = [], teamMembers = [], onTasksChang
 
             {!isCol && rows.map(t => {
               const pColor = priorityColor(t.priority);
-              const sColor = STATUS_COLOR[t.status]    || '#64748b';
+              const sColor = STATUS_COLORS[t.status] || '#64748b';
               const isOverdue = t.due_at && new Date(t.due_at) < now && t.status !== 'done';
               return (
                 <div
@@ -116,7 +115,7 @@ export default function MyTasksView({ tasks = [], teamMembers = [], onTasksChang
                   <span style={{ width: 7, height: 7, borderRadius: '50%', background: pColor, flexShrink: 0 }} />
                   <span style={{ fontSize: 13.5, fontWeight: 500, color: 'var(--ink)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.title}</span>
                   <span style={{ fontSize: 11, fontWeight: 600, color: sColor, background: sColor + '18', borderRadius: 99, padding: '2px 9px', flexShrink: 0 }}>
-                    {STATUS_LABEL[t.status] || t.status}
+                    {STATUS_LABELS[t.status] || t.status}
                   </span>
                   {t.due_at && (
                     <span style={{ fontSize: 11, color: isOverdue ? '#dc2626' : 'var(--ink-3)', fontWeight: isOverdue ? 700 : 400, flexShrink: 0, whiteSpace: 'nowrap' }}>

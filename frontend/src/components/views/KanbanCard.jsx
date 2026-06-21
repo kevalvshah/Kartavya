@@ -1,8 +1,7 @@
 import React from 'react';
-import { priorityColor, avatarColor } from '../../lib/utils';
+import { priorityColor, avatarColor, userInitials } from '../../lib/utils';
 import { formatTime, hasTimeComponent } from '../../lib/timeFormat';
-
-const PRIORITY_LABEL = { low: 'Low', medium: 'Medium', high: 'High', urgent: 'Urgent' };
+import { PRIORITY_LABELS } from '../drawer/constants';
 
 function relDue(due) {
   if (!due) return null;
@@ -17,12 +16,6 @@ function relDue(due) {
   return { label: `${new Date(due).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}${time}`, tone: 'muted' };
 }
 
-function nameInitials(name) {
-  if (!name) return '?';
-  const parts = name.trim().split(/\s+/);
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-}
 
 export default function KanbanCard({ task, onClick, dragging = false, draggable = false, onDragStart, onDragEnd }) {
   const priority = task.priority || 'medium';
@@ -54,7 +47,7 @@ export default function KanbanCard({ task, onClick, dragging = false, draggable 
             {task.approval_status === 'pending_client' ? 'Client review' : 'Needs approval'}
           </span>
         )}
-        <span className="k-bcard__priolbl">{PRIORITY_LABEL[priority]}</span>
+        <span className="k-bcard__priolbl">{PRIORITY_LABELS[priority]}</span>
       </div>
 
       {/* Title */}
@@ -110,7 +103,7 @@ export default function KanbanCard({ task, onClick, dragging = false, draggable 
                 boxShadow: '0 1px 3px rgba(0,0,0,0.15)',
                 flexShrink: 0,
               }}>
-                {nameInitials(names[i])}
+                {userInitials(names[i])}
               </span>
             ))}
             {assignees.length > 3 && (

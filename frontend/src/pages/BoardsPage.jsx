@@ -22,8 +22,6 @@ import { AVATAR_COLORS } from '../lib/utils';
 import AutomationsPage from './AutomationsPage';
 import TaskEditor from '../components/TaskEditor';
 
-const PROJECT_COLORS = ['#0082c6','#05b7aa','#8b5cf6','#ec4899','#f59e0b','#10b981','#6366f1'];
-
 const VIEWS = [
   { id: 'kanban',   label: 'Board',
     icon: <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="1" y="3" width="4" height="10" rx="1"/><rect x="6" y="3" width="4" height="10" rx="1"/><rect x="11" y="3" width="4" height="10" rx="1"/></svg> },
@@ -143,7 +141,7 @@ export default function BoardsPage() {
                   className={'k-projectpicker__chip' + (p.team_id === activeId ? ' is-active' : '')}
                   onClick={() => switchProject(p.team_id)}
                 >
-                  <span className="k-projectpicker__dot" style={{ background: PROJECT_COLORS[idx % PROJECT_COLORS.length] }} />
+                  <span className="k-projectpicker__dot" style={{ background: AVATAR_COLORS[idx % AVATAR_COLORS.length] }} />
                   {p.name}
                 </button>
               ))}

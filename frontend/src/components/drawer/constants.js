@@ -1,6 +1,6 @@
 export const PRIORITY_LABELS = { low: 'Low', medium: 'Medium', high: 'High', urgent: 'Urgent' };
-export const STATUS_LABELS   = { todo: 'To do', in_progress: 'In progress', done: 'Done', requested: 'Requested' };
-export const STATUS_COLORS   = { todo: '#64748b', in_progress: '#0082c6', done: '#16a34a', requested: '#9333ea' };
+export const STATUS_LABELS   = { todo: 'To do', in_progress: 'In progress', in_review: 'In review', done: 'Done', requested: 'Requested', rejected: 'Declined' };
+export const STATUS_COLORS   = { todo: '#64748b', in_progress: '#0082c6', in_review: '#8b5cf6', done: '#16a34a', requested: '#9333ea', rejected: '#ef4444' };
 
 export const APPROVAL_STATUS_LABEL = {
   pending:        'Awaiting Approval',
