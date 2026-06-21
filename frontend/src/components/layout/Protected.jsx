@@ -21,19 +21,19 @@ export default function Protected({ children, requiredRole }) {
 
   useEffect(() => {
     let live = true;
-    if (!sessionStorage.getItem('auth_token')) {
+    if (!localStorage.getItem('auth_token')) {
       navigate('/login', { replace: true, state: { from: location.pathname } });
       setReady(false); return;
     }
     api.get('/auth/me')
       .then((r) => {
         if (!live) return;
-        sessionStorage.setItem('kartavya_user', JSON.stringify(r.data));
+        localStorage.setItem('kartavya_user', JSON.stringify(r.data));
         setUser(r.data); setReady(true);
       })
       .catch(() => {
         if (!live) return;
-        sessionStorage.removeItem('auth_token');
+        localStorage.removeItem('auth_token');
         navigate('/login', { replace: true });
         setReady(false);
       });
