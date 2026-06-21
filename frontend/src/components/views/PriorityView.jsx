@@ -4,8 +4,8 @@
  */
 import React, { useState, useMemo } from 'react';
 import TaskDrawer from '../TaskDrawer';
-import { AVATAR_COLORS, PRIORITY_COLOR, PRIORITY_LABELS } from '../../lib/utils';
-import { STATUS_COLORS, STATUS_LABELS } from '../drawer/constants';
+import { AVATAR_COLORS, PRIORITY_COLOR } from '../../lib/utils';
+import { STATUS_COLORS, STATUS_LABELS, PRIORITY_LABELS } from '../drawer/constants';
 
 const PRIORITIES = [
   { id: 'urgent', label: PRIORITY_LABELS.urgent, sans: 'अत्यावश्यक', color: PRIORITY_COLOR.urgent },
