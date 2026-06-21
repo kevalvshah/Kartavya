@@ -75,6 +75,13 @@ agenthub/agents/youtube/db
 
 # Build caches
 .cache/
+.vite/
+
+# Test artifacts
+.playwright-mcp/
+
+# Scripts / local utilities
+scripts/
 
 # Mobile development
 android-sdk/ frontend/node_modules/.cache/default-development/0.pack
