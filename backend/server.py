@@ -345,10 +345,11 @@ class CategoryCreate(BaseModel):
 class CategoryOut(BaseModel):
     category_id:str; user_id:str; name:str; color:str; created_at:datetime; updated_at:datetime
 class TeamCreate(BaseModel):
-    name:str
+    name:str; brand_settings:Optional[dict]=None
 class TeamOut(BaseModel):
     team_id:str; name:str; created_by:str; created_at:datetime; updated_at:datetime
     task_count:int=0; done_count:int=0; color:Optional[str]=None
+    brand_settings:Optional[dict]=None
 class TeamMemberAdd(BaseModel):
     email:str; role:str="member"
 class TeamMemberUpdate(BaseModel):
@@ -687,18 +688,35 @@ async def remove_client_from_task(task_id:str,target_user_id:str,pool=Depends(ge
     await pool.execute("DELETE FROM task_clients WHERE task_id=$1 AND user_id=$2",task_id,target_user_id)
     return {"ok":True}
 
-# ── Org settings ──────────────────────────────────────────────────────────────
+# ── Org settings (brand kit) ──────────────────────────────────────────────────
+
+async def _get_org_settings(pool) -> dict:
+    rows = await pool.fetch("SELECT key, value FROM org_settings WHERE key IN ('brand_colors','brand_fonts')")
+    data = {r["key"]: list(r["value"]) for r in rows}
+    return {"brand_colors": data.get("brand_colors", []), "brand_fonts": data.get("brand_fonts", [])}
 
 @api_router.get("/settings")
 async def get_org_settings(pool=Depends(get_db), user=Depends(require_user)):
-    """Return workspace-level settings (brand colors, etc.) — readable by all authenticated users."""
-    row = await pool.fetchrow("SELECT value FROM org_settings WHERE key = 'brand_colors'")
-    colors = list(row["value"]) if row else []
-    return {"brand_colors": colors}
+    """Return workspace brand kit (colors + fonts) — readable by all non-client users."""
+    return await _get_org_settings(pool)
 
+@api_router.put("/settings")
+async def update_org_settings(body: dict, pool=Depends(get_db), user=Depends(require_user)):
+    """Persist workspace brand kit. Admin or owner only."""
+    if user.get("role") not in ("admin", "owner"):
+        raise HTTPException(status_code=403, detail="Admin access required")
+    for key in ("brand_colors", "brand_fonts"):
+        if key in body:
+            await pool.execute(
+                "INSERT INTO org_settings(key, value) VALUES($1, $2::jsonb) "
+                "ON CONFLICT(key) DO UPDATE SET value = EXCLUDED.value",
+                key, json.dumps(body[key])
+            )
+    return await _get_org_settings(pool)
+
+# Keep old endpoint as alias so existing frontend code doesn't break mid-deploy
 @api_router.put("/settings/brand-colors")
-async def update_brand_colors(body: dict, pool=Depends(get_db), user=Depends(require_user)):
-    """Persist the workspace brand color palette. Admin or owner only."""
+async def update_brand_colors_compat(body: dict, pool=Depends(get_db), user=Depends(require_user)):
     if user.get("role") not in ("admin", "owner"):
         raise HTTPException(status_code=403, detail="Admin access required")
     colors = body.get("colors", [])
@@ -1234,12 +1252,24 @@ async def _ensure_default_owner(pool, team_id: str, creator: dict):
 async def create_team(payload:TeamCreate,pool=Depends(get_db),user=Depends(require_user)):
     """Create a new project and set the caller as owner with default kanban columns."""
     team_id=f"team_{uuid.uuid4().hex[:12]}"
-    row=await pool.fetchrow("INSERT INTO teams (team_id,name,created_by) VALUES ($1,$2,$3) RETURNING *",team_id,payload.name,user["user_id"])
+    bs = json.dumps(payload.brand_settings or {"colors":[],"fonts":[]})
+    row=await pool.fetchrow("INSERT INTO teams (team_id,name,created_by,brand_settings) VALUES ($1,$2,$3,$4::jsonb) RETURNING *",team_id,payload.name,user["user_id"],bs)
     await pool.execute("INSERT INTO team_members (member_id,team_id,email,user_id,role,status) VALUES ($1,$2,$3,$4,'owner','active')",f"mem_{uuid.uuid4().hex[:12]}",team_id,user["email"],user["user_id"])
     await pool.execute("INSERT INTO project_assignments (assignment_id,team_id,user_id,role,assigned_by) VALUES ($1,$2,$3,'owner',$4)",f"assign_{uuid.uuid4().hex[:12]}",team_id,user["user_id"],user["user_id"])
     await _ensure_default_owner(pool,team_id,creator=user)
     await ensure_default_columns(pool,team_id)
     return TeamOut(**dict(row))
+
+@api_router.patch("/teams/{team_id}/brand")
+async def update_team_brand(team_id:str, body:dict, pool=Depends(get_db), user=Depends(require_user)):
+    """Update a project's brand kit (colors + fonts). Owner/admin of the project only."""
+    mem = await _team_membership(pool, team_id, user)
+    if not mem or mem["role"] not in ("owner","admin"): raise HTTPException(403)
+    await pool.execute(
+        "UPDATE teams SET brand_settings=$1::jsonb, updated_at=NOW() WHERE team_id=$2",
+        json.dumps(body), team_id
+    )
+    return {"ok": True}
 
 @api_router.get("/users")
 async def list_users(pool=Depends(get_db),user=Depends(require_user)):
@@ -2251,6 +2281,7 @@ async def _run_startup_migrations():
                 value JSONB NOT NULL DEFAULT '[]'
             )
         """)
+        await pool.execute("ALTER TABLE teams ADD COLUMN IF NOT EXISTS brand_settings JSONB NOT NULL DEFAULT '{\"colors\":[],\"fonts\":[]}'::jsonb")
         logger.info("Startup migrations OK")
     except Exception as e:
         logger.warning("Startup migration warning (non-fatal): %s", e)

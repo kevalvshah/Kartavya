@@ -14,6 +14,7 @@ import DrawerComments    from './drawer/DrawerComments';
 import DrawerAttachments from './drawer/DrawerAttachments';
 import DrawerTimeEntries from './drawer/DrawerTimeEntries';
 import DrawerApproval    from './drawer/DrawerApproval';
+import BrandKit          from './BrandKit';
 import { lbl }           from './drawer/constants';
 
 const MAX_FILES    = 5;
@@ -599,6 +600,16 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
                       startTimer={startTimer} stopTimer={stopTimer}
                       addManual={addManual} deleteEntry={deleteEntry}
                     />
+                  </div>
+                )}
+
+                {/* ── Brand Kit (non-client) ── */}
+                {!isClient && (
+                  <div className="k-dr__section">
+                    <div className="k-dr__sec-hd">
+                      Brand Kit <span className="k-dr__sec-hi">ब्रांड</span>
+                    </div>
+                    <BrandKit mode="display" />
                   </div>
                 )}
               </>

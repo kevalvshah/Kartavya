@@ -8,7 +8,7 @@ import { useToast } from '../components/ui/toast';
 import { useNavigate } from 'react-router-dom';
 import { PageHeader } from '../components/editorial';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
-import BrandColorPicker from '../components/BrandColorPicker';
+import BrandKit from '../components/BrandKit';
 import { AVATAR_COLORS } from '../lib/utils';
 
 const ICONS = ['📋','✅','🎨','📹','📸','📊','💡','🔖','⚡','🚀','📝','🎯','🔧','📦','🌐'];
@@ -445,7 +445,7 @@ export default function TemplatesPage() {
                     <div style={{ fontSize: 12, color: 'var(--ink-faint)', marginBottom: 10 }}>
                       Workspace palette — manage in <strong>Admin → Brand Colors</strong>.
                     </div>
-                    <BrandColorPicker mode="display" />
+                    <BrandKit mode="display" />
                   </div>
 
                   {/* Subtasks */}

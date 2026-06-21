@@ -8,6 +8,7 @@ import { currentUser } from '../lib/auth';
 import { useToast } from '../components/ui/toast';
 import { PageHeader, DueChip } from '../components/editorial';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
+import BrandKit from '../components/BrandKit';
 import { AVATAR_COLORS } from '../lib/utils';
 
 // ── Delete confirmation modal ─────────────────────────────────────────────────
@@ -102,9 +103,11 @@ export default function ProjectsPage() {
 
   const [projects,    setProjects]    = useState([]);
   const [binProjects, setBinProjects] = useState([]);
-  const [name,        setName]        = useState('');
-  const [creating,    setCreating]    = useState(false);
-  const [showNew,     setShowNew]     = useState(false);
+  const [name,           setName]           = useState('');
+  const [creating,       setCreating]       = useState(false);
+  const [showNew,        setShowNew]        = useState(false);
+  const [showBrandKit,   setShowBrandKit]   = useState(false);
+  const [brandKit,       setBrandKit]       = useState({ colors: [], fonts: [] });
   const [showBin,     setShowBin]     = useState(false);
   const [deleteModal, setDeleteModal] = useState(null); // project object
   const [confirmState, setConfirmState] = useState(null);
@@ -119,8 +122,11 @@ export default function ProjectsPage() {
     if (!name.trim()) return;
     setCreating(true);
     try {
-      await api.post('/teams', { name: name.trim() });
-      setName(''); setShowNew(false);
+      await api.post('/teams', {
+        name: name.trim(),
+        brand_settings: (brandKit.colors.length || brandKit.fonts.length) ? brandKit : undefined,
+      });
+      setName(''); setShowNew(false); setShowBrandKit(false); setBrandKit({ colors: [], fonts: [] });
       pushToast({ type: 'success', title: 'Project created' }); load();
     } catch (_) { pushToast({ type: 'error', title: 'Could not create project' }); }
     finally { setCreating(false); }
@@ -194,11 +200,45 @@ export default function ProjectsPage() {
               <span className="k-card__sans">नई परियोजना</span>
             </div>
           </header>
-          <div className="k-card__body">
+          <div className="k-card__body" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            {/* Name row */}
             <div style={{ display: 'flex', gap: 10 }}>
-              <input className="k-input" value={name} onChange={e => setName(e.target.value)} placeholder="Project name…" onKeyDown={e => e.key === 'Enter' && create()} autoFocus style={{ flex: 1 }} />
-              <button className="k-btn k-btn--primary" onClick={create} disabled={creating}>{creating ? 'Creating…' : 'Create'}</button>
-              <button className="k-btn k-btn--ghost" onClick={() => setShowNew(false)}>Cancel</button>
+              <input className="k-input" value={name} onChange={e => setName(e.target.value)}
+                placeholder="Project name…" onKeyDown={e => e.key === 'Enter' && !showBrandKit && create()}
+                autoFocus style={{ flex: 1 }} />
+            </div>
+
+            {/* Brand kit toggle */}
+            <button
+              type="button"
+              onClick={() => setShowBrandKit(v => !v)}
+              style={{ display: 'flex', alignItems: 'center', gap: 8, width: 'fit-content',
+                background: 'none', border: 'none', cursor: 'pointer', padding: 0,
+                fontSize: 12, fontWeight: 600, color: 'var(--k-primary)', fontFamily: 'var(--font-ui)' }}
+            >
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8">
+                <path d={showBrandKit ? 'M2 4l4 4 4-4' : 'M4 2l4 4-4 4'} />
+              </svg>
+              {showBrandKit ? 'Hide' : 'Add'} brand kit — colors & fonts (optional)
+            </button>
+
+            {showBrandKit && (
+              <div style={{ borderTop: '1px solid var(--rule-soft)', paddingTop: 16 }}>
+                <div style={{ fontSize: 12, color: 'var(--ink-3)', marginBottom: 14 }}>
+                  Define this project's brand colors and typefaces. Team members will see these as a reference in tasks.
+                </div>
+                <BrandKit mode="edit" value={brandKit} onChange={setBrandKit} />
+              </div>
+            )}
+
+            {/* Actions */}
+            <div style={{ display: 'flex', gap: 10, paddingTop: 4 }}>
+              <button className="k-btn k-btn--primary" onClick={create} disabled={creating || !name.trim()}>
+                {creating ? 'Creating…' : 'Create project'}
+              </button>
+              <button className="k-btn k-btn--ghost" onClick={() => { setShowNew(false); setShowBrandKit(false); setBrandKit({ colors: [], fonts: [] }); }}>
+                Cancel
+              </button>
             </div>
           </div>
         </section>
