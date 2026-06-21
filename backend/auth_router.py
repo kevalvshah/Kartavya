@@ -17,6 +17,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, EmailStr, Field
 
 from db import get_pool
+from limiter import limiter
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 security = HTTPBearer(auto_error=False)
@@ -113,18 +114,17 @@ def _safe_user(u: dict) -> dict:
 
 
 @router.post("/accept-invite")
-async def accept_invite(body: AcceptInviteBody):
+@limiter.limit("10/minute")
+async def accept_invite(request: Request, body: AcceptInviteBody):
     """Called when a user clicks their invite link and sets their password."""
     pool = await get_pool()
     invite = await pool.fetchrow("SELECT * FROM invites WHERE token=$1", body.token)
     if not invite:
         raise HTTPException(status_code=400, detail="Invite link is invalid or has expired")
 
-    # If the invite was already accepted (e.g. double-submit), try to log the user in
+    # Invite already accepted — never verify the password here (brute-force oracle).
+    # Direct the user to the login page instead.
     if invite["accepted_at"] is not None:
-        user = await pool.fetchrow("SELECT * FROM users WHERE email=$1", invite["email"])
-        if user and _verify_password(body.password, user["salt"], user["password_hash"]):
-            return {"token": _create_token(user["user_id"]), "user": _safe_user(dict(user))}
         raise HTTPException(status_code=400, detail="Account already activated — please sign in.")
 
     if invite["expires_at"].replace(tzinfo=timezone.utc) < datetime.now(timezone.utc):
@@ -180,7 +180,8 @@ async def accept_invite(body: AcceptInviteBody):
 
 
 @router.post("/login")
-async def login(body: LoginBody):
+@limiter.limit("5/minute")
+async def login(request: Request, body: LoginBody):
     """Authenticate with email and password and return a JWT and user profile."""
     pool = await get_pool()
     user = await pool.fetchrow("SELECT * FROM users WHERE email=$1", body.email.lower())
@@ -205,7 +206,8 @@ class ResetPasswordBody(BaseModel):
 
 
 @router.post("/forgot-password")
-async def forgot_password(body: ForgotPasswordBody):
+@limiter.limit("3/minute")
+async def forgot_password(request: Request, body: ForgotPasswordBody):
     """Generate a password-reset token and email it. Always returns 200 to avoid email enumeration."""
     pool = await get_pool()
     user = await pool.fetchrow("SELECT user_id, name, email FROM users WHERE email=$1", body.email.lower())

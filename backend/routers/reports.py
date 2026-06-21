@@ -17,13 +17,17 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, field_validator, EmailStr
+from typing import Optional as _Optional
 
-from auth_router import require_user, require_admin
+from auth_router import require_user, require_admin, _decode_token as _auth_decode
 from db import get_pool
 from utils import log_safe as _log_safe
+
+_dispatch_bearer = HTTPBearer(auto_error=False)
 
 _DATE_RE = re.compile(r'^\d{4}-\d{2}-\d{2}$')
 
@@ -401,22 +405,30 @@ async def delete_schedule(
 
 @router.post("/dispatch")
 async def dispatch_reports(
+    request: Request,
     request_secret: str = Query(""),
     pool = Depends(get_pool),
-    _caller = Depends(require_admin),
+    credentials: _Optional[HTTPAuthorizationCredentials] = Depends(_dispatch_bearer),
 ):
-    """Called hourly by Railway cron. Processes all due schedules.
+    """Called hourly by Railway cron. Accepts REPORT_DISPATCH_SECRET OR an admin JWT.
 
-    Requires both:
-    - A valid admin session (require_admin) — prevents unauthenticated access
-      when REPORT_DISPATCH_SECRET is unset.
-    - REPORT_DISPATCH_SECRET query param when the env var is set — an additional
-      layer so cron callers don't need a real session cookie.
+    Cron callers (no session): supply ?request_secret=<REPORT_DISPATCH_SECRET>.
+    Manual callers (browser/admin): supply a valid admin Bearer token.
     """
-    # When REPORT_DISPATCH_SECRET is set, callers must supply it.
-    # When unset, require_admin (applied to this route) is the sole guard.
-    if DISPATCH_SECRET and request_secret != DISPATCH_SECRET:
-        raise HTTPException(403, "Invalid dispatch secret")
+    authorized = False
+    if DISPATCH_SECRET and request_secret == DISPATCH_SECRET:
+        authorized = True
+    else:
+        # Fall back to admin JWT check
+        token = credentials.credentials if credentials else request.cookies.get("session_token")
+        if token:
+            user_id = _auth_decode(token)
+            if user_id:
+                row = await pool.fetchrow("SELECT role FROM users WHERE user_id=$1", user_id)
+                if row and row["role"] == "admin":
+                    authorized = True
+    if not authorized:
+        raise HTTPException(403, "Provide REPORT_DISPATCH_SECRET or an admin JWT")
 
     now = datetime.now(timezone.utc)
     due = await pool.fetch("""

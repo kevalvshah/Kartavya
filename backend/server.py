@@ -23,12 +23,17 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import asyncpg
+import sentry_sdk
 from dotenv import load_dotenv
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request, UploadFile, File
 from pydantic import BaseModel, ConfigDict, Field
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 from starlette.middleware.cors import CORSMiddleware
 
 from auth_router import require_user, require_admin, JWT_SECRET as _JWT_SECRET
+from limiter import limiter
 from auth_router import router as auth_router
 from invite_router import router as invite_router
 from approvals_router import router as approvals_router
@@ -60,9 +65,11 @@ from utils import SQL_USER_ROLE
 
 # ── Shared constants ──────────────────────────────────────
 _NOT_TEAM_MEMBER  = "Not a team member"
+# Single definition for the COALESCE name expression used across all queries.
+_COALESCE_NAME    = "COALESCE(full_name, name, email)"
 _SQL_USER_ROLE    = SQL_USER_ROLE          # local alias kept for backward compat
-_SQL_GET_SUBTASKS = "SELECT subtasks FROM tasks WHERE task_id=$1"
-_SQL_SET_SUBTASKS = "UPDATE tasks SET subtasks=$1,updated_at=NOW() WHERE task_id=$2 RETURNING *"
+_SQL_GET_SUBTASKS = "SELECT subtasks,team_id FROM tasks WHERE task_id=$1 AND team_id=ANY($2::text[])"
+_SQL_SET_SUBTASKS = "UPDATE tasks SET subtasks=$1,updated_at=NOW() WHERE task_id=$2 AND team_id=ANY($3::text[]) RETURNING *"
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env")
@@ -81,7 +88,14 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 def _bg(coro, *, label: str = "background") -> asyncio.Task:
     """Schedule *coro* as a fire-and-forget background task.
     Any exception it raises is caught and logged rather than becoming an
-    unhandled asyncio exception that would silently pollute stderr."""
+    unhandled asyncio exception that would silently pollute stderr.
+
+    NOTE: asyncio tasks are in-process only. A Railway dyno restart drops all
+    pending _bg() tasks silently. For critical side-effects (approval emails,
+    automation triggers) that must survive restarts, persist the intent to a DB
+    queue table first, then process from a cron worker. This is a known
+    limitation — do not add new critical workflows as bare _bg() calls.
+    """
     async def _run() -> None:
         try:
             await coro
@@ -89,7 +103,18 @@ def _bg(coro, *, label: str = "background") -> asyncio.Task:
             logger.warning("background task '%s' failed: %s", label, exc)
     return asyncio.create_task(_run())
 
+_SENTRY_DSN = os.environ.get("SENTRY_DSN")
+if _SENTRY_DSN:
+    sentry_sdk.init(
+        dsn=_SENTRY_DSN,
+        traces_sample_rate=0.1,
+        environment=os.environ.get("RAILWAY_ENVIRONMENT", "production"),
+    )
+
 app = FastAPI(title="Kartavya API v2", description="Team task management by Aekam Inc")
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_middleware(SlowAPIMiddleware)
 api_router = APIRouter(prefix="/api")
 
 # ── CORS ──────────────────────────────────────────
@@ -145,6 +170,10 @@ async def clear_request_cache(request, call_next):
 
 from utils import now_utc, parse_dt, get_db  # noqa: E402 — after FastAPI imports
 
+def actor_display(user: dict, fallback: str = "Someone") -> str:
+    """Return the best display name for a user dict. Prefers full_name > name > email."""
+    return user.get("full_name") or user.get("name") or user.get("email") or fallback
+
 async def get_visible_team_ids(pool, user_id, role=None, _user_dict=None):
     """Return team IDs visible to user_id.
 
@@ -197,26 +226,34 @@ async def is_project_member(pool, team_id: str, user: dict) -> dict | None:
     )
 
 async def normalize_orders(pool, scope_col, scope_val, column_id):
-    """Re-sequence sort_order for all tasks in the given column, closing any gaps."""
+    """Re-sequence sort_order for all tasks in the given column, closing any gaps.
+
+    Holds a pg_advisory_xact_lock keyed on (scope_val, column_id) so concurrent
+    move operations on the same column don't interleave and corrupt sort_order.
+    """
     if scope_col not in _VALID_SCOPE_COLS:
         raise ValueError(f"Invalid scope_col: {scope_col!r}")
-    rows = await pool.fetch(
-        f"SELECT task_id FROM tasks WHERE {scope_col}=$1 AND column_id=$2 ORDER BY sort_order ASC, updated_at ASC",
-        scope_val, column_id,
-    )
-    if not rows:
-        return
-    # Bulk-update all sort_orders in a single query using a VALUES list
-    values_sql = ",".join(f"(${i*2+1}::int, ${i*2+2}::text)" for i in range(len(rows)))
-    params = []
-    for idx, row in enumerate(rows):
-        params.extend([idx, row["task_id"]])
-    await pool.execute(
-        f"UPDATE tasks SET sort_order=v.idx, updated_at=NOW() "
-        f"FROM (VALUES {values_sql}) AS v(idx, task_id) "
-        f"WHERE tasks.task_id=v.task_id",
-        *params,
-    )
+    import hashlib
+    lock_key = int(hashlib.md5(f"{scope_val}:{column_id}".encode()).hexdigest()[:15], 16) % (2**63)
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            await conn.execute("SELECT pg_advisory_xact_lock($1)", lock_key)
+            rows = await conn.fetch(
+                f"SELECT task_id FROM tasks WHERE {scope_col}=$1 AND column_id=$2 ORDER BY sort_order ASC, updated_at ASC",
+                scope_val, column_id,
+            )
+            if not rows:
+                return
+            values_sql = ",".join(f"(${i*2+1}::int, ${i*2+2}::text)" for i in range(len(rows)))
+            params = []
+            for idx, row in enumerate(rows):
+                params.extend([idx, row["task_id"]])
+            await conn.execute(
+                f"UPDATE tasks SET sort_order=v.idx, updated_at=NOW() "
+                f"FROM (VALUES {values_sql}) AS v(idx, task_id) "
+                f"WHERE tasks.task_id=v.task_id",
+                *params,
+            )
 
 async def create_notification(pool, user_id, notif_type, title, message, task_id=None, team_id=None, url=None, push=True):
     """Insert a notification row and fire a Web Push if the user has a subscription.
@@ -230,29 +267,35 @@ async def create_notification(pool, user_id, notif_type, title, message, task_id
     )
     if not push: return
     # Fire Web Push (browser) + Expo Push (mobile) — both non-blocking
-    asyncio.create_task(send_web_push(pool, user_id=user_id, title=title, body=message, url=url or "/"))
-    asyncio.create_task(send_expo_push(pool, user_id=user_id, title=title, body=message, url=url or "/", task_id=task_id))
+    _bg(send_web_push(pool, user_id=user_id, title=title, body=message, url=url or "/"), label="web_push")
+    _bg(send_expo_push(pool, user_id=user_id, title=title, body=message, url=url or "/", task_id=task_id), label="expo_push")
 
 async def _replace_task_reminders(pool, task_id: str, due_dt, reminders: List["ReminderIn"]) -> List["ReminderOut"]:
     """Delete unsent reminders for a task and insert the new set, computed off due_dt.
 
+    Wrapped in a transaction so a failed INSERT rolls back the DELETE — reminders
+    are never left in a partially-written state.
     Reminders whose offset isn't in REMINDER_OFFSETS, whose channels aren't a
     recognized subset, or whose computed fire_at has already passed are skipped.
     """
-    await pool.execute("DELETE FROM task_reminders WHERE task_id=$1 AND sent_at IS NULL", task_id)
-    if not due_dt or not reminders: return []
+    if not due_dt or not reminders:
+        await pool.execute("DELETE FROM task_reminders WHERE task_id=$1 AND sent_at IS NULL", task_id)
+        return []
     now = now_utc(); out = []
-    for r in reminders:
-        if r.offset_minutes not in REMINDER_OFFSETS: continue
-        channels = [c for c in r.channels if c in REMINDER_CHANNELS] or ["in_app"]
-        fire_at = due_dt - timedelta(minutes=r.offset_minutes)
-        if fire_at <= now: continue
-        row = await pool.fetchrow(
-            """INSERT INTO task_reminders (task_id,offset_minutes,channel_inapp,channel_push,channel_email,fire_at)
-               VALUES ($1,$2,$3,$4,$5,$6) RETURNING *""",
-            task_id, r.offset_minutes, "in_app" in channels, "push" in channels, "email" in channels, fire_at,
-        )
-        out.append(_reminder_row_to_out(row))
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            await conn.execute("DELETE FROM task_reminders WHERE task_id=$1 AND sent_at IS NULL", task_id)
+            for r in reminders:
+                if r.offset_minutes not in REMINDER_OFFSETS: continue
+                channels = [c for c in r.channels if c in REMINDER_CHANNELS] or ["in_app"]
+                fire_at = due_dt - timedelta(minutes=r.offset_minutes)
+                if fire_at <= now: continue
+                row = await conn.fetchrow(
+                    """INSERT INTO task_reminders (task_id,offset_minutes,channel_inapp,channel_push,channel_email,fire_at)
+                       VALUES ($1,$2,$3,$4,$5,$6) RETURNING *""",
+                    task_id, r.offset_minutes, "in_app" in channels, "push" in channels, "email" in channels, fire_at,
+                )
+                out.append(_reminder_row_to_out(row))
     return out
 
 def _reminder_row_to_out(row) -> "ReminderOut":
@@ -543,6 +586,8 @@ async def reorder_columns(team_id:str,body:dict,pool=Depends(get_db),user=Depend
     mem=await is_project_member(pool,team_id,user)
     if not mem or mem["role"] not in ("owner","admin"): raise HTTPException(403)
     ordered_ids = body.get("ordered_ids", [])
+    if not isinstance(ordered_ids, list): raise HTTPException(400,"ordered_ids must be a list")
+    if len(ordered_ids) > 100: raise HTTPException(400,"Too many columns in reorder request")
     if ordered_ids:
         values_sql = ",".join(f"(${i*2+1}::int, ${i*2+2}::text)" for i in range(len(ordered_ids)))
         params = []
@@ -645,6 +690,8 @@ async def remove_client_from_task(task_id:str,target_user_id:str,pool=Depends(ge
 @api_router.post("/client/tasks/request", response_model=TaskOut)
 async def client_request_task(payload:TaskCreate,pool=Depends(get_db),user=Depends(require_user)):
     """Create a task request from a client user, pending team approval."""
+    if user.get("role") != "client":
+        raise HTTPException(403, "Only client users can submit task requests")
     if not payload.team_id: raise HTTPException(400,"team_id required")
     assignment=await pool.fetchrow("SELECT role FROM project_assignments WHERE team_id=$1 AND user_id=$2",payload.team_id,user["user_id"])
     if not assignment: raise HTTPException(403,"Not a project member")
@@ -657,7 +704,7 @@ async def client_request_task(payload:TaskCreate,pool=Depends(get_db),user=Depen
     column_id=first_col["column_id"] if first_col else None
     max_row=await pool.fetchrow("SELECT MAX(sort_order) AS mo FROM tasks WHERE team_id=$1 AND column_id=$2",payload.team_id,column_id)
     next_order=(max_row["mo"] or -1)+1; task_id=f"task_{uuid.uuid4().hex[:12]}"
-    actor_name=user.get("full_name") or user.get("name") or user.get("email","")
+    actor_name=actor_display(user)
     atts_json=json.dumps([a.model_dump() for a in (payload.attachments or [])])
     row=await pool.fetchrow("""
         INSERT INTO tasks (task_id,team_id,column_id,created_by_user_id,created_by_name,
@@ -819,7 +866,7 @@ async def _approve_task_send_client(
     )
     try:
         from email_service import send_approval_request_email
-        approver_name = user.get("full_name") or user.get("name") or user.get("email", "Team")
+        approver_name = actor_display(user, "Team")
         send_approval_request_email(
             client_email, client["name"] or client_email,
             approver_name, task["title"],
@@ -934,7 +981,7 @@ async def _review_approval_inner(approval_id:str,body:dict,pool,user):
                     "SELECT email, COALESCE(full_name, name, email) AS name FROM users WHERE user_id=$1",
                     approval["requested_by"]
                 )
-                reviewer_name = user.get("full_name") or user.get("name") or user.get("email", "")
+                reviewer_name = actor_display(user, "")
                 if requester and requester["email"]:
                     from email_service import send_request_approved_email
                     send_request_approved_email(
@@ -976,7 +1023,7 @@ async def add_comment(task_id:str,body:CommentCreate,pool=Depends(get_db),user=D
             for c in cr:
                 if c["user_id"]!=user["user_id"]: recipients.add(c["user_id"])
             preview=body.body[:140]+("…" if len(body.body)>140 else "")
-            actor_name=user.get("full_name") or user.get("name") or user.get("email","")
+            actor_name=actor_display(user)
             for rid in recipients:
                 await create_notification(pool,rid,"comment",f"New comment on {task['title']}",f"{actor_name}: {preview}",task_id,task["team_id"],"/tasks")
             if recipients:
@@ -1000,7 +1047,7 @@ async def add_comment(task_id:str,body:CommentCreate,pool=Depends(get_db),user=D
             await log_event(pool,task_id=task_id,actor_id=user["user_id"],event_type="commented",data={"preview":preview[:80]})
     except Exception as e:
         logger.warning("comment fan-out failed: %s", e)
-    actor_name=user.get("full_name") or user.get("name") or user.get("email","")
+    actor_name=actor_display(user)
     return CommentOut(comment_id=row["comment_id"],task_id=row["task_id"],user_id=row["user_id"],user_name=actor_name,body=row["body"],created_at=row["created_at"])
 
 @api_router.put("/tasks/{task_id}/comments/{comment_id}",response_model=CommentOut)
@@ -1015,7 +1062,7 @@ async def edit_comment(task_id:str,comment_id:str,body:CommentCreate,pool=Depend
         from services.activity_logger import log_event
         await log_event(pool,task_id=task_id,actor_id=user["user_id"],event_type="comment_edited",data={"preview":body.body[:80]})
     except Exception as _e: logger.debug("activity log failed (comment_edited): %s", _e)
-    actor_name=user.get("full_name") or user.get("name") or user.get("email","")
+    actor_name=actor_display(user)
     return CommentOut(comment_id=updated["comment_id"],task_id=updated["task_id"],user_id=updated["user_id"],user_name=actor_name,body=updated["body"],created_at=updated["created_at"])
 
 @api_router.delete("/tasks/{task_id}/comments/{comment_id}")
@@ -1035,12 +1082,13 @@ async def delete_comment(task_id:str,comment_id:str,pool=Depends(get_db),user=De
 @api_router.post("/tasks/{task_id}/subtasks",response_model=TaskOut)
 async def add_subtask(task_id:str,body:Subtask,pool=Depends(get_db),user=Depends(require_user)):
     """Append a new subtask to a task's subtask list."""
-    task=await pool.fetchrow(_SQL_GET_SUBTASKS,task_id)
+    team_ids=await get_visible_team_ids(pool,user["user_id"],_user_dict=user)
+    task=await pool.fetchrow(_SQL_GET_SUBTASKS,task_id,team_ids)
     if not task: raise HTTPException(404)
     subtasks=json.loads(task["subtasks"] or "[]")
     new_sub={"subtask_id":f"sub_{uuid.uuid4().hex[:12]}","title":body.title,"is_done":False,"order":len(subtasks)}
     subtasks.append(new_sub)
-    row=await pool.fetchrow(_SQL_SET_SUBTASKS,json.dumps(subtasks),task_id)
+    row=await pool.fetchrow(_SQL_SET_SUBTASKS,json.dumps(subtasks),task_id,team_ids)
     if not row: raise HTTPException(404, "Task not found")
     try:
         from services.activity_logger import log_event
@@ -1051,24 +1099,26 @@ async def add_subtask(task_id:str,body:Subtask,pool=Depends(get_db),user=Depends
 @api_router.patch("/tasks/{task_id}/subtasks/{subtask_id}",response_model=TaskOut)
 async def toggle_subtask(task_id:str,subtask_id:str,pool=Depends(get_db),user=Depends(require_user)):
     """Toggle the is_done flag on a subtask."""
-    task=await pool.fetchrow(_SQL_GET_SUBTASKS,task_id)
+    team_ids=await get_visible_team_ids(pool,user["user_id"],_user_dict=user)
+    task=await pool.fetchrow(_SQL_GET_SUBTASKS,task_id,team_ids)
     if not task: raise HTTPException(404)
     subtasks=json.loads(task["subtasks"] or "[]")
     for s in subtasks:
         if s["subtask_id"]==subtask_id: s["is_done"]=not s.get("is_done",False)
-    row=await pool.fetchrow(_SQL_SET_SUBTASKS,json.dumps(subtasks),task_id)
+    row=await pool.fetchrow(_SQL_SET_SUBTASKS,json.dumps(subtasks),task_id,team_ids)
     if not row: raise HTTPException(404, "Task not found")
     return row_to_task(row)
 
 @api_router.delete("/tasks/{task_id}/subtasks/{subtask_id}",response_model=TaskOut)
 async def delete_subtask(task_id:str,subtask_id:str,pool=Depends(get_db),user=Depends(require_user)):
     """Remove a subtask from a task's subtask list by its ID."""
-    task=await pool.fetchrow(_SQL_GET_SUBTASKS,task_id)
+    team_ids=await get_visible_team_ids(pool,user["user_id"],_user_dict=user)
+    task=await pool.fetchrow(_SQL_GET_SUBTASKS,task_id,team_ids)
     if not task: raise HTTPException(404)
     subtasks=json.loads(task["subtasks"] or "[]")
     removed=[s for s in subtasks if s["subtask_id"]==subtask_id]
     subtasks=[s for s in subtasks if s["subtask_id"]!=subtask_id]
-    row=await pool.fetchrow(_SQL_SET_SUBTASKS,json.dumps(subtasks),task_id)
+    row=await pool.fetchrow(_SQL_SET_SUBTASKS,json.dumps(subtasks),task_id,team_ids)
     if not row: raise HTTPException(404, "Task not found")
     try:
         from services.activity_logger import log_event
@@ -1084,14 +1134,22 @@ class SubtaskPatch(BaseModel):
 @api_router.put("/tasks/{task_id}/subtasks/{subtask_id}",response_model=TaskOut)
 async def update_subtask(task_id:str,subtask_id:str,body:SubtaskPatch,pool=Depends(get_db),user=Depends(require_user)):
     """Update the title or assignee of an existing subtask."""
-    task=await pool.fetchrow(_SQL_GET_SUBTASKS,task_id)
+    team_ids=await get_visible_team_ids(pool,user["user_id"],_user_dict=user)
+    task=await pool.fetchrow(_SQL_GET_SUBTASKS,task_id,team_ids)
     if not task: raise HTTPException(404)
     subtasks=json.loads(task["subtasks"] or "[]")
     for s in subtasks:
         if s["subtask_id"]==subtask_id:
-            if body.assignee_user_id is not None: s["assignee_user_id"]=body.assignee_user_id
+            if body.assignee_user_id is not None:
+                # Validate the assignee belongs to this task's team
+                member=await pool.fetchrow(
+                    "SELECT 1 FROM project_assignments WHERE team_id=$1 AND user_id=$2 UNION SELECT 1 FROM team_members WHERE team_id=$1 AND user_id=$2 AND status='active' LIMIT 1",
+                    task["team_id"], body.assignee_user_id
+                )
+                if not member: raise HTTPException(400,"Assignee is not a member of this project")
+                s["assignee_user_id"]=body.assignee_user_id
             if body.title is not None: s["title"]=body.title
-    row=await pool.fetchrow(_SQL_SET_SUBTASKS,json.dumps(subtasks),task_id)
+    row=await pool.fetchrow(_SQL_SET_SUBTASKS,json.dumps(subtasks),task_id,team_ids)
     if not row: raise HTTPException(404, "Task not found")
     return row_to_task(row)
 
@@ -1293,6 +1351,8 @@ async def purge_team(team_id:str,pool=Depends(get_db),user=Depends(require_admin
 @api_router.patch("/teams/{team_id}/color")
 async def set_team_color(team_id:str,body:dict,pool=Depends(get_db),user=Depends(require_user)):
     """Set project colour (hex string). Any project member can update."""
+    mem=await is_project_member(pool,team_id,user)
+    if not mem: raise HTTPException(403,"Not a project member")
     color = body.get("color")
     if not color or not isinstance(color, str) or not color.startswith("#"):
         raise HTTPException(400, "color must be a hex string e.g. #05b7aa")
@@ -1335,6 +1395,7 @@ async def delete_category(category_id:str,pool=Depends(get_db),user=Depends(requ
 async def list_tasks(status:Optional[str]=None,category_id:Optional[str]=None,q:Optional[str]=None,
                      team_id:Optional[str]=None,assigned_to_me:Optional[bool]=None,
                      archived:Optional[bool]=False,
+                     limit:Optional[int]=500,offset:Optional[int]=0,
                      pool=Depends(get_db),user=Depends(require_user)):
     """Return all tasks visible to the user, with optional filters for status, category, team, and search."""
     team_ids=await get_visible_team_ids(pool,user["user_id"],_user_dict=user)
@@ -1351,6 +1412,10 @@ async def list_tasks(status:Optional[str]=None,category_id:Optional[str]=None,q:
     if category_id:    conditions.append(f"t.category_id=${len(vals)+1}");   vals.append(category_id)
     if q:              conditions.append(f"t.title ILIKE ${len(vals)+1}");    vals.append(f"%{q}%")
     if assigned_to_me: conditions.append(f"${len(vals)+1}=ANY(t.assignee_user_ids)"); vals.append(user["user_id"])
+    _lim = min(limit if limit is not None else 500, 500)
+    _off = max(offset if offset is not None else 0, 0)
+    _lim_idx = len(vals) + 1
+    _off_idx = len(vals) + 2
     rows=await pool.fetch(f"""
         SELECT t.*,
                COALESCE(cu.full_name,cu.name,cu.email) AS created_by_name,
@@ -1366,7 +1431,8 @@ async def list_tasks(status:Optional[str]=None,category_id:Optional[str]=None,q:
         LEFT JOIN project_columns pc ON pc.column_id=t.column_id
         WHERE {' AND '.join(conditions)}
         ORDER BY t.sort_order ASC
-    """,*vals)
+        LIMIT ${_lim_idx} OFFSET ${_off_idx}
+    """,*vals, _lim, _off)
     return [row_to_task(r) for r in rows]
 
 
@@ -1442,7 +1508,7 @@ async def create_task(payload:TaskCreate,pool=Depends(get_db),user=Depends(requi
     reminder_dt=parse_dt(payload.reminder_at) or (due_dt-timedelta(hours=2) if due_dt else None)
     max_row=await pool.fetchrow(f"SELECT MAX(sort_order) AS mo FROM tasks WHERE {scope_col}=$1 AND column_id=$2",scope_val,column_id)
     next_order=(max_row["mo"] or -1)+1; task_id=f"task_{uuid.uuid4().hex[:12]}"
-    actor_name=user.get("full_name") or user.get("name") or user.get("email","")
+    actor_name=actor_display(user)
     row=await pool.fetchrow("""
         INSERT INTO tasks (task_id,user_id,team_id,column_id,created_by_user_id,assigned_by_user_id,
            created_by_name,title,description,status,priority,category_id,tags,assignee_user_ids,assignee_emails,
@@ -1482,7 +1548,7 @@ async def create_task(payload:TaskCreate,pool=Depends(get_db),user=Depends(requi
 
 async def _notify_status_changed(pool, row, existing, old_status: str, new_status: str, actor: dict, task_id: str):
     """Fan-out in-app + email notifications after a task status change."""
-    actor_name   = actor.get("full_name") or actor.get("name") or actor.get("email", "Someone")
+    actor_name   = actor_display(actor, "Someone")
     actor_id     = actor["user_id"]
     assignees    = list(row.get("assignee_user_ids") or [])
     creator_id   = existing["created_by_user_id"]
@@ -1690,7 +1756,7 @@ async def update_task(task_id:str,payload:TaskUpdate,pool=Depends(get_db),user=D
         if added:
             try:
                 from services.push_service import fan_out_push
-                actor_name=user.get("full_name") or user.get("name") or user.get("email","Someone")
+                actor_name=actor_display(user, "Someone")
                 asyncio.create_task(fan_out_push(
                     pool,
                     recipient_ids=[u for u in added if u!=user["user_id"]],

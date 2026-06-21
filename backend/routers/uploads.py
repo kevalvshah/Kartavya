@@ -7,6 +7,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query
 
 from auth_router import require_user
+from db import get_pool
 from services.storage import upload_file
 
 router = APIRouter(prefix="/api", tags=["uploads"])
@@ -35,6 +36,20 @@ ALLOWED_TYPES = {
     "text/plain",
 }
 
+# Magic-byte signatures for server-side type sniffing (offset, bytes)
+_MAGIC: list[tuple[bytes, str]] = [
+    (b"\xff\xd8\xff",             "image/jpeg"),
+    (b"\x89PNG\r\n\x1a\n",       "image/png"),
+    (b"GIF87a",                   "image/gif"),
+    (b"GIF89a",                   "image/gif"),
+    (b"RIFF",                     "video/webm"),   # also WAV — ext disambiguates
+    (b"\x1aE\xdf\xa3",           "video/webm"),
+    (b"%PDF",                     "application/pdf"),
+    (b"PK\x03\x04",              "application/zip"),  # .docx/.xlsx/.pptx are ZIP
+    (b"\xd0\xcf\x11\xe0",        "application/msword"),  # legacy .doc/.xls/.ppt
+    (b"ftyp",                     "video/mp4"),    # checked at offset 4
+]
+
 VIDEO_EXTENSIONS = {".mov", ".mp4", ".webm", ".avi", ".mkv"}
 
 ALLOWED_EXTENSIONS = {
@@ -47,30 +62,68 @@ ALLOWED_EXTENSIONS = {
 } | VIDEO_EXTENSIONS
 
 
+def _sniff_mime(header: bytes, ext: str, claimed: str) -> str:
+    """Return a MIME type based on magic bytes, falling back to claimed value."""
+    for magic, mime in _MAGIC:
+        if header.startswith(magic):
+            return mime
+    # mp4 ftyp box is at byte 4
+    if len(header) >= 8 and header[4:8] == b"ftyp":
+        return "video/mp4"
+    # HEIC/HEIF have no reliable magic — trust extension
+    if ext in {".heic", ".heif"}:
+        return f"image/{ext.lstrip('.')}"
+    return claimed
+
+
 @router.post("/upload")
 async def upload(
     file: UploadFile = File(...),
     team_id: Optional[str] = Query(None),
+    pool=Depends(get_pool),
     user=Depends(require_user),
 ):
-    content = await file.read()
+    # Validate team membership before accepting the upload
+    if team_id:
+        member = await pool.fetchrow(
+            "SELECT 1 FROM project_assignments WHERE team_id=$1 AND user_id=$2 "
+            "UNION SELECT 1 FROM team_members WHERE team_id=$1 AND user_id=$2 AND status='active' LIMIT 1",
+            team_id, user["user_id"]
+        )
+        if not member and user.get("role") != "admin":
+            raise HTTPException(403, "Not a member of this project")
 
     fname = (file.filename or "upload").lower()
     ext   = "." + fname.rsplit(".", 1)[-1] if "." in fname else ""
-    mime  = file.content_type or mimetypes.guess_type(file.filename or "")[0] or "application/octet-stream"
-
-    is_video = ext in VIDEO_EXTENSIONS or mime.startswith("video/")
+    is_video = ext in VIDEO_EXTENSIONS
     limit    = MAX_BYTES_VIDEO if is_video else MAX_BYTES
 
-    if len(content) > limit:
-        label = "50 MB" if is_video else "5 MB"
-        raise HTTPException(400, f"File exceeds {label} limit")
+    # Stream with early abort — never buffer more than limit+1 bytes
+    chunks: list[bytes] = []
+    total = 0
+    async for chunk in file:
+        total += len(chunk)
+        if total > limit:
+            label = "50 MB" if is_video else "5 MB"
+            raise HTTPException(413, f"File exceeds {label} limit")
+        chunks.append(chunk)
+    content = b"".join(chunks)
+
+    claimed_mime = file.content_type or mimetypes.guess_type(file.filename or "")[0] or "application/octet-stream"
+    mime = _sniff_mime(content[:16], ext, claimed_mime)
+
+    # Zip-based Office formats: trust extension to pick the right MIME
+    if mime == "application/zip" and ext in (".docx", ".xlsx", ".pptx", ".odt", ".ods"):
+        type_map = {
+            ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        }
+        mime = type_map.get(ext, mime)
 
     if mime not in ALLOWED_TYPES and ext not in ALLOWED_EXTENSIONS:
         raise HTTPException(415, "File type not allowed. Supported: images, video, PDF, Word, Excel, PowerPoint.")
 
-    if ext in {".heic", ".heif"} and mime == "application/octet-stream":
-        mime = f"image/{ext.lstrip('.')}"
     if ext in VIDEO_EXTENSIONS and mime == "application/octet-stream":
         mime = "video/quicktime" if ext == ".mov" else f"video/{ext.lstrip('.')}"
 

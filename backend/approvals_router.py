@@ -9,8 +9,21 @@ from pydantic import BaseModel, EmailStr
 from typing import Optional, List
 from datetime import datetime, timezone
 import asyncio
+import logging as _logging
 import uuid
 import jwt as _jwt
+
+_logger = _logging.getLogger(__name__)
+
+
+def _bg_push(coro, label: str = "push"):
+    """Schedule a push coroutine as fire-and-forget, logging any exception."""
+    async def _run():
+        try:
+            await coro
+        except Exception as exc:
+            _logger.warning("bg push '%s' failed: %s", label, exc)
+    return asyncio.create_task(_run())
 
 from auth_router import require_user, JWT_SECRET as _JWT_SECRET
 from db import get_pool
@@ -140,7 +153,7 @@ async def send_approval_notification(pool, task_id: str, task_title: str,
                 "approved": "The task has been approved.",
                 "rejected": "The task was sent back for revision.",
             }.get(notification_type, "")
-            asyncio.ensure_future(send_push(
+            _bg_push(send_push(
                 pool,
                 recipient_id=recipient_id,
                 kind=notification_type if notification_type in ("approved", "rejected") else "approval_request",
@@ -148,7 +161,7 @@ async def send_approval_notification(pool, task_id: str, task_title: str,
                 body=_push_body,
                 task_id=task_id,
                 is_mine=True,
-            ))
+            ), "approval-push")
         except Exception as exc:
             import logging; logging.getLogger(__name__).warning("approval push failed: %s", exc)
 
@@ -305,6 +318,7 @@ async def get_pending_approvals(pool=Depends(get_pool), user=Depends(require_use
     """Return all tasks with approval_status='pending' that the user can action."""
     user_data = await pool.fetchrow(_SQL_USER_ROLE, user["user_id"])
     if user_data and user_data["role"] == "admin":
+        # Admins see only teams they are actually a member of — no cross-team data leak.
         tasks = await pool.fetch("""
             SELECT t.*, u.name AS created_by_name, u.email AS created_by_email,
                    tm.name AS team_name
@@ -312,8 +326,12 @@ async def get_pending_approvals(pool=Depends(get_pool), user=Depends(require_use
             JOIN users u ON u.user_id = t.created_by_user_id
             LEFT JOIN teams tm ON tm.team_id = t.team_id
             WHERE t.approval_status = 'pending'
+              AND (
+                EXISTS (SELECT 1 FROM project_assignments pa WHERE pa.team_id=t.team_id AND pa.user_id=$1)
+                OR EXISTS (SELECT 1 FROM team_members tmem WHERE tmem.team_id=t.team_id AND tmem.user_id=$1 AND tmem.status='active')
+              )
             ORDER BY t.approval_requested_at DESC
-        """)
+        """, user["user_id"])
     else:
         tasks = await pool.fetch("""
             SELECT t.*, u.name AS created_by_name, u.email AS created_by_email,
@@ -379,23 +397,15 @@ async def client_approve_task(task_id: str, payload: ApprovalRequest,
                                pool=Depends(get_pool), user=Depends(require_user)):
     """Allow an authenticated client user to approve a pending_client task."""
     task   = await get_task_with_permission(pool, task_id, user["user_id"])
+    # Only explicit task_clients entries may approve — not general project members.
+    # Admins retain override access to unblock stuck approvals.
     if user.get("role") != "admin":
         access = await pool.fetchrow(
-            "SELECT 1 FROM project_assignments WHERE team_id=$1 AND user_id=$2",
-            task["team_id"], user["user_id"]
+            "SELECT 1 FROM task_clients WHERE task_id=$1 AND user_id=$2",
+            task_id, user["user_id"]
         )
         if not access:
-            access = await pool.fetchrow(
-                "SELECT 1 FROM team_members WHERE team_id=$1 AND user_id=$2 AND status='active'",
-                task["team_id"], user["user_id"]
-            )
-        if not access:
-            access = await pool.fetchrow(
-                "SELECT 1 FROM task_clients WHERE task_id=$1 AND user_id=$2",
-                task_id, user["user_id"]
-            )
-        if not access:
-            raise HTTPException(403, "You are not authorized to approve this task")
+            raise HTTPException(403, "Only the assigned client can approve this task")
 
     done_col = await pool.fetchrow(
         "SELECT column_id FROM project_columns WHERE team_id=$1 AND is_done=TRUE ORDER BY sort_order DESC LIMIT 1",
@@ -449,10 +459,10 @@ async def client_approve_task(task_id: str, payload: ApprovalRequest,
                 await _notify(pool, task_id, task["title"], r["user_id"], "approved", payload.notes, team_id=task.get("team_id"))
             except Exception:
                 pass
-            asyncio.create_task(send_web_push(pool, user_id=r["user_id"], title=notif_title, body=notif_body, url=task_url))
-            asyncio.create_task(send_expo_push(pool, user_id=r["user_id"], title=notif_title, body=notif_body, url=task_url, task_id=task_id))
+            _bg_push(send_web_push(pool, user_id=r["user_id"], title=notif_title, body=notif_body, url=task_url), "web-push")
+            _bg_push(send_expo_push(pool, user_id=r["user_id"], title=notif_title, body=notif_body, url=task_url, task_id=task_id), "expo-push")
     except Exception as exc:
-        import logging; logging.getLogger(__name__).warning("team-sync fan-out failed: %s", exc)
+        _logger.warning("team-sync fan-out failed: %s", exc)
 
     return {"message": "Task approved by client", "approval_status": "approved",
             "new_column_id": new_col_id}
@@ -550,10 +560,10 @@ async def approve_by_token(token: str, payload_body: ApprovalRequest, pool=Depen
                 await _notify(pool, task_id, task["title"], r["user_id"], "approved", payload_body.notes, team_id=task.get("team_id"))
             except Exception:
                 pass
-            asyncio.create_task(send_web_push(pool, user_id=r["user_id"], title=notif_title, body=notif_body, url=task_url))
-            asyncio.create_task(send_expo_push(pool, user_id=r["user_id"], title=notif_title, body=notif_body, url=task_url, task_id=task_id))
+            _bg_push(send_web_push(pool, user_id=r["user_id"], title=notif_title, body=notif_body, url=task_url), "web-push")
+            _bg_push(send_expo_push(pool, user_id=r["user_id"], title=notif_title, body=notif_body, url=task_url, task_id=task_id), "expo-push")
     except Exception as exc:
-        import logging; logging.getLogger(__name__).warning("team-sync fan-out failed: %s", exc)
+        _logger.warning("team-sync fan-out failed: %s", exc)
     return {"message": "Task approved by client", "approval_status": "approved"}
 
 
@@ -599,21 +609,11 @@ async def client_reject_task(task_id: str, payload: ApprovalRequest,
     task   = await get_task_with_permission(pool, task_id, user["user_id"])
     if user.get("role") != "admin":
         access = await pool.fetchrow(
-            "SELECT 1 FROM project_assignments WHERE team_id=$1 AND user_id=$2",
-            task["team_id"], user["user_id"]
+            "SELECT 1 FROM task_clients WHERE task_id=$1 AND user_id=$2",
+            task_id, user["user_id"]
         )
         if not access:
-            access = await pool.fetchrow(
-                "SELECT 1 FROM team_members WHERE team_id=$1 AND user_id=$2 AND status='active'",
-                task["team_id"], user["user_id"]
-            )
-        if not access:
-            access = await pool.fetchrow(
-                "SELECT 1 FROM task_clients WHERE task_id=$1 AND user_id=$2",
-                task_id, user["user_id"]
-            )
-        if not access:
-            raise HTTPException(403, "You are not authorized to reject this task")
+            raise HTTPException(403, "Only the assigned client can reject this task")
 
     if not payload.notes or not payload.notes.strip():
         raise HTTPException(400, _REJECTION_REQUIRED)

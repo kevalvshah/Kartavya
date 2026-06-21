@@ -112,7 +112,7 @@ async def send_push(
         if not tokens:
             return
 
-        payload_data = data or {}
+        payload_data = dict(data) if data else {}
         if task_id:
             payload_data["taskId"] = task_id
 

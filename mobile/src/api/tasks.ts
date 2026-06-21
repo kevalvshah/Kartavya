@@ -64,9 +64,7 @@ export const tasksApi = {
 
   // Attachments
   uploadAttachment: (taskId: string, formData: FormData) =>
-    apiClient.post<Task>(`/tasks/${taskId}/attachments`, formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    }).then(r => r.data),
+    apiClient.post<Task>(`/tasks/${taskId}/attachments`, formData).then(r => r.data),
 
   deleteAttachment: (taskId: string, key: string) =>
     apiClient.delete(`/tasks/${taskId}/attachments/${encodeURIComponent(key)}`).then(r => r.data),

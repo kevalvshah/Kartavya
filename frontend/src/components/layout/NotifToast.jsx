@@ -154,7 +154,7 @@ export function NotifToastContainer({ toasts, onDismiss }) {
         }
       `}</style>
       <div style={{
-        position: 'fixed', bottom: 20, right: 20, zIndex: 9999,
+        position: 'fixed', bottom: 'max(20px, env(safe-area-inset-bottom))', right: 20, zIndex: 9999,
         display: 'flex', flexDirection: 'column', gap: 10,
         alignItems: 'flex-end',
         pointerEvents: 'none',

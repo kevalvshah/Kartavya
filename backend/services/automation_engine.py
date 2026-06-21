@@ -33,8 +33,25 @@ async def run_automation(automation: dict, context: dict, pool) -> dict:
         cfg = action.get("config", {})
         try:
             if action_type == "send_email":
+                to_addr = cfg.get("to")
+                if not to_addr:
+                    results.append({"action": action_type, "ok": False, "error": "missing to address"})
+                    continue
+                # Validate recipient is a workspace member to prevent data exfiltration via automation.
+                workspace_team = context.get("team_id") or context.get("task", {}).get("team_id")
+                if workspace_team:
+                    is_member = await pool.fetchval(
+                        "SELECT 1 FROM users u "
+                        "JOIN team_members tm ON tm.user_id = u.user_id "
+                        "WHERE u.email=$1 AND tm.team_id=$2 AND tm.status='active'",
+                        to_addr, workspace_team,
+                    )
+                    if not is_member:
+                        logger.warning("automation send_email blocked: %s not in team %s", to_addr, workspace_team)
+                        results.append({"action": action_type, "ok": False, "error": "recipient not in workspace"})
+                        continue
                 from email_service import send_email
-                send_email(cfg.get("to"), cfg.get("subject", "Kartavya notification"), cfg.get("html", ""))
+                send_email(to_addr, cfg.get("subject", "Kartavya notification"), cfg.get("html", ""))
                 results.append({"action": action_type, "ok": True})
 
             elif action_type == "send_notification":
@@ -87,17 +104,22 @@ async def run_automation(automation: dict, context: dict, pool) -> dict:
     return {"action_results": results}
 
 
-async def fire_automations(pool, event_type: str, context: dict):
+async def fire_automations(pool, event_type: str, context: dict, _depth: int = 0):
     """
     Called from routers after mutations. Finds matching automations and runs them.
     Non-blocking: swallows all errors.
+    _depth guards against infinite recursion when a change_status automation
+    triggers another status_changed event (max 3 levels deep).
     """
+    if _depth > 3:
+        logger.warning("fire_automations: max recursion depth reached, aborting chain")
+        return
     try:
         team_id = context.get("team_id") or context.get("task", {}).get("team_id")
         if not team_id:
             return
         automations = await pool.fetch(
-            "SELECT * FROM automations WHERE team_id=$1 AND enabled=TRUE",
+            "SELECT * FROM automations WHERE team_id=$1 AND enabled=TRUE ORDER BY created_at ASC LIMIT 50",
             team_id
         )
         for auto in automations:

@@ -71,6 +71,11 @@ _FONT_UI    = "Inter, -apple-system, 'Helvetica Neue', Arial, sans-serif"
 _FONT_HINDI = "'Tiro Devanagari Hindi', 'Noto Serif Devanagari', 'Newsreader', Georgia, serif"
 
 
+def _safe_subject(s: str) -> str:
+    """Strip CR/LF from email subject values to prevent SMTP header injection."""
+    return str(s).replace("\r", "").replace("\n", "")
+
+
 def _preheader(text: str) -> str:
     """Return an invisible preheader div shown in email client preview text."""
     return (f'<div style="display:none;font-size:1px;color:{_BG};line-height:1px;'
@@ -296,7 +301,7 @@ def send_email(to_email: str, subject: str, html_content: str,
         else:
             logger.info("[EMAIL-DEV] To:%s | Subject:%s", to_email, subject)
 
-    threading.Thread(target=_send, daemon=True).start()
+    threading.Thread(target=_send).start()
     return True
 
 
@@ -487,7 +492,7 @@ def send_approval_request_email(user_email: str, user_name: str,
     )
     return send_email(
         user_email,
-        f"Approval needed: {task_title}",
+        _safe_subject(f"Approval needed: {task_title}"),
         _base(preheader, "APPROVAL NEEDED", f"{_h(requester_name)} requested a new task.",
               "अनुमोदन हेतु अनुरोध", "", body),
     )
@@ -519,7 +524,7 @@ def send_request_approved_email(user_email: str, user_name: str,
     )
     return send_email(
         user_email,
-        f"Your request was approved: {task_title}",
+        _safe_subject(f"Your request was approved: {task_title}"),
         _base(preheader, "REQUEST APPROVED", "Your request is in the queue.",
               "अनुमोदन प्राप्त हुआ", "", body),
     )
@@ -574,7 +579,7 @@ def send_task_done_email(user_email: str, user_name: str,
     )
     return send_email(
         user_email,
-        f"Done: {task_title}",
+        _safe_subject(f"Done: {task_title}"),
         _base(preheader, "WORK COMPLETED", "Done — ready for your review.",
               "कार्य सम्पन्न", "", body),
     )
@@ -595,7 +600,7 @@ def send_task_assignment_email(user_email: str, user_name: str,
     )
     return send_email(
         user_email,
-        f"New task assigned: {task_title}",
+        _safe_subject(f"New task assigned: {task_title}"),
         _base(preheader, "NEW TASK · कार्य", "New task assigned", "नया कार्य",
               "A task has been assigned to you.", body),
     )
@@ -619,7 +624,7 @@ def send_comment_email(user_email: str, user_name: str, actor_name: str,
     )
     return send_email(
         user_email,
-        f"New comment on: {task_title}",
+        _safe_subject(f"New comment on: {task_title}"),
         _base(preheader, "COMMENT · टिप्पणी", "New comment", "टिप्पणी",
               f"{_h(actor_name)} left a comment.", body),
     )
@@ -643,7 +648,7 @@ def send_mention_email(user_email: str, user_name: str, actor_name: str,
     )
     return send_email(
         user_email,
-        f"{actor_name} mentioned you",
+        _safe_subject(f"{actor_name} mentioned you"),
         _base(preheader, "MENTION · उल्लेख", "You were mentioned", "उल्लेख",
               f"{_h(actor_name)} referenced you in a comment.", body),
     )
@@ -662,7 +667,7 @@ def send_task_reminder_email(user_email: str, user_name: str,
     )
     return send_email(
         user_email,
-        f"Reminder: {task_title}",
+        _safe_subject(f"Reminder: {task_title}"),
         _base(preheader, "REMINDER · स्मरण", "Task due soon", "समयसीमा",
               "Don't let this slip.", body),
     )
@@ -683,7 +688,7 @@ def send_team_sync_email(user_email: str, user_name: str, client_name: str,
     )
     return send_email(
         user_email,
-        f"Client approved: {task_title}",
+        _safe_subject(f"Client approved: {task_title}"),
         _base(preheader, "APPROVED · स्वीकृत", "Client approved", "अनुमोदित",
               f"{_h(client_name)} has signed off.", body),
     )
@@ -707,7 +712,7 @@ def send_approval_decision_email(user_email: str, user_name: str, reviewer_name:
     )
     return send_email(
         user_email,
-        f"Task {verb}: {task_title}",
+        _safe_subject(f"Task {verb}: {task_title}"),
         _base(preheader, f"TASK {verb.upper()} · {'स्वीकृत' if approved else 'अस्वीकृत'}",
               f"Task {verb}", "समीक्षा परिणाम",
               f"Your task has been reviewed.", body),
@@ -1034,7 +1039,7 @@ def send_report_email(
             return
         try:
             msg = MIMEMultipart("mixed")
-            msg["Subject"] = f"{freq_cap} Report: {team_name} ({period_from} to {period_to})"
+            msg["Subject"] = _safe_subject(f"{freq_cap} Report: {team_name} ({period_from} to {period_to})")
             msg["From"]    = FROM_EMAIL
             msg["To"]      = to_email
 
@@ -1068,7 +1073,7 @@ def send_report_email(
         except Exception as exc:
             logger.error("❌ Report email failed → %s: %s", to_email, exc)
 
-    threading.Thread(target=_send, daemon=True).start()
+    threading.Thread(target=_send).start()
     return True
 
 
