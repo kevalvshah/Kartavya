@@ -120,6 +120,7 @@ api_router = APIRouter(prefix="/api")
 # ── CORS ──────────────────────────────────────────
 DEFAULT_ORIGINS = [
     "https://kartavya-aekam.vercel.app",
+    "https://kartavya-production.akeam.vercel.app",
     "https://kartavya-kevalvshah03-6145s-projects.vercel.app",
     "https://kartavya-git-main-kevalvshah03-6145s-projects.vercel.app",
     "https://kartavya-git-v2-plan-kevalvshah03-6145s-projects.vercel.app",
@@ -133,10 +134,11 @@ ALLOWED_ORIGINS = list(dict.fromkeys(DEFAULT_ORIGINS + _extra))
 # company account always has full visibility, regardless of who created it.
 DEFAULT_OWNER_EMAIL = os.environ.get("DEFAULT_OWNER_EMAIL", "admin@aekaminc.com")
 
-# Scoped regex for Vercel PR preview deployments — locked to this project's Vercel tenant.
-# Pattern covers both per-commit previews (kartavya-abc123-...) and branch-alias previews
-# (kartavya-git-feat-branch-name-...). [a-z0-9-] allows hyphens in branch-derived slugs.
-_VERCEL_PREVIEW_RE = r"https://kartavya-[a-z0-9-]+-kevalvshah03-6145s-projects\.vercel\.app"
+# Regex covers PR preview deployments on both Vercel tenants (kevalvshah03 + akeam).
+_VERCEL_PREVIEW_RE = (
+    r"https://kartavya-[a-z0-9-]+-kevalvshah03-6145s-projects\.vercel\.app"
+    r"|https://kartavya-[a-z0-9-]+\.akeam\.vercel\.app"
+)
 
 app.add_middleware(
     CORSMiddleware,
