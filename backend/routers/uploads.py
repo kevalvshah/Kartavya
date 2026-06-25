@@ -2,9 +2,12 @@
 uploads.py — /api/upload endpoint backed by Cloudflare R2.
 Per-file limit: 50 MB for video, 5 MB for everything else.
 """
+import logging
 import mimetypes
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query
+
+logger = logging.getLogger(__name__)
 
 from auth_router import require_user
 from db import get_pool
@@ -134,11 +137,15 @@ async def upload(
         mime = "video/quicktime" if ext == ".mov" else f"video/{ext.lstrip('.')}"
 
     folder = f"projects/{team_id}" if team_id else None
-    result = await upload_file(
-        file_bytes=content,
-        filename=file.filename or "upload",
-        content_type=mime,
-        user_id=user["user_id"],
-        folder=folder,
-    )
+    try:
+        result = await upload_file(
+            file_bytes=content,
+            filename=file.filename or "upload",
+            content_type=mime,
+            user_id=user["user_id"],
+            folder=folder,
+        )
+    except Exception as exc:
+        logger.error("R2 upload failed for user=%s file=%s: %s", user["user_id"], file.filename, exc)
+        raise HTTPException(503, "Upload service temporarily unavailable — please try again in a moment.")
     return result
