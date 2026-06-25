@@ -50,9 +50,13 @@ export default function NewTaskModal({ open, onClose, onCreated }) {
 
   const [assignees,   setAssignees]   = useState([]);
 
-  const [files,       setFiles]       = useState([]);
+  const [files,          setFiles]          = useState([]);
 
-  const [uploading,   setUploading]   = useState(false);
+  const [uploading,      setUploading]      = useState(false);
+
+  const [uploadProgress, setUploadProgress] = useState(0);
+
+  const [uploadError,    setUploadError]    = useState('');
 
   const [projects,    setProjects]    = useState([]);
 
@@ -87,7 +91,7 @@ export default function NewTaskModal({ open, onClose, onCreated }) {
 
     setDueAt(''); setReminders([]); setDescription(''); setAssignees([]); setFiles([]);
 
-    setTitleError(false); setAssigneeOpen(false); setTemplates([]); setSubtasks([]); setShowTemplatePicker(false);
+    setTitleError(false); setAssigneeOpen(false); setTemplates([]); setSubtasks([]); setShowTemplatePicker(false); setUploadError('');
 
     api.get('/teams').then(r => setProjects(Array.isArray(r.data) ? r.data : [])).catch(() => {});
 
@@ -167,25 +171,53 @@ export default function NewTaskModal({ open, onClose, onCreated }) {
     if (!picked.length) return;
 
     setUploading(true);
+    setUploadProgress(0);
+    setUploadError('');
 
     try {
 
-      for (const file of picked) {
+      for (let i = 0; i < picked.length; i++) {
+        const file = picked[i];
+        const controller = new AbortController();
+        let stallTimer = null;
+        const kickStall = () => {
+          clearTimeout(stallTimer);
+          stallTimer = setTimeout(() => controller.abort('stall'), 30_000);
+        };
+        kickStall();
 
-        const fd = new FormData();
-
-        fd.append('file', file);
-
-        const res = await api.post('/upload', fd);
-
-        setFiles(prev => [...prev, { name: file.name, url: res.data.url, key: res.data.key || null }]);
-
+        try {
+          const fd = new FormData();
+          fd.append('file', file);
+          const res = await api.post('/upload', fd, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+            signal: controller.signal,
+            noRetry: true,
+            onUploadProgress: (ev) => {
+              kickStall();
+              if (ev.total) {
+                const filePct = ev.loaded / ev.total;
+                setUploadProgress(Math.round(((i + filePct) / picked.length) * 100));
+              }
+            },
+          });
+          clearTimeout(stallTimer);
+          setFiles(prev => [...prev, { name: file.name, url: res.data.url, key: res.data.key || null }]);
+          setUploadProgress(Math.round(((i + 1) / picked.length) * 100));
+        } catch (err) {
+          clearTimeout(stallTimer);
+          if (err.name === 'CanceledError' || err.code === 'ERR_CANCELED') {
+            setUploadError('Upload got stuck — no data transferred for 30 s. Check your connection and try again.');
+          } else {
+            setUploadError(err?.response?.data?.detail || 'Upload failed — please try again.');
+          }
+          return;
+        }
       }
 
-    } catch (_) {}
-
-    finally {
+    } finally {
       setUploading(false);
+      setUploadProgress(0);
       if (fileRef.current)  fileRef.current.value  = '';
       if (videoRef.current) videoRef.current.value = '';
     }
@@ -728,6 +760,22 @@ export default function NewTaskModal({ open, onClose, onCreated }) {
             <FieldLabel>ATTACHMENTS · संलग्नक</FieldLabel>
             <input ref={fileRef} type="file" multiple accept=".jpg,.jpeg,.png,.gif,.heic,.heif,.pdf,.doc,.docx,.xls,.xlsx,.csv,.ppt,.pptx,.txt" style={{ display: 'none' }} onChange={handleFileChange} />
             <input ref={videoRef} type="file" multiple accept="video/*,.mov,.mp4,.webm,.avi,.mkv,.m4v,.3gp,.flv,.wmv,.ogv,.ts" style={{ display: 'none' }} onChange={handleFileChange} />
+            {uploading && (
+              <div style={{ marginBottom: 10 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--ink-3)', fontSize: 13, marginBottom: 6 }}>
+                  <div className="k-spinner" style={{ width: 14, height: 14, flexShrink: 0 }} />
+                  <span>Uploading{uploadProgress > 0 ? ` ${uploadProgress}%` : '…'}</span>
+                </div>
+                <div style={{ height: 4, background: 'var(--rule)', borderRadius: 2, overflow: 'hidden' }}>
+                  <div style={{ height: '100%', width: `${uploadProgress || 0}%`, background: 'var(--k-primary)', borderRadius: 2, transition: 'width 0.25s ease', minWidth: uploadProgress > 0 ? undefined : '15%' }} />
+                </div>
+              </div>
+            )}
+            {uploadError && (
+              <div style={{ fontSize: 12, color: '#dc2626', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, padding: '8px 12px', marginBottom: 8 }}>
+                {uploadError}
+              </div>
+            )}
             {files.length > 0 && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 10 }}>
                 {files.map((f, i) => (
