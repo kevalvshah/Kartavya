@@ -721,7 +721,7 @@ export default function NewTaskModal({ open, onClose, onCreated }) {
           {/* ATTACHMENTS */}
           <div>
             <FieldLabel>ATTACHMENTS · संलग्नक</FieldLabel>
-            <input ref={fileRef} type="file" multiple accept=".jpg,.jpeg,.png,.gif,.heic,.heif,.pdf,.doc,.docx,.xls,.xlsx,.csv,.ppt,.pptx,.txt" style={{ display: 'none' }} onChange={handleFileChange} />
+            <input ref={fileRef} type="file" multiple accept=".jpg,.jpeg,.png,.gif,.heic,.heif,.pdf,.doc,.docx,.xls,.xlsx,.csv,.ppt,.pptx,.txt,.mov,.mp4,.webm,.avi,video/quicktime,video/mp4,video/webm" style={{ display: 'none' }} onChange={handleFileChange} />
             {files.length > 0 && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 10 }}>
                 {files.map((f, i) => (
@@ -748,7 +748,7 @@ export default function NewTaskModal({ open, onClose, onCreated }) {
               >
                 <svg width="20" height="20" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M8 12V4M4 8l4-4 4 4"/><path d="M2 14h12"/></svg>
                 <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-2)' }}>{uploading ? 'Uploading…' : 'Drop files or click to browse'}</span>
-                <span style={{ fontSize: 11, lineHeight: 1.6, textAlign: 'center' }}>Computer · Google Drive · OneDrive · Dropbox<br/>Images, PDF, Word, Excel · max 5 MB each</span>
+                <span style={{ fontSize: 11, lineHeight: 1.6, textAlign: 'center' }}>Computer · Google Drive · OneDrive · Dropbox<br/>Images, PDF, Word, Excel, Video (MOV, MP4) · images/docs max 5 MB · video max 50 MB</span>
               </button>
             )}
           </div>

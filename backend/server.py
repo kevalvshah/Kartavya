@@ -1837,7 +1837,7 @@ async def add_task_attachment(
     user=Depends(require_user),
 ):
     """Upload a file to R2 and append it to the task's attachments list."""
-    from routers.uploads import MAX_BYTES, ALLOWED_TYPES, ALLOWED_EXTENSIONS
+    from routers.uploads import MAX_BYTES, MAX_BYTES_VIDEO, ALLOWED_TYPES, ALLOWED_EXTENSIONS, VIDEO_EXTENSIONS
     from services.storage import upload_file
     import mimetypes as _mt
 
@@ -1853,17 +1853,23 @@ async def add_task_attachment(
         if not row:
             raise HTTPException(404)
 
-    content = await file.read()
-    if len(content) > MAX_BYTES:
-        raise HTTPException(400, "File exceeds 5 MB limit")
-
     fname = (file.filename or "upload").lower()
     ext   = "." + fname.rsplit(".", 1)[-1] if "." in fname else ""
+    is_video = ext in VIDEO_EXTENSIONS
+    limit = MAX_BYTES_VIDEO if is_video else MAX_BYTES
+
+    content = await file.read()
+    if len(content) > limit:
+        label = "50 MB" if is_video else "5 MB"
+        raise HTTPException(400, f"File exceeds {label} limit")
+
     mime  = file.content_type or _mt.guess_type(file.filename or "")[0] or "application/octet-stream"
     if mime not in ALLOWED_TYPES and ext not in ALLOWED_EXTENSIONS:
         raise HTTPException(415, "File type not allowed.")
     if ext in {".heic", ".heif"} and mime == "application/octet-stream":
         mime = f"image/{ext.lstrip('.')}"
+    if ext in VIDEO_EXTENSIONS and mime == "application/octet-stream":
+        mime = "video/quicktime" if ext == ".mov" else f"video/{ext.lstrip('.')}"
 
     folder = f"projects/{row['team_id']}" if row.get("team_id") else None
     result = await upload_file(file_bytes=content, filename=file.filename or "upload", content_type=mime, user_id=user["user_id"], folder=folder)

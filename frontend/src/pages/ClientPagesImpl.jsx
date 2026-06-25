@@ -312,6 +312,7 @@ function ClientTaskDrawer({ open, onClose, task: initialTask, categories = [], t
           {!isNew && tab === 'files' && (
             <div>
               <input ref={fileRef} type="file" style={{ display: 'none' }}
+                accept=".jpg,.jpeg,.png,.gif,.heic,.heif,.pdf,.doc,.docx,.xls,.xlsx,.csv,.ppt,.pptx,.txt,.mov,.mp4,.webm,.avi,video/quicktime,video/mp4,video/webm"
                 onChange={e => e.target.files[0] && uploadFile(e.target.files[0])} />
               <button className="k-btn k-btn--ghost k-btn--sm"
                 onClick={() => fileRef.current?.click()} disabled={uploading}
