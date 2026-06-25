@@ -107,16 +107,10 @@ async def upload(
     is_video = ext in VIDEO_EXTENSIONS
     limit    = MAX_BYTES_VIDEO if is_video else MAX_BYTES
 
-    # Stream with early abort — never buffer more than limit+1 bytes
-    chunks: list[bytes] = []
-    total = 0
-    async for chunk in file:
-        total += len(chunk)
-        if total > limit:
-            label = "50 MB" if is_video else "5 MB"
-            raise HTTPException(413, f"File exceeds {label} limit")
-        chunks.append(chunk)
-    content = b"".join(chunks)
+    content = await file.read()
+    if len(content) > limit:
+        label = "50 MB" if is_video else "25 MB"
+        raise HTTPException(413, f"File exceeds {label} limit")
 
     claimed_mime = file.content_type or mimetypes.guess_type(file.filename or "")[0] or "application/octet-stream"
     mime = _sniff_mime(content[:16], ext, claimed_mime)
