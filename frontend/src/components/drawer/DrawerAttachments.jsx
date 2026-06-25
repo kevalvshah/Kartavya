@@ -143,7 +143,7 @@ function FileChip({ file, onRemove, members, currentUserId, onPrivacyChange }) {
 }
 
 export default function DrawerAttachments({
-  attachments, uploading, fileRef, videoRef, handleFileChange, removeAttachment,
+  attachments, uploading, uploadProgress = 0, fileRef, videoRef, handleFileChange, removeAttachment,
   onPrivacyChange, members = [], currentUserId,
 }) {
   const [dragging, setDragging] = useState(false);
@@ -238,11 +238,26 @@ export default function DrawerAttachments({
         </div>
       )}
 
-      {/* Upload spinner */}
+      {/* Upload progress */}
       {uploading && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--ink-3)', fontSize: 13, padding: '12px 0' }}>
-          <div className="k-spinner" style={{ width: 14, height: 14 }} />
-          Uploading…
+        <div style={{ padding: '12px 0' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--ink-3)', fontSize: 13, marginBottom: 8 }}>
+            <div className="k-spinner" style={{ width: 14, height: 14, flexShrink: 0 }} />
+            <span>Uploading{uploadProgress > 0 ? ` ${uploadProgress}%` : '…'}</span>
+          </div>
+          <div style={{ height: 4, background: 'var(--rule)', borderRadius: 2, overflow: 'hidden' }}>
+            <div style={{
+              height: '100%',
+              width: `${uploadProgress || 0}%`,
+              background: 'var(--k-primary)',
+              borderRadius: 2,
+              transition: 'width 0.25s ease',
+              minWidth: uploadProgress > 0 ? undefined : '15%',
+            }} />
+          </div>
+          <div style={{ fontSize: 10, color: 'var(--ink-faint)', marginTop: 5 }}>
+            If this takes more than a minute, try a smaller file or check your connection.
+          </div>
         </div>
       )}
 

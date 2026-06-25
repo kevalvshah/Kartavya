@@ -162,16 +162,32 @@ function ClientTaskDrawer({ open, onClose, task: initialTask, categories = [], t
       pushToast({ type: 'error', title: 'Save the task first before attaching files.' }); return;
     }
     setUploading(true);
+    const controller = new AbortController();
+    let stallTimer = null;
+    const kickStall = () => {
+      clearTimeout(stallTimer);
+      stallTimer = setTimeout(() => controller.abort('stall'), 30_000);
+    };
+    kickStall();
     try {
       const fd = new FormData();
       fd.append('file', file);
       const r = await api.post(`/tasks/${initialTask.task_id}/attachments`, fd, {
         headers: { 'Content-Type': 'multipart/form-data' },
+        signal: controller.signal,
+        noRetry: true,
+        onUploadProgress: () => kickStall(),
       });
+      clearTimeout(stallTimer);
       setAttachments(p => [...p, r.data]);
       pushToast({ type: 'success', title: 'File attached' });
-    } catch (_) {
-      pushToast({ type: 'error', title: 'Upload failed' });
+    } catch (err) {
+      clearTimeout(stallTimer);
+      if (err.name === 'CanceledError' || err.code === 'ERR_CANCELED') {
+        pushToast({ type: 'error', title: 'Upload got stuck', message: 'No data transferred for 30 s. Check your connection and try again.' });
+      } else {
+        pushToast({ type: 'error', title: err?.response?.data?.detail || 'Upload failed — please try again.' });
+      }
     } finally { setUploading(false); }
   };
 

@@ -62,8 +62,9 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
   const [addingSubtask, setAddingSubtask] = useState(false);
 
   // ── Attachments ───────────────────────────────────────────────────────────
-  const [attachments, setAttachments] = useState([]);
-  const [uploading,   setUploading]   = useState(false);
+  const [attachments,    setAttachments]    = useState([]);
+  const [uploading,      setUploading]      = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
 
   // ── Time tracking ─────────────────────────────────────────────────────────
   const [entries,    setEntries]    = useState([]);
@@ -310,24 +311,55 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
     }
 
     setUploading(true);
+    setUploadProgress(0);
     try {
       const newFiles = [];
       const teamId = task?.team_id;
-      for (const file of toUpload) {
-        const fd = new FormData();
-        fd.append('file', file);
-        const url = teamId ? `/upload?team_id=${encodeURIComponent(teamId)}` : '/upload';
-        const res = await api.post(url, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
-        newFiles.push({ name: file.name, url: res.data.url, key: res.data.key, size: res.data.size, is_private: false, visible_to: [] });
+      for (let i = 0; i < toUpload.length; i++) {
+        const file = toUpload[i];
+        const controller = new AbortController();
+        let stallTimer = null;
+        const kickStall = () => {
+          clearTimeout(stallTimer);
+          stallTimer = setTimeout(() => controller.abort('stall'), 30_000);
+        };
+        kickStall();
+        try {
+          const fd = new FormData();
+          fd.append('file', file);
+          const url = teamId ? `/upload?team_id=${encodeURIComponent(teamId)}` : '/upload';
+          const res = await api.post(url, fd, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+            signal: controller.signal,
+            noRetry: true,
+            onUploadProgress: (ev) => {
+              kickStall();
+              if (ev.total) {
+                const filePct = ev.loaded / ev.total;
+                setUploadProgress(Math.round(((i + filePct) / toUpload.length) * 100));
+              }
+            },
+          });
+          clearTimeout(stallTimer);
+          newFiles.push({ name: file.name, url: res.data.url, key: res.data.key, size: res.data.size, is_private: false, visible_to: [] });
+          setUploadProgress(Math.round(((i + 1) / toUpload.length) * 100));
+        } catch (err) {
+          clearTimeout(stallTimer);
+          if (err.name === 'CanceledError' || err.code === 'ERR_CANCELED') {
+            pushToast({ type: 'error', title: 'Upload got stuck', message: 'No data transferred for 30 s. Check your connection and try again — if it keeps happening, please report it.' });
+          } else {
+            pushToast({ type: 'error', title: err?.response?.data?.detail || 'Upload failed' });
+          }
+          return;
+        }
       }
       const updated = [...attachments, ...newFiles];
       setAttachments(updated);
       await saveTask({ attachments: updated.map(f => ({ name: f.name, url: f.url, key: f.key || null, is_private: f.is_private || false, visible_to: f.visible_to || [] })) });
       pushToast({ type: 'success', title: `${newFiles.length} file${newFiles.length > 1 ? 's' : ''} uploaded` });
-    } catch (err) {
-      pushToast({ type: 'error', title: err?.response?.data?.detail || 'Upload failed' });
     } finally {
       setUploading(false);
+      setUploadProgress(0);
       if (fileRef.current)  fileRef.current.value  = '';
       if (videoRef.current) videoRef.current.value = '';
     }
@@ -572,7 +604,7 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
                     {attachments.length > 0 && <span className="k-dr__sec-count">{attachments.length}</span>}
                   </div>
                   <DrawerAttachments
-                    attachments={attachments} uploading={uploading}
+                    attachments={attachments} uploading={uploading} uploadProgress={uploadProgress}
                     fileRef={fileRef} videoRef={videoRef} handleFileChange={handleFileChange}
                     removeAttachment={removeAttachment}
                     onPrivacyChange={handlePrivacyChange}

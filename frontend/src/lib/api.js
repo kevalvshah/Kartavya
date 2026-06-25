@@ -29,9 +29,10 @@ api.interceptors.request.use((config) => {
 });
 
 // Retry on network errors / 502-504 (Railway restart window) — up to 3 attempts
+// noRetry: true skips retries (used for file uploads to avoid double-sending)
 api.interceptors.response.use(undefined, async (error) => {
   const config = error.config;
-  if (!config) return Promise.reject(error);
+  if (!config || config.noRetry) return Promise.reject(error);
   config._retryCount = config._retryCount ?? 0;
   const isRetryable =
     !error.response ||                          // network error
