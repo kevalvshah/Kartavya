@@ -45,7 +45,8 @@ const statusLabel = (s) => ({
 // @mention comments, file attachments.
 function ClientTaskDrawer({ open, onClose, task: initialTask, categories = [], teams = [], defaultTeamId, members = [], onSaved, onDeleted }) {
   const { pushToast } = useToast();
-  const fileRef = useRef();
+  const fileRef  = useRef();
+  const videoRef = useRef();
   const [confirmState, setConfirmState] = useState(null);
 
   const isNew = !initialTask;
@@ -312,20 +313,31 @@ function ClientTaskDrawer({ open, onClose, task: initialTask, categories = [], t
           {!isNew && tab === 'files' && (
             <div>
               <input ref={fileRef} type="file" style={{ display: 'none' }}
-                accept=".jpg,.jpeg,.png,.gif,.heic,.heif,.pdf,.doc,.docx,.xls,.xlsx,.csv,.ppt,.pptx,.txt,.mov,.mp4,.webm,.avi,video/quicktime,video/mp4,video/webm"
-                onChange={e => e.target.files[0] && uploadFile(e.target.files[0])} />
-              <button className="k-btn k-btn--ghost k-btn--sm"
-                onClick={() => fileRef.current?.click()} disabled={uploading}
-                style={{ marginBottom: 20, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                <Paperclip size={13} />
-                {uploading ? 'Uploading…' : 'Attach file'}
-              </button>
+                accept=".jpg,.jpeg,.png,.gif,.heic,.heif,.pdf,.doc,.docx,.xls,.xlsx,.csv,.ppt,.pptx,.txt"
+                onChange={e => { if (e.target.files[0]) uploadFile(e.target.files[0]); if (fileRef.current) fileRef.current.value = ''; }} />
+              <input ref={videoRef} type="file" style={{ display: 'none' }}
+                accept="video/*,.mov,.mp4,.webm,.avi,.mkv,.m4v,.3gp,.flv,.wmv,.ogv,.ts"
+                onChange={e => { if (e.target.files[0]) uploadFile(e.target.files[0]); if (videoRef.current) videoRef.current.value = ''; }} />
+              <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
+                <button className="k-btn k-btn--ghost k-btn--sm"
+                  onClick={() => fileRef.current?.click()} disabled={uploading}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  <Paperclip size={13} />
+                  {uploading ? 'Uploading…' : 'Attach file'}
+                </button>
+                <button className="k-btn k-btn--ghost k-btn--sm"
+                  onClick={() => videoRef.current?.click()} disabled={uploading}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: '#8b5cf6' }}>
+                  <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="#8b5cf6" strokeWidth="1.8"><polygon points="4,2 14,8 4,14" fill="none"/></svg>
+                  Attach video
+                </button>
+              </div>
 
               {attachments.length === 0 && (
                 <div className="k-empty" style={{ padding: '28px 0' }}>
                   <div className="k-empty__icon">📎</div>
                   <div className="k-empty__title">No files yet</div>
-                  <div className="k-empty__sub">Click "Attach file" to upload.</div>
+                  <div className="k-empty__sub">Use the buttons above to attach files or video.</div>
                 </div>
               )}
               <div style={{ display: 'flex', flexDirection: 'column' }}>

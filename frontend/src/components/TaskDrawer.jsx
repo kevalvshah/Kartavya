@@ -18,9 +18,9 @@ import BrandKit          from './BrandKit';
 import { lbl }           from './drawer/constants';
 
 const MAX_FILES    = 5;
-const MAX_MB       = 5;
+const MAX_MB       = 25;
 const MAX_MB_VIDEO = 50;
-const VIDEO_EXT    = /\.(mov|mp4|webm|avi|mkv)$/i;
+const VIDEO_EXT    = /\.(mov|mp4|webm|avi|mkv|m4v|3gp|3gpp|flv|wmv|asf|ogv|ts|mts|m2ts)$/i;
 
 export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers = [] }) {
   const me = currentUser();
@@ -44,6 +44,7 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
   const [assigneeOpen, setAssigneeOpen] = useState(false);
   const assigneeRef = useRef(null);
   const fileRef     = useRef(null);
+  const videoRef    = useRef(null);
 
   // ── Collapse title on scroll ──────────────────────────────────────────────
   const handleBodyScroll = useCallback(() => {
@@ -327,7 +328,8 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
       pushToast({ type: 'error', title: err?.response?.data?.detail || 'Upload failed' });
     } finally {
       setUploading(false);
-      if (fileRef.current) fileRef.current.value = '';
+      if (fileRef.current)  fileRef.current.value  = '';
+      if (videoRef.current) videoRef.current.value = '';
     }
   };
 
@@ -571,7 +573,7 @@ export default function TaskDrawer({ taskId, open, onClose, onSaved, teamMembers
                   </div>
                   <DrawerAttachments
                     attachments={attachments} uploading={uploading}
-                    fileRef={fileRef} handleFileChange={handleFileChange}
+                    fileRef={fileRef} videoRef={videoRef} handleFileChange={handleFileChange}
                     removeAttachment={removeAttachment}
                     onPrivacyChange={handlePrivacyChange}
                     members={members}

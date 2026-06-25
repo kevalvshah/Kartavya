@@ -1864,7 +1864,7 @@ async def add_task_attachment(
         raise HTTPException(400, f"File exceeds {label} limit")
 
     mime  = file.content_type or _mt.guess_type(file.filename or "")[0] or "application/octet-stream"
-    if mime not in ALLOWED_TYPES and ext not in ALLOWED_EXTENSIONS:
+    if mime not in ALLOWED_TYPES and not mime.startswith("video/") and ext not in ALLOWED_EXTENSIONS:
         raise HTTPException(415, "File type not allowed.")
     if ext in {".heic", ".heif"} and mime == "application/octet-stream":
         mime = f"image/{ext.lstrip('.')}"

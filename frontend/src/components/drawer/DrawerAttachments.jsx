@@ -1,11 +1,14 @@
 import React, { useRef, useState } from 'react';
-import { Paperclip, ExternalLink, Trash2, Upload, Image, FileText, Film, Lock, Unlock, Users } from 'lucide-react';
+import { Paperclip, ExternalLink, Trash2, Upload, Image, FileText, Film, Lock, Unlock } from 'lucide-react';
 import { avatarColor, userInitials } from '../../lib/utils';
 
 const MAX_FILES     = 5;
-const MAX_MB        = 5;
+const MAX_MB        = 25;
 const MAX_MB_VIDEO  = 50;
-const VIDEO_EXT     = /\.(mov|mp4|webm|avi|mkv)$/i;
+const VIDEO_EXT     = /\.(mov|mp4|webm|avi|mkv|m4v|3gp|3gpp|flv|wmv|asf|ogv|ts|mts|m2ts)$/i;
+
+const DOC_ACCEPT  = '.jpg,.jpeg,.png,.gif,.heic,.heif,.pdf,.doc,.docx,.xls,.xlsx,.csv,.ppt,.pptx,.txt';
+const VIDEO_ACCEPT = 'video/*,.mov,.mp4,.webm,.avi,.mkv,.m4v,.3gp,.flv,.wmv,.ogv,.ts';
 
 function fileIcon(name) {
   if (/\.(jpg|jpeg|png|gif|webp|heic)$/i.test(name)) return <Image size={13} style={{ color: 'var(--k-primary)', flexShrink: 0 }} />;
@@ -64,7 +67,7 @@ function PrivacyPicker({ file, members, currentUserId, onChange }) {
             <Unlock size={11} style={{ marginRight: 5, verticalAlign: 'middle' }} />
             Visible to all project members
           </button>
-          {members.filter(m => (m.user_id || m.member_id) !== currentUserId).map((m, i) => {
+          {members.filter(m => (m.user_id || m.member_id) !== currentUserId).map((m) => {
             const uid  = m.user_id || m.member_id;
             const name = m.display_name || m.full_name || m.name || '';
             const checked = visibleTo.includes(uid);
@@ -140,7 +143,7 @@ function FileChip({ file, onRemove, members, currentUserId, onPrivacyChange }) {
 }
 
 export default function DrawerAttachments({
-  attachments, uploading, fileRef, handleFileChange, removeAttachment,
+  attachments, uploading, fileRef, videoRef, handleFileChange, removeAttachment,
   onPrivacyChange, members = [], currentUserId,
 }) {
   const [dragging, setDragging] = useState(false);
@@ -159,17 +162,26 @@ export default function DrawerAttachments({
 
   return (
     <div>
+      {/* Hidden inputs — docs and video separate */}
       <input
         ref={fileRef}
         type="file"
         multiple
-        accept=".jpg,.jpeg,.png,.gif,.heic,.heif,.pdf,.doc,.docx,.xls,.xlsx,.csv,.ppt,.pptx,.txt,.mov,.mp4,.webm,.avi,video/quicktime,video/mp4,video/webm"
+        accept={DOC_ACCEPT}
+        style={{ display: 'none' }}
+        onChange={handleFileChange}
+      />
+      <input
+        ref={videoRef}
+        type="file"
+        multiple
+        accept={VIDEO_ACCEPT}
         style={{ display: 'none' }}
         onChange={handleFileChange}
       />
 
       {/* Header row */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 12 }}>
         <button
           className="k-btn k-btn--ghost k-btn--sm"
           onClick={() => fileRef.current?.click()}
@@ -179,9 +191,23 @@ export default function DrawerAttachments({
           <Paperclip size={13} />
           {uploading ? 'Uploading…' : 'Attach files'}
         </button>
-        <span style={{ fontSize: 11, color: 'var(--ink-3)' }}>
-          {attachments.length}/{MAX_FILES} · images/docs {MAX_MB} MB · video {MAX_MB_VIDEO} MB
+        <button
+          className="k-btn k-btn--ghost k-btn--sm"
+          onClick={() => videoRef.current?.click()}
+          disabled={uploading || full}
+          style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#8b5cf6' }}
+        >
+          <Film size={13} />
+          Attach video
+        </button>
+        <span style={{ fontSize: 11, color: 'var(--ink-3)', marginLeft: 'auto' }}>
+          {attachments.length}/{MAX_FILES}
         </span>
+      </div>
+
+      {/* Limit hints */}
+      <div style={{ fontSize: 10, color: 'var(--ink-3)', marginBottom: 10, lineHeight: 1.6 }}>
+        Docs &amp; images up to {MAX_MB} MB &nbsp;·&nbsp; Video (any format) up to {MAX_MB_VIDEO} MB
       </div>
 
       {/* Drop zone */}
@@ -194,7 +220,7 @@ export default function DrawerAttachments({
           style={{
             border: `1.5px dashed ${dragging ? 'var(--k-primary)' : 'var(--rule-strong)'}`,
             borderRadius: 10,
-            padding: '32px 20px',
+            padding: '28px 20px',
             textAlign: 'center',
             cursor: full ? 'default' : 'pointer',
             background: dragging ? 'var(--k-primary-dim, rgba(0,130,198,0.06))' : 'transparent',
@@ -203,11 +229,11 @@ export default function DrawerAttachments({
         >
           <Upload size={22} style={{ color: 'var(--ink-3)', marginBottom: 8 }} />
           <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-2)', marginBottom: 4 }}>
-            Drop files or click to browse
+            Drop files here or use buttons above
           </div>
           <div style={{ fontSize: 11, color: 'var(--ink-3)', lineHeight: 1.6 }}>
-            Images, PDF, Word, Excel, PowerPoint<br />
-            Video (MOV, MP4, WebM) · images/docs max {MAX_MB} MB · video max {MAX_MB_VIDEO} MB
+            Images, PDF, Word, Excel, PowerPoint · max {MAX_MB} MB<br />
+            Video: MOV, MP4, MKV and more · max {MAX_MB_VIDEO} MB
           </div>
         </div>
       )}
@@ -234,19 +260,32 @@ export default function DrawerAttachments({
             />
           ))}
           {!full && !uploading && (
-            <button
-              onClick={() => fileRef.current?.click()}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 6,
-                padding: '7px 12px', borderRadius: 8,
-                border: '1.5px dashed var(--rule-strong)',
-                background: 'transparent', cursor: 'pointer',
-                color: 'var(--ink-3)', fontSize: 12, fontWeight: 600,
-                marginTop: 2,
-              }}
-            >
-              <Paperclip size={12} /> Add more files
-            </button>
+            <div style={{ display: 'flex', gap: 6, marginTop: 2 }}>
+              <button
+                onClick={() => fileRef.current?.click()}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 6,
+                  padding: '7px 12px', borderRadius: 8,
+                  border: '1.5px dashed var(--rule-strong)',
+                  background: 'transparent', cursor: 'pointer',
+                  color: 'var(--ink-3)', fontSize: 12, fontWeight: 600,
+                }}
+              >
+                <Paperclip size={12} /> Add files
+              </button>
+              <button
+                onClick={() => videoRef.current?.click()}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 6,
+                  padding: '7px 12px', borderRadius: 8,
+                  border: '1.5px dashed var(--rule-strong)',
+                  background: 'transparent', cursor: 'pointer',
+                  color: '#8b5cf6', fontSize: 12, fontWeight: 600,
+                }}
+              >
+                <Film size={12} /> Add video
+              </button>
+            </div>
           )}
         </div>
       )}

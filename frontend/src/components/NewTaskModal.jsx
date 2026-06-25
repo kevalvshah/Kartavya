@@ -73,6 +73,7 @@ export default function NewTaskModal({ open, onClose, onCreated }) {
   const titleRef    = useRef(null);
 
   const fileRef     = useRef(null);
+  const videoRef    = useRef(null);
 
   const assigneeRef = useRef(null);
 
@@ -183,7 +184,11 @@ export default function NewTaskModal({ open, onClose, onCreated }) {
 
     } catch (_) {}
 
-    finally { setUploading(false); e.target.value = ''; }
+    finally {
+      setUploading(false);
+      if (fileRef.current)  fileRef.current.value  = '';
+      if (videoRef.current) videoRef.current.value = '';
+    }
 
   };
 
@@ -721,7 +726,8 @@ export default function NewTaskModal({ open, onClose, onCreated }) {
           {/* ATTACHMENTS */}
           <div>
             <FieldLabel>ATTACHMENTS · संलग्नक</FieldLabel>
-            <input ref={fileRef} type="file" multiple accept=".jpg,.jpeg,.png,.gif,.heic,.heif,.pdf,.doc,.docx,.xls,.xlsx,.csv,.ppt,.pptx,.txt,.mov,.mp4,.webm,.avi,video/quicktime,video/mp4,video/webm" style={{ display: 'none' }} onChange={handleFileChange} />
+            <input ref={fileRef} type="file" multiple accept=".jpg,.jpeg,.png,.gif,.heic,.heif,.pdf,.doc,.docx,.xls,.xlsx,.csv,.ppt,.pptx,.txt" style={{ display: 'none' }} onChange={handleFileChange} />
+            <input ref={videoRef} type="file" multiple accept="video/*,.mov,.mp4,.webm,.avi,.mkv,.m4v,.3gp,.flv,.wmv,.ogv,.ts" style={{ display: 'none' }} onChange={handleFileChange} />
             {files.length > 0 && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 10 }}>
                 {files.map((f, i) => (
@@ -732,24 +738,42 @@ export default function NewTaskModal({ open, onClose, onCreated }) {
                   </div>
                 ))}
                 {files.length < 5 && !uploading && (
-                  <button type="button" onClick={() => fileRef.current?.click()} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 10px', borderRadius: 8, border: '1.5px dashed var(--rule-strong)', background: 'transparent', color: 'var(--ink-3)', cursor: 'pointer', fontSize: 12, fontFamily: 'var(--font-ui)' }}>
-                    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M8 3v10M3 8h10"/></svg>
-                    Add more
-                  </button>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <button type="button" onClick={() => fileRef.current?.click()} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 10px', borderRadius: 8, border: '1.5px dashed var(--rule-strong)', background: 'transparent', color: 'var(--ink-3)', cursor: 'pointer', fontSize: 12, fontFamily: 'var(--font-ui)' }}>
+                      <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M8 3v10M3 8h10"/></svg>
+                      Add files
+                    </button>
+                    <button type="button" onClick={() => videoRef.current?.click()} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 10px', borderRadius: 8, border: '1.5px dashed var(--rule-strong)', background: 'transparent', color: '#8b5cf6', cursor: 'pointer', fontSize: 12, fontFamily: 'var(--font-ui)' }}>
+                      <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="#8b5cf6" strokeWidth="1.8"><polygon points="5,3 13,8 5,13"/></svg>
+                      Add video
+                    </button>
+                  </div>
                 )}
               </div>
             )}
             {files.length === 0 && (
-              <button
-                type="button"
-                onClick={() => fileRef.current?.click()}
-                disabled={uploading}
-                style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, width: '100%', padding: '20px 14px', borderRadius: 10, border: '1.5px dashed var(--rule-strong)', background: 'transparent', color: 'var(--ink-3)', cursor: 'pointer', fontFamily: 'var(--font-ui)', boxSizing: 'border-box' }}
-              >
-                <svg width="20" height="20" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M8 12V4M4 8l4-4 4 4"/><path d="M2 14h12"/></svg>
-                <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-2)' }}>{uploading ? 'Uploading…' : 'Drop files or click to browse'}</span>
-                <span style={{ fontSize: 11, lineHeight: 1.6, textAlign: 'center' }}>Computer · Google Drive · OneDrive · Dropbox<br/>Images, PDF, Word, Excel, Video (MOV, MP4) · images/docs max 5 MB · video max 50 MB</span>
-              </button>
+              <div style={{ display: 'flex', gap: 8, width: '100%', boxSizing: 'border-box' }}>
+                <button
+                  type="button"
+                  onClick={() => fileRef.current?.click()}
+                  disabled={uploading}
+                  style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, padding: '18px 10px', borderRadius: 10, border: '1.5px dashed var(--rule-strong)', background: 'transparent', color: 'var(--ink-3)', cursor: 'pointer', fontFamily: 'var(--font-ui)' }}
+                >
+                  <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M8 12V4M4 8l4-4 4 4"/><path d="M2 14h12"/></svg>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink-2)' }}>{uploading ? 'Uploading…' : 'Files & Images'}</span>
+                  <span style={{ fontSize: 10, lineHeight: 1.5, textAlign: 'center', color: 'var(--ink-3)' }}>PDF, Word, Excel<br/>max 25 MB</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => videoRef.current?.click()}
+                  disabled={uploading}
+                  style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, padding: '18px 10px', borderRadius: 10, border: '1.5px dashed #c4b5fd', background: 'transparent', color: '#8b5cf6', cursor: 'pointer', fontFamily: 'var(--font-ui)' }}
+                >
+                  <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="#8b5cf6" strokeWidth="1.5"><polygon points="4,2 14,8 4,14" fill="none"/></svg>
+                  <span style={{ fontSize: 12, fontWeight: 600 }}>Video</span>
+                  <span style={{ fontSize: 10, lineHeight: 1.5, textAlign: 'center' }}>Any format<br/>max 50 MB</span>
+                </button>
+              </div>
             )}
           </div>
         </div>

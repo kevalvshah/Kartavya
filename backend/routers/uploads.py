@@ -12,15 +12,18 @@ from services.storage import upload_file
 
 router = APIRouter(prefix="/api", tags=["uploads"])
 
-MAX_BYTES        = 5  * 1024 * 1024   # 5 MB  — images/docs
+MAX_BYTES        = 25 * 1024 * 1024   # 25 MB — images/docs
 MAX_BYTES_VIDEO  = 50 * 1024 * 1024   # 50 MB — video
 
 ALLOWED_TYPES = {
     # Images
     "image/jpeg", "image/png", "image/gif", "image/webp",
     "image/heic", "image/heif",
-    # Video
+    # Video — any video/* MIME is accepted; common ones listed explicitly
     "video/quicktime", "video/mp4", "video/webm", "video/x-msvideo",
+    "video/x-matroska", "video/3gpp", "video/3gpp2", "video/ogg",
+    "video/mpeg", "video/x-flv", "video/x-ms-wmv", "video/x-ms-asf",
+    "video/m4v",
     # Documents
     "application/pdf",
     "application/msword",
@@ -50,7 +53,10 @@ _MAGIC: list[tuple[bytes, str]] = [
     (b"ftyp",                     "video/mp4"),    # checked at offset 4
 ]
 
-VIDEO_EXTENSIONS = {".mov", ".mp4", ".webm", ".avi", ".mkv"}
+VIDEO_EXTENSIONS = {
+    ".mov", ".mp4", ".webm", ".avi", ".mkv", ".m4v", ".3gp", ".3gpp",
+    ".flv", ".wmv", ".asf", ".ogv", ".ts", ".mts", ".m2ts",
+}
 
 ALLOWED_EXTENSIONS = {
     ".jpg", ".jpeg", ".png", ".gif", ".webp", ".heic", ".heif",
@@ -121,7 +127,7 @@ async def upload(
         }
         mime = type_map.get(ext, mime)
 
-    if mime not in ALLOWED_TYPES and ext not in ALLOWED_EXTENSIONS:
+    if mime not in ALLOWED_TYPES and not mime.startswith("video/") and ext not in ALLOWED_EXTENSIONS:
         raise HTTPException(415, "File type not allowed. Supported: images, video, PDF, Word, Excel, PowerPoint.")
 
     if ext in VIDEO_EXTENSIONS and mime == "application/octet-stream":
