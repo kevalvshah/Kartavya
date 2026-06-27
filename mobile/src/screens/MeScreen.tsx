@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, Switch,
   StyleSheet, Platform, ActivityIndicator,
@@ -320,7 +320,7 @@ export default function MeScreen() {
         >
           <Text style={[s.signOutText, { color: t.error }]}>Sign out</Text>
         </TouchableOpacity>
-        <Text style={[s.footer, { color: t.ink3 }]}>KARTAVYA · BY AEKAM INC</Text>
+        <Text style={[s.footer, { color: t.ink3 }]}>Kartavaya · BY AEKAM INC</Text>
       </View>
     </ScrollView>
   );

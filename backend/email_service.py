@@ -1,4 +1,4 @@
-"""email_service.py — Kartavya by Aekam Inc
+﻿"""email_service.py — Kartavaya by Aekam Inc
 Sends via AWS SES when configured; logs to console otherwise (dev/test mode).
 Table-based layout — Outlook 2019+ / Gmail / Apple Mail / Gmail Android compatible.
 """
@@ -9,7 +9,7 @@ from html import escape as _h
 
 logger = logging.getLogger(__name__)
 
-FROM_EMAIL   = os.environ.get("FROM_EMAIL",   "Kartavya <no-reply@aekaminc.com>")
+FROM_EMAIL   = os.environ.get("FROM_EMAIL",   "Kartavaya <no-reply@aekaminc.com>")
 FRONTEND_URL = os.environ.get("FRONTEND_URL", "https://kartavaya.com")
 
 # ── Email provider: Resend (primary) or AWS SES (fallback) ────────────────────
@@ -115,7 +115,7 @@ def _base(preheader: str, kicker: str, headline: str, sanskrit: str,
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
-<title>Kartavya</title>
+<title>Kartavaya</title>
 <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,wght@0,400;0,500;1,400&family=Tiro+Devanagari+Hindi&display=swap" rel="stylesheet">
 {_dark_mode_css()}
 </head>
@@ -133,7 +133,7 @@ def _base(preheader: str, kicker: str, headline: str, sanskrit: str,
           style="border-bottom:1px solid {_RULE_SOFT};padding-bottom:24px;margin-bottom:28px;">
           <tr>
             <td style="font-family:{_FONT_DISP};font-size:22px;font-weight:500;
-                       color:{_INK};letter-spacing:0.005em;">Kartavya</td>
+                       color:{_INK};letter-spacing:0.005em;">Kartavaya</td>
             <td style="font-family:{_FONT_HINDI};font-size:16px;color:{_MID};padding-left:10px;">कर्तव्य</td>
             <td align="right" style="font-family:{_FONT_UI};font-size:10px;
                 letter-spacing:0.2em;text-transform:uppercase;color:{_INK3};font-weight:700;">
@@ -157,7 +157,7 @@ def _base(preheader: str, kicker: str, headline: str, sanskrit: str,
           {gita}
           <tr><td style="padding:20px 0 0;font-family:{_FONT_UI};font-size:11.5px;
                          color:{_INK3};line-height:1.6;">
-            You are receiving this because you are a member or invitee of a Kartavya workspace.
+            You are receiving this because you are a member or invitee of a Kartavaya workspace.
             If you did not expect this email, you can safely ignore it.
           </td></tr>
           <!-- bottom bar -->
@@ -165,7 +165,7 @@ def _base(preheader: str, kicker: str, headline: str, sanskrit: str,
             <table width="100%" cellpadding="0" cellspacing="0" border="0">
               <tr>
                 <td style="font-family:{_FONT_UI};font-size:11px;color:{_INK3};">
-                  Kartavya &mdash; <em>do what must be done.</em><br>
+                  Kartavaya &mdash; <em>do what must be done.</em><br>
                   <span style="color:{_INK3};">Aekam Inc &middot; Ahmedabad, IN</span>
                 </td>
                 <td align="right" style="font-family:{_FONT_UI};font-size:11px;color:{_INK3};white-space:nowrap;vertical-align:top;">
@@ -349,7 +349,7 @@ def _info_card(rows: list[tuple[str, str]], hindi_sub: dict[str, str] = None) ->
 
 
 def send_invite_email(to_email: str, inviter_name: str, role: str,
-                      invite_token: str, workspace_name: str = "Kartavya",
+                      invite_token: str, workspace_name: str = "Kartavaya",
                       expires_label: str = "7 days", recipient_name: str = "",
                       workspace_hindi: str = "मुख्य कार्यस्थल",
                       inviter_role: str = "Admin"):
@@ -361,7 +361,7 @@ def send_invite_email(to_email: str, inviter_name: str, role: str,
     workspace_short  = workspace_name.split()[0] if workspace_name else workspace_name
     recip_first      = recipient_name.split()[0] if recipient_name else ""
     greeting         = f'Hi <strong>{_h(recip_first)}</strong>, ' if recip_first else ''
-    preheader        = f"{inviter_name} invited you to {workspace_name} on Kartavya — accept within {expires_label}."
+    preheader        = f"{inviter_name} invited you to {workspace_name} on Kartavaya — accept within {expires_label}."
 
     card = _info_card(
         [
@@ -375,7 +375,7 @@ def send_invite_email(to_email: str, inviter_name: str, role: str,
 
     body = (
         _body_text(f'{greeting}<strong>{_h(inviter_name)}</strong> has invited you to collaborate '
-                   f'on <strong>Kartavya</strong> — the task workspace where '
+                   f'on <strong>Kartavaya</strong> — the task workspace where '
                    f'{_h(workspace_name)}\'s team plans projects, collaborates, and ships client work. '
                    f'<span style="color:#03a1b6;">साथ मिलकर काम करें।</span>')
         + card
@@ -385,7 +385,7 @@ def send_invite_email(to_email: str, inviter_name: str, role: str,
     )
     return send_email(
         to_email,
-        f"{inviter_name} invited you to {workspace_name} on Kartavya",
+        f"{inviter_name} invited you to {workspace_name} on Kartavaya",
         _base(preheader, "YOU'RE INVITED",
               f"{_h(inviter_first)} invited you to {_h(workspace_short)} Workspace.",
               "आपका स्वागत है", "", body),
@@ -397,7 +397,7 @@ def send_invite_email(to_email: str, inviter_name: str, role: str,
 def send_welcome_email(user_email: str, user_name: str):
     """Send a welcome email with onboarding steps to a newly registered user."""
     first_name = _h(user_name.split()[0] if user_name else "there")
-    preheader  = f"Your Kartavya account is live. Here's the shortest path to doing what must be done."
+    preheader  = f"Your Kartavaya account is live. Here's the shortest path to doing what must be done."
 
     def _step(num_hi, title, body_text):
         return (
@@ -443,13 +443,13 @@ def send_welcome_email(user_email: str, user_name: str):
                    f'Here\'s the shortest path to doing <em style="font-family:{_FONT_DISP};'
                    f'font-style:italic;color:{_DEEP};">what must be done</em> on day one.')
         + steps
-        + _cta_row(f"{FRONTEND_URL}/dashboard", "Open Kartavya", "primary",
+        + _cta_row(f"{FRONTEND_URL}/dashboard", "Open Kartavaya", "primary",
                    f"{FRONTEND_URL}/dashboard", "Read the quickstart")
         + gita_block
     )
     return send_email(
         user_email,
-        f"Welcome to Kartavya",
+        f"Welcome to Kartavaya",
         _base(preheader, "WELCOME ABOARD", f"Glad to have you, {first_name}.",
               "कर्तव्य में आपका स्वागत है", "", body),
     )
@@ -515,7 +515,7 @@ def send_request_approved_email(user_email: str, user_name: str,
     body = (
         _body_text(f'Hi <strong>{first_name}</strong> — '
                    f'<strong>{_h(reviewer_name)}</strong> approved your request. The team has '
-                   f'picked it up and you\'ll see status updates in the Kartavya portal.')
+                   f'picked it up and you\'ll see status updates in the Kartavaya portal.')
         + card
         + _body_text(f'<span style="font-size:14.5px;color:{_INK2};">'
                      f'<strong>What happens next:</strong> work starts within one business day. '
@@ -745,8 +745,8 @@ def send_report_email(
     freq_cap = frequency.capitalize()
 
     safe_name   = team_name.lower().replace(" ", "-")
-    excel_fname = f"kartavya-{safe_name}-{period_from}-{period_to}.xlsx"
-    pdf_fname   = f"kartavya-{safe_name}-{period_from}-{period_to}.pdf"
+    excel_fname = f"Kartavaya-{safe_name}-{period_from}-{period_to}.xlsx"
+    pdf_fname   = f"Kartavaya-{safe_name}-{period_from}-{period_to}.pdf"
 
     # ── Kicker / headline copy ─���────────────────────────────────────
     done_count = data_summary.get("done", 0)
@@ -1082,10 +1082,10 @@ def send_password_reset_email(user_email: str, user_name: str, reset_token: str)
     """Send a password-reset link to the user."""
     reset_url  = f"{FRONTEND_URL}/reset-password?token={reset_token}"
     first_name = _h(user_name.split()[0] if user_name else "there")
-    preheader  = "Reset your Kartavya password — link expires in 1 hour."
+    preheader  = "Reset your Kartavaya password — link expires in 1 hour."
     body = (
         _body_text(f'Hi <strong>{first_name}</strong>, we received a request to reset the password '
-                   f'for your Kartavya account. Click the button below to choose a new password.')
+                   f'for your Kartavaya account. Click the button below to choose a new password.')
         + _cta_row(reset_url, "Reset password", "primary")
         + _body_text(f'<span style="font-size:12.5px;color:{_INK3};">This link expires in '
                      f'<strong>1 hour</strong>. If you didn\'t request a password reset, '
@@ -1093,7 +1093,7 @@ def send_password_reset_email(user_email: str, user_name: str, reset_token: str)
     )
     return send_email(
         user_email,
-        "Reset your Kartavya password",
+        "Reset your Kartavaya password",
         _base(preheader, "PASSWORD RESET · पासवर्ड रीसेट",
               "Reset your password.", "सुरक्षा", "", body),
     )

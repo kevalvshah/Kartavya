@@ -1,4 +1,4 @@
-/**
+﻿/**
  * ReportsPage.jsx — Generate Report screen.
  * Layout matches the design: two-column builder (left) + sticky preview/export (right).
  * Schedules management toggles below the builder via "Manage schedules" in the header.
@@ -25,12 +25,12 @@ const fmtDT = dt => {
 
 // LocalStorage export history
 function loadHistory() {
-  try { return JSON.parse(localStorage.getItem('kartavya_report_history') || '[]'); }
+  try { return JSON.parse(localStorage.getItem('Kartavaya_report_history') || '[]'); }
   catch { return []; }
 }
 function pushHistory(entry) {
   const h = [entry, ...loadHistory()].slice(0, 8);
-  localStorage.setItem('kartavya_report_history', JSON.stringify(h));
+  localStorage.setItem('Kartavaya_report_history', JSON.stringify(h));
 }
 
 // ── Icons ──────────────────────────────────────────────────────────
@@ -432,7 +432,7 @@ export default function ReportsPage({ teams: propTeams }) {
       for (const tid of projectIds) {
         const team  = teams.find(t => t.team_id === tid);
         const tname = (team?.name || 'report').toLowerCase().replace(/\s+/g, '-');
-        const fname = `kartavya-${tname}-${from}-${to}.${ext}`;
+        const fname = `Kartavaya-${tname}-${from}-${to}.${ext}`;
         const res   = await api.get(`/reports/download/${tid}`, {
           params: { from, to, fmt },
           responseType: 'blob',
@@ -622,7 +622,7 @@ export default function ReportsPage({ teams: propTeams }) {
           <div className="gr__preview">
             <div className="gr__preview-paper">
               <div className="gr__preview-brand">
-                <span className="gr__preview-brand-main">Kartavya</span>
+                <span className="gr__preview-brand-main">Kartavaya</span>
                 <span className="gr__preview-brand-hi">कर्तव्य</span>
               </div>
               <div className="gr__preview-kicker">
@@ -711,7 +711,7 @@ export default function ReportsPage({ teams: propTeams }) {
               </div>
               <div>
                 <b>Privacy</b>
-                <span>Only data you can already see in Kartavya is included.</span>
+                <span>Only data you can already see in Kartavaya is included.</span>
               </div>
             </div>
           </div>

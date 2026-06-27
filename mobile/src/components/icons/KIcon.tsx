@@ -1,5 +1,5 @@
-/**
- * KIcon — Kartavya brand mark
+﻿/**
+ * KIcon — Kartavaya brand mark
  *
  * Renders the Devanagari क on a 135° brand gradient with:
  *   • inner shine overlay (radial highlight)

@@ -1,5 +1,5 @@
-"""
-invite_router.py — Kartavya by Aekam Inc
+﻿"""
+invite_router.py — Kartavaya by Aekam Inc
 Admin-only invite system. No public registration.
 """
 import os
@@ -297,7 +297,7 @@ async def create_invite(body: InviteCreate, pool=Depends(get_pool), admin=Depend
             row = await pool.fetchrow(
                 "SELECT company_name FROM users WHERE company_name IS NOT NULL LIMIT 1"
             )
-            workspace_name = (row["company_name"] if row else None) or "Kartavya"
+            workspace_name = (row["company_name"] if row else None) or "Kartavaya"
         expires_label  = expires_at.strftime("%b %-d, %Y")
         send_invite_email(body.email.lower(), inviter_name, body.role, token,
                           workspace_name=workspace_name,

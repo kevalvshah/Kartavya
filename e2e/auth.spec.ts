@@ -1,7 +1,7 @@
-/**
+﻿/**
  * E2E tests — Authentication flows
  *
- * These tests run against the deployed/local Kartavya web app.
+ * These tests run against the deployed/local Kartavaya web app.
  * Set environment variables for credentials:
  *   E2E_ADMIN_EMAIL    (default: admin@aekaminc.com)
  *   E2E_ADMIN_PASSWORD (required for login tests to pass)
@@ -20,9 +20,9 @@ test('login page loads and shows email/password fields', async ({ page }) => {
   await expect(page.locator('input[type="password"]')).toBeVisible();
 });
 
-test('login page shows the Kartavya brand', async ({ page }) => {
+test('login page shows the Kartavaya brand', async ({ page }) => {
   await page.goto('/login');
-  await expect(page).toHaveTitle(/Kartavya/i);
+  await expect(page).toHaveTitle(/Kartavaya/i);
 });
 
 // ── Invalid login ─────────────────────────────────────────────────────────────

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * ApprovePage.jsx — public magic-link approval landing.
  * Route: /approve?token=<jwt>  — NO <Protected> wrapper.
  * Validates token, renders the editorial approval card, two big buttons.
@@ -21,7 +21,7 @@ function Logo() {
         <text x="16" y="22" textAnchor="middle" fill="white" fontSize="16" fontWeight="700" fontFamily="serif">क</text>
       </svg>
       <div>
-        <div style={{ fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 500, color: 'var(--ink)', letterSpacing: '-0.01em' }}>Kartavya</div>
+        <div style={{ fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 500, color: 'var(--ink)', letterSpacing: '-0.01em' }}>Kartavaya</div>
         <div style={{ fontFamily: 'var(--font-hindi)', fontSize: 12, color: 'var(--ink-3)' }}>कर्तव्य</div>
       </div>
     </div>
@@ -243,7 +243,7 @@ export default function ApprovePage() {
         )}
 
         <div style={{ marginTop: 24, textAlign: 'center', fontSize: 11, color: 'var(--ink-faint)' }}>
-          Kartavya by Aekam Inc · <span style={{ fontFamily: 'var(--font-hindi)' }}>कर्तव्य</span>
+          Kartavaya by Aekam Inc · <span style={{ fontFamily: 'var(--font-hindi)' }}>कर्तव्य</span>
         </div>
       </div>
     </div>

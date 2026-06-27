@@ -1,5 +1,5 @@
-"""
-server.py — Kartavya API v2 by Aekam Inc
+﻿"""
+server.py — Kartavaya API v2 by Aekam Inc
 Monolith routes stay; new v2 routers mounted at the bottom.
 R2 upload router replaces the old base64 /api/upload endpoint.
 
@@ -111,7 +111,7 @@ if _SENTRY_DSN:
         environment=os.environ.get("RAILWAY_ENVIRONMENT", "production"),
     )
 
-app = FastAPI(title="Kartavya API v2", description="Team task management by Aekam Inc")
+app = FastAPI(title="Kartavaya API v2", description="Team task management by Aekam Inc")
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.add_middleware(SlowAPIMiddleware)
@@ -121,11 +121,11 @@ api_router = APIRouter(prefix="/api")
 DEFAULT_ORIGINS = [
     "https://kartavaya.com",
     "https://www.kartavaya.com",
-    "https://kartavya-aekam.vercel.app",
-    "https://kartavya-production.akeam.vercel.app",
-    "https://kartavya-kevalvshah03-6145s-projects.vercel.app",
-    "https://kartavya-git-main-kevalvshah03-6145s-projects.vercel.app",
-    "https://kartavya-git-v2-plan-kevalvshah03-6145s-projects.vercel.app",
+    "https://Kartavaya-aekam.vercel.app",
+    "https://Kartavaya-production.akeam.vercel.app",
+    "https://Kartavaya-kevalvshah03-6145s-projects.vercel.app",
+    "https://Kartavaya-git-main-kevalvshah03-6145s-projects.vercel.app",
+    "https://Kartavaya-git-v2-plan-kevalvshah03-6145s-projects.vercel.app",
     "http://localhost:3000",
     "http://localhost:8080",
 ]
@@ -138,8 +138,8 @@ DEFAULT_OWNER_EMAIL = os.environ.get("DEFAULT_OWNER_EMAIL", "admin@aekaminc.com"
 
 # Regex covers PR preview deployments on both Vercel tenants (kevalvshah03 + akeam).
 _VERCEL_PREVIEW_RE = (
-    r"https://kartavya-[a-z0-9-]+-kevalvshah03-6145s-projects\.vercel\.app"
-    r"|https://kartavya-[a-z0-9-]+\.akeam\.vercel\.app"
+    r"https://Kartavaya-[a-z0-9-]+-kevalvshah03-6145s-projects\.vercel\.app"
+    r"|https://Kartavaya-[a-z0-9-]+\.akeam\.vercel\.app"
 )
 
 app.add_middleware(
@@ -455,7 +455,7 @@ def row_to_task(r) -> TaskOut:
 @api_router.get("/")
 async def root():
     """Return a simple health-check payload confirming the API is running."""
-    return {"message":"Kartavya API v2","by":"Aekam Inc","status":"ok"}
+    return {"message":"Kartavaya API v2","by":"Aekam Inc","status":"ok"}
 
 @api_router.get("/auth/me")
 async def me(user=Depends(require_user)):
@@ -2309,7 +2309,7 @@ async def startup():
     r2_bucket = os.environ.get("R2_BUCKET_NAME", "NOT SET")
     logger.info("R2_BUCKET: %s | R2_PUBLIC_URL: %s", r2_bucket, os.environ.get('R2_PUBLIC_URL', '<presigned>'))
     logger.info("CORS origins: %s", ALLOWED_ORIGINS)
-    logger.info("Kartavya API v2 ready — custom fields, automations, activity, time tracking, R2 uploads")
+    logger.info("Kartavaya API v2 ready — custom fields, automations, activity, time tracking, R2 uploads")
     # Run schema migrations in the background so gunicorn workers are ready immediately.
     # The healthcheck hits /api/health which also warms the pool, so the background task
     # completes well before real user traffic arrives.

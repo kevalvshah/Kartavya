@@ -1,5 +1,5 @@
-# Messaging + WhatsApp Integration Plan
-### Kartavya · संवाद (Samvāda)
+﻿# Messaging + WhatsApp Integration Plan
+### Kartavaya · संवाद (Samvāda)
 
 **Status:** Draft — Approved for Development  
 **Owner:** Keval V Shah · Aekam Inc  
@@ -26,11 +26,11 @@
 
 ## 1. Vision
 
-Indian professional services teams — CA firms, consultancies, agencies — do not separate work and communication. They run approvals on WhatsApp, share files in groups, and lose context between apps. Kartavya should be the single place where work *and* conversation live together.
+Indian professional services teams — CA firms, consultancies, agencies — do not separate work and communication. They run approvals on WhatsApp, share files in groups, and lose context between apps. Kartavaya should be the single place where work *and* conversation live together.
 
-**Feature 1 — Messaging (संवाद):** A Slack-inspired messaging layer embedded inside Kartavya. Project channels auto-exist. DMs work. Messages are threaded. Files attach. Task links unfurl. Realtime throughout.
+**Feature 1 — Messaging (संवाद):** A Slack-inspired messaging layer embedded inside Kartavaya. Project channels auto-exist. DMs work. Messages are threaded. Files attach. Task links unfurl. Realtime throughout.
 
-**Feature 2 — WhatsApp (वार्ता):** WhatsApp becomes a notification and reply surface. Team members receive approval requests on WhatsApp with one-tap Approve/Reject buttons. Replies to any notification land as comments inside Kartavya. Users never have to open the app to stay in the loop.
+**Feature 2 — WhatsApp (वार्ता):** WhatsApp becomes a notification and reply surface. Team members receive approval requests on WhatsApp with one-tap Approve/Reject buttons. Replies to any notification land as comments inside Kartavaya. Users never have to open the app to stay in the loop.
 
 **Key principle:** Both features share a single `messages` table. WhatsApp is a delivery channel, not a separate system.
 
@@ -64,7 +64,7 @@ Indian professional services teams — CA firms, consultancies, agencies — do 
 - Non-image files show a filename chip with download icon
 
 **Link Unfurling**
-- Paste any Kartavya task URL → renders a compact task card: title, status chip, assignee avatar, due date
+- Paste any Kartavaya task URL → renders a compact task card: title, status chip, assignee avatar, due date
 - Paste Figma, Loom, or Google Drive URLs → branded chip with icon
 - OG metadata fetch for all other URLs → title + description preview
 
@@ -101,14 +101,14 @@ Reuses existing `send_push()` with `kind="mention"` and `kind="comment"`.
 
 ### 3.1 Scope — Phase 1
 
-**Outbound (Kartavya → WhatsApp)**
+**Outbound (Kartavaya → WhatsApp)**
 - Task assigned to you
 - Approval requested (with Approve/Reject buttons)
 - Task approved
 - Task rejected
 - @mention in a channel
 
-**Inbound (WhatsApp → Kartavya)**
+**Inbound (WhatsApp → Kartavaya)**
 - Reply to any notification → posted as a comment on the linked task or message in the linked channel
 - Tap **Approve** button → approval recorded, fan-out fires
 - Tap **Reject** button → bot asks for reason, next reply used as rejection notes
@@ -128,7 +128,7 @@ Reuses existing `send_push()` with `kind="mention"` and `kind="comment"`.
     ↓
     WhatsApp Template Message:
     ┌─────────────────────────────────────────┐
-    │ 📋 Approval Required — Kartavya         │
+    │ 📋 Approval Required — Kartavaya         │
     │                                         │
     │ Task: {task_title}                      │
     │ Requested by: {requester_name}          │
@@ -176,13 +176,13 @@ Meta requires explicit opt-in before sending outbound messages.
 
 ### 3.6 Inbound Reply Threading
 
-When Kartavya sends a WhatsApp message, it stores the Meta message ID in `whatsapp_messages.wa_message_id` along with `context_type` (task_comment / approval / channel_message) and `context_id`.
+When Kartavaya sends a WhatsApp message, it stores the Meta message ID in `whatsapp_messages.wa_message_id` along with `context_type` (task_comment / approval / channel_message) and `context_id`.
 
 When an inbound reply arrives:
 - `message.context.id` matches a stored `wa_message_id`
 - Lookup → get `context_type` + `context_id`
 - Route accordingly: insert into `messages` table with `source='whatsapp'`
-- Message appears in Kartavya with a WhatsApp badge icon
+- Message appears in Kartavaya with a WhatsApp badge icon
 
 If no context (user texts the bot number directly):
 - Bot replies: "Please reply to a specific notification to add a comment."
@@ -473,7 +473,7 @@ frontend/src/
 
 ## 7. UI Patterns + Design Conventions
 
-All new components follow the existing Kartavya `k-*` design system.
+All new components follow the existing Kartavaya `k-*` design system.
 
 ### 7.1 Layout Classes Used
 
@@ -518,7 +518,7 @@ padding-left: var(--sp-3);
 
 ### 7.3 Bilingual Labels
 
-All section headers follow the English + Sanskrit/Hindi pattern per Kartavya convention:
+All section headers follow the English + Sanskrit/Hindi pattern per Kartavaya convention:
 
 | English | Sanskrit/Hindi |
 |---|---|
@@ -627,7 +627,7 @@ This is the only time the WhatsApp green (#25D366) appears in the UI.
 | 4.5 | WhatsApp source badge on messages posted via WhatsApp |
 | 4.6 | Graceful fallback for uncontexted inbound messages |
 
-**Done criteria:** Approver receives WhatsApp message, taps Approve → task moves to approved in Kartavya. Reply to task notification → comment appears in task channel with WhatsApp badge.
+**Done criteria:** Approver receives WhatsApp message, taps Approve → task moves to approved in Kartavaya. Reply to task notification → comment appears in task channel with WhatsApp badge.
 
 ---
 

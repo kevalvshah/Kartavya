@@ -1,4 +1,4 @@
-# AWS SES Setup Guide for Kartavya
+﻿# AWS SES Setup Guide for Kartavaya
 
 ## Why AWS SES?
 
@@ -21,7 +21,7 @@
 2. Click "Create an AWS Account"
 3. Fill in:
    - Email address
-   - Account name: "Kartavya Production"
+   - Account name: "Kartavaya Production"
    - Password
 4. Add payment method (won't be charged in free tier)
 5. Verify phone number
@@ -41,7 +41,7 @@
 
 1. Click **"Identities"** → **"Create identity"**
 2. Select **"Domain"**
-3. Enter your domain: `yourdomain.com` (e.g., `kartavya.app`)
+3. Enter your domain: `yourdomain.com` (e.g., `Kartavaya.app`)
 4. Leave "Use a custom MAIL FROM domain" unchecked
 5. Click **"Create identity"**
 
@@ -106,10 +106,10 @@ TTL: 1800
 2. Click **"Request production access"**
 3. Fill out the form:
    - **Mail type:** Transactional
-   - **Website URL:** https://kartavya-aekam.vercel.app
+   - **Website URL:** https://Kartavaya-aekam.vercel.app
    - **Use case description:**
      ```
-     Kartavya is a task management platform that sends:
+     Kartavaya is a task management platform that sends:
      1. Task assignment notifications to team members
      2. Approval workflow notifications (pending/approved/rejected)
      3. Team invitation emails
@@ -140,7 +140,7 @@ TTL: 1800
 
 1. Go to SES Console → **"SMTP settings"**
 2. Click **"Create SMTP credentials"**
-3. IAM User Name: `kartavya-ses-smtp`
+3. IAM User Name: `Kartavaya-ses-smtp`
 4. Click **"Create user"**
 5. **IMPORTANT:** Download the credentials CSV file
    - SMTP Username: `AKIAxxxxxxxxxx`
@@ -154,7 +154,7 @@ TTL: 1800
 ### On Railway (Production):
 
 1. Go to Railway Dashboard: https://railway.app/
-2. Select your `Kartavya` project → `backend` service
+2. Select your `Kartavaya` project → `backend` service
 3. Go to **"Variables"** tab
 4. Add these environment variables:
 
@@ -218,7 +218,7 @@ Railway will auto-deploy with boto3 installed.
 5. Check your inbox (and spam folder)
 
 ### Test via Backend API:
-1. Login to Kartavya: https://kartavya-aekam.vercel.app/
+1. Login to Kartavaya: https://Kartavaya-aekam.vercel.app/
 2. Create a test task and assign it to someone
 3. Check if they receive the email notification
 4. Check Railway logs:
@@ -294,7 +294,7 @@ pip install boto3
 
 ### After Free Tier:
 - **$0.10 per 1,000 emails** sent
-- **$0.12 per 1,000 emails** received (not applicable for Kartavya)
+- **$0.12 per 1,000 emails** received (not applicable for Kartavaya)
 - **No monthly fees**
 
 ### Example Costs:
@@ -346,7 +346,7 @@ pip install boto3
 
 - **AWS SES Documentation:** https://docs.aws.amazon.com/ses/
 - **AWS Support:** https://console.aws.amazon.com/support/
-- **Kartavya Issues:** https://github.com/kevalvshah/Kartavya/issues
+- **Kartavaya Issues:** https://github.com/kevalvshah/Kartavaya/issues
 
 ---
 

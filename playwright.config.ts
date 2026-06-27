@@ -1,7 +1,7 @@
-import { defineConfig, devices } from '@playwright/test';
+﻿import { defineConfig, devices } from '@playwright/test';
 
 /**
- * E2E test configuration for Kartavya web app.
+ * E2E test configuration for Kartavaya web app.
  *
  * In CI: set PLAYWRIGHT_BASE_URL to the deployed Vercel URL.
  * Locally: runs against the Vite dev server on port 3000.

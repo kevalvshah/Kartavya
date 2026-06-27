@@ -1,4 +1,4 @@
-# Kartavya — कर्तव्य
+﻿# Kartavaya — कर्तव्य
 **Do what must be done.**
 
 Team task management built for Indian businesses — by [Aekam Inc](https://www.aekaminc.com)
@@ -27,7 +27,7 @@ Team task management built for Indian businesses — by [Aekam Inc](https://www.
 ## Repo structure
 
 ```
-Kartavya/
+Kartavaya/
 ├── backend/          ← FastAPI app (see backend/README.md)
 │   ├── server.py     ← entry point: app factory + router mounts
 │   ├── routers/      ← one file per feature domain
@@ -88,4 +88,4 @@ npm start
 
 ---
 
-*Kartavya (कर्तव्य) — Sanskrit for "duty" or "that which must be done"*
+*Kartavaya (कर्तव्य) — Sanskrit for "duty" or "that which must be done"*

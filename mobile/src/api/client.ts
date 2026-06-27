@@ -1,8 +1,8 @@
-import axios from 'axios';
+﻿import axios from 'axios';
 
 const BASE_URL =
   process.env.EXPO_PUBLIC_API_URL ??
-  'https://kartavya-production.up.railway.app';
+  'https://Kartavaya-production.up.railway.app';
 
 export const apiClient = axios.create({
   baseURL:         `${BASE_URL}/api`,

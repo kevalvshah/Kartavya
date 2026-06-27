@@ -1,4 +1,4 @@
-"""
+﻿"""
 automation_engine.py — Evaluates automation rules on events.
 
 Usage:
@@ -51,7 +51,7 @@ async def run_automation(automation: dict, context: dict, pool) -> dict:
                         results.append({"action": action_type, "ok": False, "error": "recipient not in workspace"})
                         continue
                 from email_service import send_email
-                send_email(to_addr, cfg.get("subject", "Kartavya notification"), cfg.get("html", ""))
+                send_email(to_addr, cfg.get("subject", "Kartavaya notification"), cfg.get("html", ""))
                 results.append({"action": action_type, "ok": True})
 
             elif action_type == "send_notification":

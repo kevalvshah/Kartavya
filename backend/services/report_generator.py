@@ -1,4 +1,4 @@
-"""report_generator.py — PDF (WeasyPrint) and Excel (openpyxl) generation.
+﻿"""report_generator.py — PDF (WeasyPrint) and Excel (openpyxl) generation.
 
 PDF matches the 5-page editorial design from report-pdf.jsx / report-pdf.css:
   Page 1 — Cover + KPI tiles + executive summary
@@ -93,7 +93,7 @@ def _page_shell(body_html: str, brand: str, meta_right: str, foot_left: str, pag
 <div class="pdf">
   <div class="pdf__head">
     <div class="pdf__brand">
-      <span class="pdf__brand-main">Kartavya</span>
+      <span class="pdf__brand-main">Kartavaya</span>
       <span class="pdf__brand-hi">कर्तव्य</span>
       <span class="pdf__brand-by">by Aekam Inc</span>
     </div>
@@ -534,7 +534,7 @@ def _build_html(data: dict, team_name: str, period_from: str, period_to: str) ->
       <div class="pdf__method">
         <div>
           <div class="pdf__method-k">Source</div>
-          <p>All data is pulled directly from the Kartavya production database (Postgres). No third-party aggregator.</p>
+          <p>All data is pulled directly from the Kartavaya production database (Postgres). No third-party aggregator.</p>
         </div>
         <div>
           <div class="pdf__method-k">Counting rules</div>
@@ -552,7 +552,7 @@ def _build_html(data: dict, team_name: str, period_from: str, period_to: str) ->
 
       <div class="pdf__colophon">
         <div class="pdf__colophon-h">
-          <span class="pdf__colophon-main">Kartavya</span>
+          <span class="pdf__colophon-main">Kartavaya</span>
           <span class="pdf__colophon-hi">कर्तव्य</span>
           <em>— do what must be done.</em>
         </div>
@@ -876,7 +876,7 @@ def generate_excel(data: dict, team_name: str, period_from: str, period_to: str)
     # ── Sheet 1: Summary ──────────────────────────────────────────────
     ws1 = wb.active; ws1.title = "Summary"
     ws1.column_dimensions["A"].width = 28; ws1.column_dimensions["B"].width = 18
-    ws1["A1"] = f"Kartavya — {team_name} Report"
+    ws1["A1"] = f"Kartavaya — {team_name} Report"
     ws1["A1"].font = Font(name="Georgia", bold=True, size=16, color=C_INK)
     ws1["A2"] = f"Period: {period_from} – {period_to}"
     ws1["A2"].font = Font(name="Calibri", size=10, color=C_INK3)

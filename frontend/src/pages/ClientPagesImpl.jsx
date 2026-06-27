@@ -1,4 +1,4 @@
-/**
+﻿/**
  * ClientPagesImpl.jsx — client-facing page components.
  *
  * v2 capabilities:
@@ -592,7 +592,7 @@ export function ClientPortal() {
   const [marking,  setMarking]  = useState(null);
   const [members,  setMembers]  = useState([]);
   const [confirmState, setConfirmState] = useState(null);
-  const user = (() => { try { return JSON.parse(localStorage.getItem('kartavya_user') || 'null'); } catch { return null; } })();
+  const user = (() => { try { return JSON.parse(localStorage.getItem('Kartavaya_user') || 'null'); } catch { return null; } })();
 
   const reloadTasks = () =>
     api.get('/client/tasks').then(r => setTasks(r.data)).catch(() => {});

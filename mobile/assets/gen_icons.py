@@ -1,5 +1,5 @@
-"""
-Generate Kartavya app icons from the brand spec:
+﻿"""
+Generate Kartavaya app icons from the brand spec:
   - 135° gradient #0082c6 → #03a1b6 → #05b7aa
   - Devanagari "क" mark in white, ~62% of icon height
   - Inner shine: 18% white top-to-transparent (0→35%)
@@ -195,7 +195,7 @@ def gen_splash():
         name_font = ImageFont.truetype(FONT_PATH, 72)
     except Exception:
         name_font = ImageFont.load_default()
-    name = "KARTAVYA"
+    name = "Kartavaya"
     nb = draw.textbbox((0, 0), name, font=name_font)
     nw = nb[2] - nb[0]
     nx = (W - nw) / 2 - nb[0]

@@ -1,4 +1,4 @@
-/** Brand tokens, logo, wordmark, role badge — shared across all layouts */
+﻿/** Brand tokens, logo, wordmark, role badge — shared across all layouts */
 import React from 'react';
 
 export const K = {
@@ -29,7 +29,7 @@ export function KWordmark({ dark = false, size = 'md' }) {
   return (
     <div>
       <div style={{ fontSize: fs, fontWeight: 800, letterSpacing: 2.5, textTransform: 'uppercase',
-        color: dark ? '#fff' : K.dark }}>Kartavya</div>
+        color: dark ? '#fff' : K.dark }}>Kartavaya</div>
       <div style={{ fontSize: sub, letterSpacing: 2.5, textTransform: 'uppercase',
         color: K.teal, fontWeight: 700, marginTop: 1 }}>by Aekam Inc</div>
     </div>

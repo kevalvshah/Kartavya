@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Unit tests for frontend/src/lib/auth.js
  *
  * Tests that:
@@ -59,7 +59,7 @@ describe('apiLogin()', () => {
     const result = await apiLogin('admin@test.com', 'password123');
 
     expect(localStorage.getItem('auth_token')).toBe(FAKE_TOKEN);
-    expect(JSON.parse(localStorage.getItem('kartavya_user'))).toEqual(FAKE_USER);
+    expect(JSON.parse(localStorage.getItem('Kartavaya_user'))).toEqual(FAKE_USER);
     expect(result.token).toBe(FAKE_TOKEN);
     expect(result.user).toEqual(FAKE_USER);
   });
@@ -83,16 +83,16 @@ describe('apiLogin()', () => {
 // ── apiLogout ─────────────────────────────────────────────────────────────────
 
 describe('apiLogout()', () => {
-  it('clears auth_token, kartavya_user, and kv_teams_cache', async () => {
+  it('clears auth_token, Kartavaya_user, and kv_teams_cache', async () => {
     localStorage.setItem('auth_token', FAKE_TOKEN);
-    localStorage.setItem('kartavya_user', JSON.stringify(FAKE_USER));
+    localStorage.setItem('Kartavaya_user', JSON.stringify(FAKE_USER));
     localStorage.setItem('kv_teams_cache', '[]');
 
     api.post.mockResolvedValue({ data: { ok: true } });
     await apiLogout();
 
     expect(localStorage.getItem('auth_token')).toBeNull();
-    expect(localStorage.getItem('kartavya_user')).toBeNull();
+    expect(localStorage.getItem('Kartavaya_user')).toBeNull();
     expect(localStorage.getItem('kv_teams_cache')).toBeNull();
   });
 
@@ -112,17 +112,17 @@ describe('currentUser()', () => {
   });
 
   it('returns the stored user object when logged in', () => {
-    localStorage.setItem('kartavya_user', JSON.stringify(FAKE_USER));
+    localStorage.setItem('Kartavaya_user', JSON.stringify(FAKE_USER));
     expect(currentUser()).toEqual(FAKE_USER);
   });
 
   it('returns null for corrupted localStorage value', () => {
-    localStorage.setItem('kartavya_user', 'not-valid-json{{{');
+    localStorage.setItem('Kartavaya_user', 'not-valid-json{{{');
     expect(currentUser()).toBeNull();
   });
 
   it('returns null when value is the string "null"', () => {
-    localStorage.setItem('kartavya_user', 'null');
+    localStorage.setItem('Kartavaya_user', 'null');
     expect(currentUser()).toBeNull();
   });
 });

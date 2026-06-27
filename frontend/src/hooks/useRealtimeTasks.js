@@ -1,4 +1,4 @@
-/**
+﻿/**
  * useRealtimeTasks.js
  *
  * Subscribes to Supabase Realtime changes on the `tasks` table
@@ -47,7 +47,7 @@ export function useRealtimeTasks(projectId, initialTasks = []) {
           event: '*',           // INSERT | UPDATE | DELETE
           schema: 'public',
           table: 'tasks',
-          filter: `team_id=eq.${projectId}`,  // Kartavya uses team_id as project FK
+          filter: `team_id=eq.${projectId}`,  // Kartavaya uses team_id as project FK
         },
         (payload) => {
           const { eventType, new: newRow, old: oldRow } = payload;

@@ -1,5 +1,5 @@
-"""
-utils.py — shared helpers and Pydantic models for the Kartavya API.
+﻿"""
+utils.py — shared helpers and Pydantic models for the Kartavaya API.
 
 Anything that was previously inline in server.py and used by more than
 one router lives here. Import from here, not from server.py.

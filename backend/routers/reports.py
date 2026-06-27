@@ -1,4 +1,4 @@
-"""reports.py — Kartavya Reports router.
+﻿"""reports.py — Kartavaya Reports router.
 
 Endpoints:
   GET  /api/reports/data/{team_id}           — fetch report data (time + tasks)
@@ -320,12 +320,12 @@ async def download_report(
         if fmt == "excel":
             from services.report_generator import generate_excel
             content = generate_excel(data, team_name, from_date, to_date)
-            filename = f"kartavya-{safe_slug}-{from_date}-{to_date}.xlsx"
+            filename = f"Kartavaya-{safe_slug}-{from_date}-{to_date}.xlsx"
             media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         else:
             from services.report_generator import generate_pdf
             content = generate_pdf(data, team_name, from_date, to_date)
-            filename = f"kartavya-{safe_slug}-{from_date}-{to_date}.pdf"
+            filename = f"Kartavaya-{safe_slug}-{from_date}-{to_date}.pdf"
             media_type = "application/pdf"
     except Exception as exc:
         logger.error("Report generation failed for %s fmt=%s: %s", _log_safe(team_id), _log_safe(fmt), _log_safe(exc), exc_info=True)

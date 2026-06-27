@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Sidebar.jsx — redesigned dark ink sidebar with bilingual grouped nav.
  */
 import React from 'react';
@@ -123,7 +123,7 @@ export default function Sidebar({ inboxCount = 0 }) {
       <div className="k-sidebar__brand">
         <KMark size={32} />
         <div className="k-wordmark">
-          <div className="k-wordmark__main">Kartavya</div>
+          <div className="k-wordmark__main">Kartavaya</div>
           <div className="k-wordmark__sans">कर्तव्य</div>
           <div className="k-wordmark__sub">by Aekam Inc</div>
         </div>

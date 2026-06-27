@@ -1,5 +1,5 @@
-﻿/* Kartavya Service Worker — PWA offline support */
-const CACHE = 'kartavya-v2';
+﻿/* Kartavaya Service Worker — PWA offline support */
+const CACHE = 'Kartavaya-v2';
 const PRECACHE = ['/', '/index.html'];
 
 self.addEventListener('install', (e) => {
@@ -14,7 +14,7 @@ self.addEventListener('activate', (e) => {
 
 /* Push notification handler — fires when backend sends a Web Push message */
 self.addEventListener('push', (e) => {
-  let data = { title: 'Kartavya', body: 'You have a new notification.' };
+  let data = { title: 'Kartavaya', body: 'You have a new notification.' };
   try { data = e.data?.json() ?? data; } catch (_) {}
   e.waitUntil(
     self.registration.showNotification(data.title, {

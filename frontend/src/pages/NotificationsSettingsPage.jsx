@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+﻿import React, { useEffect, useMemo, useState } from 'react';
 import { api } from '../lib/api';
 import { ensureServiceWorkerRegistered, urlBase64ToUint8Array } from '../lib/push';
 import { PageHeader } from '../components/editorial';
@@ -125,7 +125,7 @@ export default function NotificationsSettingsPage() {
         </div>
         <div className="k-card__body">
           <p style={{ fontSize: 13, color: 'var(--ink-3)', marginBottom: 18 }}>
-            Plays when an in-app reminder or notification toast appears while Kartavya is open.
+            Plays when an in-app reminder or notification toast appears while Kartavaya is open.
           </p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             {NOTIF_SOUND_GROUPS.map(g => (

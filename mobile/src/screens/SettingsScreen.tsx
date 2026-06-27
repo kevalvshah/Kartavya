@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   Switch, ActivityIndicator, Platform, Alert, Linking,
@@ -309,7 +309,7 @@ export default function SettingsScreen() {
         </Row>
       </View>
 
-      <Text style={[s.version, { color: t.ink4 }]}>Kartavya v2.0 · Aekam Inc</Text>
+      <Text style={[s.version, { color: t.ink4 }]}>Kartavaya v2.0 · Aekam Inc</Text>
     </ScrollView>
   );
 }

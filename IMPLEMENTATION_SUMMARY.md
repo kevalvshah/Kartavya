@@ -1,4 +1,4 @@
-# QA Audit Fixes - Complete Implementation
+﻿# QA Audit Fixes - Complete Implementation
 
 All issues from the E2E QA audit have been fixed and are ready for deployment.
 
@@ -32,8 +32,8 @@ Add these environment variables in Railway:
 ```env
 JWT_SECRET=your-secret-key-min-32-chars
 SENDGRID_API_KEY=SG.your_sendgrid_api_key
-FROM_EMAIL=noreply@kartavya.app
-FRONTEND_URL=https://kartavya-aekam.vercel.app
+FROM_EMAIL=noreply@Kartavaya.app
+FRONTEND_URL=https://Kartavaya-aekam.vercel.app
 DATABASE_URL=postgresql://...
 ENVIRONMENT=production
 ```

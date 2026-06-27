@@ -1,4 +1,4 @@
-/**
+﻿/**
  * TimeReportPage.jsx — editorial Time Report.
  * Layout: filters card → two-col (daily distribution chart + by member) → entries table → quote
  */
@@ -37,7 +37,7 @@ function exportCSV(entries) {
   const blob = new Blob([csv], { type: 'text/csv' });
   const url  = URL.createObjectURL(blob);
   const a    = document.createElement('a');
-  a.href = url; a.download = 'kartavya-time-report.csv'; a.click();
+  a.href = url; a.download = 'Kartavaya-time-report.csv'; a.click();
   URL.revokeObjectURL(url);
 }
 

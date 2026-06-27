@@ -1,6 +1,6 @@
-{
-  "short_name": "Kartavya",
-  "name": "Kartavya by Aekam Inc",
+﻿{
+  "short_name": "Kartavaya",
+  "name": "Kartavaya by Aekam Inc",
   "description": "Team task management — invite-only, project boards, client portal",
   "start_url": "/",
   "display": "standalone",

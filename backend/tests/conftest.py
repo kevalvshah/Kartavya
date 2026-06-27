@@ -1,5 +1,5 @@
-"""
-Shared fixtures for Kartavya backend unit tests.
+﻿"""
+Shared fixtures for Kartavaya backend unit tests.
 
 Strategy
 --------

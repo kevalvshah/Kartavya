@@ -1,5 +1,5 @@
-"""
-db.py — Supabase PostgreSQL connection pool for Kartavya
+﻿"""
+db.py — Supabase PostgreSQL connection pool for Kartavaya
 Lazy connection — does NOT connect at startup, connects on first request.
 This prevents Railway crashes if DATABASE_URL is misconfigured.
 """

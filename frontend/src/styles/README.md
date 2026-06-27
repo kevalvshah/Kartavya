@@ -1,4 +1,4 @@
-# frontend/src/styles/
+﻿# frontend/src/styles/
 
 Global CSS files. All imported at the top of `App.js` in this order:
 
@@ -24,7 +24,7 @@ because all other files reference its `var(--)` values.
 | `dark-theme.css` | Dark mode overrides via `[data-theme="dark"]` selector | Adding a new token that needs a dark-mode value |
 | `animations.css` | Keyframe animations and transition utilities (`fade-in`, `slide-up`, etc.) | Adding or changing a shared animation |
 | `mobile-responsive.css` | Media query overrides for `md` (768px) and below | Fixing mobile layout issues |
-| `brand.css` | Harabara Mais `@font-face` + `.kartavya-wordmark` scoped styles | Changing the wordmark font or its sizing |
+| `brand.css` | Harabara Mais `@font-face` + `.Kartavaya-wordmark` scoped styles | Changing the wordmark font or its sizing |
 
 ## Rules
 

@@ -1,4 +1,4 @@
-"""Database Migration: Role-Based Access Control & Approval Workflow"""
+﻿"""Database Migration: Role-Based Access Control & Approval Workflow"""
 
 import asyncpg
 import os
@@ -132,7 +132,7 @@ if __name__ == "__main__":
     import asyncio
     print("="*80)
     print("Database Migration: Role-Based Access Control & Approval Workflow")
-    print("Kartavya by Aekam Inc")
+    print("Kartavaya by Aekam Inc")
     print("="*80)
     print()
     asyncio.run(run_migration())

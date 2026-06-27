@@ -1,4 +1,4 @@
-/**
+﻿/**
  * ClientPortalScreen — read-only task view for client users.
  * Uses cookie-based apiClient (new API layer) and getCachedUser.
  */
@@ -111,7 +111,7 @@ export default function ClientPortalScreen({ onLogout }: Props) {
           <Text style={{ color: '#fff', fontSize: 14, fontWeight: '900' }}>◆</Text>
         </LinearGradient>
         <View style={{ flex: 1 }}>
-          <Text style={[s.brand, { color: t.ink }]}>KARTAVYA</Text>
+          <Text style={[s.brand, { color: t.ink }]}>Kartavaya</Text>
           <Text style={[s.brandSub, { color: t.ink3 }]}>Hi, {user?.name ?? user?.full_name}</Text>
         </View>
         <TouchableOpacity onPress={confirmLogout} style={[s.logoutBtn, { backgroundColor: `${t.error}18` }]}>

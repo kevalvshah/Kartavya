@@ -1,4 +1,4 @@
-# Implementation Status - Kartavya Features
+﻿# Implementation Status - Kartavaya Features
 
 ## 🎯 Implementation Progress: 60% Complete
 
@@ -275,7 +275,7 @@ FROM_EMAIL=noreply@yourdomain.com
 - Platform: Expo
 - Build tool: EAS Build
 - Organization: `aekaminc`
-- Project: `kartavya`
+- Project: `Kartavaya`
 
 **Build Profiles:**
 1. **Preview** (Recommended for testing):
@@ -283,19 +283,19 @@ FROM_EMAIL=noreply@yourdomain.com
    cd mobile/
    eas build --profile preview --platform android
    ```
-   Output: `kartavya-preview.apk` (~40-60MB)
+   Output: `Kartavaya-preview.apk` (~40-60MB)
 
 2. **Development** (With dev tools):
    ```bash
    eas build --profile development --platform android
    ```
-   Output: `kartavya-dev.apk` (~80-100MB)
+   Output: `Kartavaya-dev.apk` (~80-100MB)
 
 3. **Production** (For Play Store):
    ```bash
    eas build --profile production --platform android
    ```
-   Output: `kartavya-release.aab` (App Bundle)
+   Output: `Kartavaya-release.aab` (App Bundle)
 
 **Next Steps:**
 1. Install EAS CLI: `npm install -g eas-cli`

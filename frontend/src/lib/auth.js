@@ -1,4 +1,4 @@
-/** Auth helpers, date utils, theme hook — shared across all pages */
+﻿/** Auth helpers, date utils, theme hook — shared across all pages */
 import { useState, useEffect } from 'react';
 import { api } from './api';
 
@@ -6,14 +6,14 @@ import { api } from './api';
 export async function apiLogin(email, password) {
   const res = await api.post('/auth/login', { email, password });
   localStorage.setItem('auth_token', res.data.token);
-  localStorage.setItem('kartavya_user', JSON.stringify(res.data.user));
+  localStorage.setItem('Kartavaya_user', JSON.stringify(res.data.user));
   return res.data;
 }
 
 export async function apiAcceptInvite(token, name, password) {
   const res = await api.post('/auth/accept-invite', { token, name, password });
   localStorage.setItem('auth_token', res.data.token);
-  localStorage.setItem('kartavya_user', JSON.stringify(res.data.user));
+  localStorage.setItem('Kartavaya_user', JSON.stringify(res.data.user));
   return res.data;
 }
 
@@ -25,27 +25,27 @@ export async function apiForgotPassword(email) {
 export async function apiResetPassword(token, password) {
   const res = await api.post('/auth/reset-password', { token, password });
   localStorage.setItem('auth_token', res.data.token);
-  localStorage.setItem('kartavya_user', JSON.stringify(res.data.user));
+  localStorage.setItem('Kartavaya_user', JSON.stringify(res.data.user));
   return res.data;
 }
 
 export async function apiLogout() {
   try { await api.post('/auth/logout'); } catch (_) { /* fire-and-forget: logout always proceeds */ }
   localStorage.removeItem('auth_token');
-  localStorage.removeItem('kartavya_user');
+  localStorage.removeItem('Kartavaya_user');
   localStorage.removeItem('kv_teams_cache');
 }
 
 export function currentUser() {
-  try { return JSON.parse(localStorage.getItem('kartavya_user') || 'null'); } catch { return null; }
+  try { return JSON.parse(localStorage.getItem('Kartavaya_user') || 'null'); } catch { return null; }
 }
 
 // ── Theme ─────────────────────────────────────────────────────────────────────
 export function useTheme() {
-  const [theme, setTheme] = useState(() => localStorage.getItem('kartavya_theme') || 'light');
+  const [theme, setTheme] = useState(() => localStorage.getItem('Kartavaya_theme') || 'light');
   useEffect(() => {
     document.documentElement.classList.toggle('dark', theme === 'dark');
-    localStorage.setItem('kartavya_theme', theme);
+    localStorage.setItem('Kartavaya_theme', theme);
   }, [theme]);
   return { theme, setTheme };
 }

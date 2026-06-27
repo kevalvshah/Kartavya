@@ -1,11 +1,11 @@
-# Kartavya — Deployment Guide
+﻿# Kartavaya — Deployment Guide
 by Aekam Inc
 
 ## Repo
-https://github.com/kevalvshah/Kartavya
+https://github.com/kevalvshah/Kartavaya
 
 ## Stack
-- Frontend: React → Vercel (`kartavya.vercel.app`)
+- Frontend: React → Vercel (`Kartavaya.vercel.app`)
 - Backend: FastAPI → Railway
 - Database: MongoDB Atlas
 - Android: Expo + React Native (same JWT backend)
@@ -16,22 +16,22 @@ https://github.com/kevalvshah/Kartavya
 3. Copy connection string
 
 ## Step 2 — Railway (Backend)
-1. railway.app → New Project → Deploy from GitHub → kevalvshah/Kartavya
+1. railway.app → New Project → Deploy from GitHub → kevalvshah/Kartavaya
 2. Root directory: `backend`
 3. Start command: `uvicorn server:app --host 0.0.0.0 --port $PORT`
 
 ### Railway Environment Variables
 ```
 MONGO_URL=mongodb+srv://...
-DB_NAME=kartavya
+DB_NAME=Kartavaya
 JWT_SECRET=<64-char-random-hex>
-CORS_ORIGINS=https://kartavya.vercel.app
+CORS_ORIGINS=https://Kartavaya.vercel.app
 COOKIE_SECURE=true
 VAPID_SUBJECT=mailto:admin@aekaminc.com
 ```
 
 ## Step 3 — Vercel (Frontend)
-1. vercel.com → New Project → Import kevalvshah/Kartavya
+1. vercel.com → New Project → Import kevalvshah/Kartavaya
 2. Root directory: `frontend`
 3. Framework: Create React App
 
@@ -42,13 +42,13 @@ REACT_APP_BACKEND_URL=https://your-app.up.railway.app
 
 Your live URL:
 ```
-https://kartavya.vercel.app
+https://Kartavaya.vercel.app
 ```
 
 ## Step 4 — Update CORS on Railway
 Once Vercel URL is confirmed, update:
 ```
-CORS_ORIGINS=https://kartavya.vercel.app
+CORS_ORIGINS=https://Kartavaya.vercel.app
 ```
 
 ## Step 5 — Wire auth into server.py
@@ -72,6 +72,6 @@ python -c "import secrets; print(secrets.token_hex(32))"
 ## Future: Custom Domain
 When ready to move to aekaminc.com:
 ```
-CNAME  kartavya  →  cname.vercel-dns.com
+CNAME  Kartavaya  →  cname.vercel-dns.com
 ```
-Then add `kartavya.aekaminc.com` in Vercel → Settings → Domains.
+Then add `Kartavaya.aekaminc.com` in Vercel → Settings → Domains.

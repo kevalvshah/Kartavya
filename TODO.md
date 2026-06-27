@@ -1,4 +1,4 @@
-# Kartavya — Pending / Notes
+﻿# Kartavaya — Pending / Notes
 
 ## App Store (iOS)
 

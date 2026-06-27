@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 
@@ -56,7 +56,7 @@ export function MobileSidebar({ children }: MobileSidebarProps) {
               )}
             </svg>
           </button>
-          <div className="text-xl font-bold text-indigo-600">Kartavya</div>
+          <div className="text-xl font-bold text-indigo-600">Kartavaya</div>
           <div className="w-10"></div> {/* Spacer for centering */}
         </div>
       </div>
@@ -78,7 +78,7 @@ export function MobileSidebar({ children }: MobileSidebarProps) {
         {/* Mobile: Header inside sidebar */}
         <div className="lg:hidden p-4 border-b border-gray-200">
           <div className="flex items-center justify-between">
-            <div className="text-xl font-bold text-indigo-600">Kartavya</div>
+            <div className="text-xl font-bold text-indigo-600">Kartavaya</div>
             <button
               onClick={() => setIsOpen(false)}
               className="p-2 rounded-lg hover:bg-gray-100"

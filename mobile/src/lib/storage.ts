@@ -1,6 +1,6 @@
-import { MMKV } from 'react-native-mmkv';
+﻿import { MMKV } from 'react-native-mmkv';
 
-export const storage = new MMKV({ id: 'kartavya' });
+export const storage = new MMKV({ id: 'Kartavaya' });
 
 // Typed helpers
 export function storeGet<T>(key: string): T | undefined {

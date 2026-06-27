@@ -1,8 +1,8 @@
-import type { LinkingOptions } from '@react-navigation/native';
+﻿import type { LinkingOptions } from '@react-navigation/native';
 import type { RootStackParamList } from './RootStack';
 
 export const linking: LinkingOptions<RootStackParamList> = {
-  prefixes: ['kartavya://', 'https://app.kartavya.in'],
+  prefixes: ['Kartavaya://', 'https://app.Kartavaya.in'],
   config: {
     screens: {
       Main: {

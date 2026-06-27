@@ -1,5 +1,5 @@
-"""
-auth_router.py — Kartavya by Aekam Inc
+﻿"""
+auth_router.py — Kartavaya by Aekam Inc
 Invite-only auth. No public registration.
 Roles: admin | member | client
 """

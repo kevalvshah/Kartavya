@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Protected.jsx — auth guard wrapper.
  * Verifies token via /auth/me before rendering children.
  * Roles: admin (full access) | member (no admin page) | client (restricted to client/* pages)
@@ -28,7 +28,7 @@ export default function Protected({ children, requiredRole }) {
     api.get('/auth/me')
       .then((r) => {
         if (!live) return;
-        localStorage.setItem('kartavya_user', JSON.stringify(r.data));
+        localStorage.setItem('Kartavaya_user', JSON.stringify(r.data));
         setUser(r.data); setReady(true);
       })
       .catch(() => {
@@ -44,7 +44,7 @@ export default function Protected({ children, requiredRole }) {
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#050e1a' }}>
       <div style={{ textAlign: 'center' }}>
         <KLogo size={40} />
-        <div style={{ marginTop: 16, fontSize: 13, color: '#5a7087', fontFamily: "'Inter',sans-serif" }}>Loading Kartavya…</div>
+        <div style={{ marginTop: 16, fontSize: 13, color: '#5a7087', fontFamily: "'Inter',sans-serif" }}>Loading Kartavaya…</div>
       </div>
     </div>
   );

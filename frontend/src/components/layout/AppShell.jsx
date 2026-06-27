@@ -1,4 +1,4 @@
-/**
+﻿/**
  * AppShell.jsx — main layout shell.
  * Week 3: Templates added to sidebar nav.
  *
@@ -134,7 +134,7 @@ export default function AppShell() {
             } else if (Notification.permission === 'granted') {
               fireBrowserNotif(
                 fresh[0]?.title ?? 'New notification',
-                fresh[0]?.message ?? 'Open Kartavya to view'
+                fresh[0]?.message ?? 'Open Kartavaya to view'
               );
             }
           }
@@ -177,7 +177,7 @@ export default function AppShell() {
           <button className="k-iconbtn" onClick={() => setSidebarOpen(true)} aria-label="Open menu">
             <Menu size={18} />
           </button>
-          <span style={{ fontFamily: 'var(--font-display)', fontSize: 16, color: 'var(--ink)', fontWeight: 500 }}>Kartavya</span>
+          <span style={{ fontFamily: 'var(--font-display)', fontSize: 16, color: 'var(--ink)', fontWeight: 500 }}>Kartavaya</span>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <button className="k-iconbtn" style={{ position: 'relative' }} onClick={() => setNotifOpen(true)} aria-label="Notifications">
               <Bell size={18} />

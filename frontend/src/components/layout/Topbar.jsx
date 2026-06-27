@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Topbar.jsx — editorial header: "कर्तव्य / Page" breadcrumb, pill search, actions.
  */
 import React, { useState } from 'react';
@@ -28,7 +28,7 @@ export default function Topbar({ unread = 0, onOpenNotifications, onNewTask }) {
 
   const meta = PAGE_META[location.pathname]
     || Object.entries(PAGE_META).find(([k]) => location.pathname.startsWith(k + '/'))?.[1]
-    || { en: 'Kartavya', hi: 'कर्तव्य' };
+    || { en: 'Kartavaya', hi: 'कर्तव्य' };
 
   return (
     <header className="k-topbar">

@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+﻿import React, { useState, useRef } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity,
   StyleSheet, KeyboardAvoidingView, Platform,
@@ -85,7 +85,7 @@ export default function LoginScreen() {
           {/* ── Logo ── */}
           <View style={s.logoSection}>
             <KIcon size={80} radius={24} />
-            <Text style={s.brand}>KARTAVYA</Text>
+            <Text style={s.brand}>Kartavaya</Text>
             <Text style={s.brandSub}>BY AEKAM INC</Text>
             <Text style={s.tagline}>Do what must be done.</Text>
           </View>

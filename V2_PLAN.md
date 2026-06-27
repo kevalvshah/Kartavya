@@ -1,8 +1,8 @@
-# Kartavya v2 — Build Plan
+﻿# Kartavaya v2 — Build Plan
 
 **Status:** approved 2026-05-05
 **Owner:** Keval V Shah
-**Working branch:** `v2-plan` on `kevalvshah/Kartavya` (will move to a `Kartavya-v2` repo once user creates it)
+**Working branch:** `v2-plan` on `kevalvshah/Kartavaya` (will move to a `Kartavaya-v2` repo once user creates it)
 **Timeline:** 3 weeks (Day 1 starts the day after this file is committed)
 
 This file is the source of truth for the rebuild. Any future Claude session — or any human contributor — can read this and pick up where we left off without re-litigating decisions.
@@ -43,7 +43,7 @@ This is the most important commitment in the plan. Without it we end up where we
 
 ### Typography
 - **Body / UI font:** Inter (loaded from rsms.me CDN, OFL-licensed, free for commercial use)
-- **Wordmark / logo only:** Harabara Mais — applied exclusively to the "KARTAVYA" wordmark in the top-left of `KWordmark`. Not used anywhere else in the app.
+- **Wordmark / logo only:** Harabara Mais — applied exclusively to the "Kartavaya" wordmark in the top-left of `KWordmark`. Not used anywhere else in the app.
 - **Weights used:** 400 (body), 500 (emphasis), 600 (headings), 700 (rare strong emphasis only)
 - **Body sizes:** 12 / 13 / 14 / 16 / 18 / 20 / 24 / 32 / 40
 - **Line heights:** 1.4 for prose, 1.2 for headings, 1 for buttons
@@ -58,7 +58,7 @@ text-default, text-muted, text-subtle, text-disabled, text-on-accent
 accent-default, accent-hover, accent-pressed
 success, success-bg, warning, warning-bg, danger, danger-bg, info, info-bg
 ```
-Concrete palette uses Kartavya teal `#1AB8B0` as the accent, neutral grays from Radix Colors `slate` scale.
+Concrete palette uses Kartavaya teal `#1AB8B0` as the accent, neutral grays from Radix Colors `slate` scale.
 
 ### Spacing scale
 4 / 8 / 12 / 16 / 24 / 32 / 48 / 64 only. No 18, 22, 26.
@@ -172,7 +172,7 @@ frontend/src/
 │   └── automation-rules.js
 └── styles/
     ├── globals.css                      # Inter import + base styles
-    └── harabara-wordmark.css            # Harabara Mais @font-face, scoped to .kartavya-wordmark only
+    └── harabara-wordmark.css            # Harabara Mais @font-face, scoped to .Kartavaya-wordmark only
 ```
 
 ---
@@ -345,7 +345,7 @@ CREATE INDEX mentions_user_idx ON mentions(mentioned_user_id, read_at);
 1. **3 weeks is aggressive for this scope at high UI quality.** If foundation work in Week 1 reveals it needs 4 weeks, that gets flagged on Day 3, not Day 21.
 2. **Automations engine grows complex fast.** v2 stays deliberately simple (no if/else, no multi-step). Push back if scope creeps.
 3. **The file split in Days 1–2 is the most important work.** No new features land until Wed of Week 1. This is correct sequencing, not slow progress.
-4. **Existing `Kartavya` repo on `main` stays running.** All v2 work happens on a branch. Production isn't disrupted until final merge.
+4. **Existing `Kartavaya` repo on `main` stays running.** All v2 work happens on a branch. Production isn't disrupted until final merge.
 5. **Storage decision blocks Week 3 attachment migration.** Hard deadline: end of Week 2.
 6. **Harabara Mais licensing.** Confirmed scoped to wordmark only (display use, the use case the font was designed for). If commercial use of the font itself becomes an issue, fallback to a custom-styled Inter wordmark.
 

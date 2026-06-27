@@ -1,4 +1,4 @@
-# Cursor branch: training seed & board task modal
+﻿# Cursor branch: training seed & board task modal
 
 **Branch:** `cursor/training-seed-and-board-task-modal`  
 **Commit (initial feature):** `e10ec45` — *Add Training Academy seed (100 tasks) and project board new-task modal.*
@@ -56,6 +56,6 @@ Use a role that can satisfy your **RLS** policies if applicable (often the **ser
 
 Seed upserts demo users (password hash is placeholder — reset via admin if needed):
 
-- `admin@kartavya.dev`
-- `member@kartavya.dev`
-- `client@kartavya.dev`
+- `admin@Kartavaya.dev`
+- `member@Kartavaya.dev`
+- `client@Kartavaya.dev`

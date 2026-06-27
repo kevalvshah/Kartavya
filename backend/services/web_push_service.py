@@ -1,5 +1,5 @@
-"""
-web_push_service.py — VAPID Web Push for Kartavya.
+﻿"""
+web_push_service.py — VAPID Web Push for Kartavaya.
 
 Stores PushSubscription objects (from browser's pushManager.subscribe()) in the
 push_web_subscriptions table and delivers Web Push messages via pywebpush.
@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 VAPID_PUBLIC_KEY  = os.environ.get("VAPID_PUBLIC_KEY", "")
 VAPID_PRIVATE_KEY = os.environ.get("VAPID_PRIVATE_KEY", "")
-VAPID_MAILTO      = os.environ.get("VAPID_MAILTO", "mailto:hello@kartavya.app")
+VAPID_MAILTO      = os.environ.get("VAPID_MAILTO", "mailto:hello@Kartavaya.app")
 
 _configured = bool(VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY and VAPID_PUBLIC_KEY != "not-configured")
 

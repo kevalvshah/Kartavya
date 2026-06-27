@@ -1,5 +1,5 @@
-"""
-push_service.py — Kartavya push notifications via Expo Push API.
+﻿"""
+push_service.py — Kartavaya push notifications via Expo Push API.
 
 send_push(pool, *, recipient_id, kind, title, body, task_id=None, data=None, is_mine=True)
     Checks user prefs + quiet hours (IST = UTC+5:30) then fires.

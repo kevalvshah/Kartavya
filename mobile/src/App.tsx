@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+﻿import React, { useEffect, useState, useCallback } from 'react';
 import {
   View, Text, ActivityIndicator, StyleSheet, StatusBar,
   TouchableOpacity, Alert, Platform,
@@ -81,7 +81,7 @@ function OfflineBanner({ message, kind, onRetry, onClear }: BannerProps) {
 export function Splash() {
   return (
     <View style={s.splash}>
-      <Text style={s.splashBrand}>KARTAVYA</Text>
+      <Text style={s.splashBrand}>Kartavaya</Text>
       <Text style={s.splashSub}>BY AEKAM INC</Text>
       <ActivityIndicator color="#0082c6" size="large" style={{ marginTop: 32 }} />
     </View>

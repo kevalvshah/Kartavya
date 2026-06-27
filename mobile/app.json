@@ -1,8 +1,8 @@
-{
+﻿{
   "expo": {
-    "name": "Kartavya",
-    "slug": "kartavya",
-    "scheme": "kartavya",
+    "name": "Kartavaya",
+    "slug": "Kartavaya",
+    "scheme": "Kartavaya",
     "version": "2.0.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -17,7 +17,7 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.aekaminc.kartavya",
+      "bundleIdentifier": "com.aekaminc.Kartavaya",
       "infoPlist": {
         "NSCameraUsageDescription": "Capture site photos and receipts to attach to tasks.",
         "NSMicrophoneUsageDescription": "Record voice notes that turn into task comments.",
@@ -26,7 +26,7 @@
       }
     },
     "android": {
-      "package": "com.aekaminc.kartavya",
+      "package": "com.aekaminc.Kartavaya",
       "versionCode": 7,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
@@ -56,8 +56,8 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Allow Kartavya to attach photos to tasks.",
-          "cameraPermission": "Allow Kartavya to capture photos for tasks."
+          "photosPermission": "Allow Kartavaya to attach photos to tasks.",
+          "cameraPermission": "Allow Kartavaya to capture photos for tasks."
         }
       ],
       "expo-av",

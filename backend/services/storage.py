@@ -1,12 +1,12 @@
-"""
+﻿"""
 storage.py — Cloudflare R2 file storage (no auto-expiry).
 
 Environment variables required:
   R2_ACCOUNT_ID        — Cloudflare account ID
   R2_ACCESS_KEY_ID     — R2 access key
   R2_SECRET_ACCESS_KEY — R2 secret key
-  R2_BUCKET_NAME       — bucket name (e.g. 'kartavya-uploads')
-  R2_PUBLIC_URL        — public URL prefix (e.g. https://uploads.kartavya.app)
+  R2_BUCKET_NAME       — bucket name (e.g. 'Kartavaya-uploads')
+  R2_PUBLIC_URL        — public URL prefix (e.g. https://uploads.Kartavaya.app)
                          OR leave empty to use presigned URLs (7-day expiry)
 """
 import os
@@ -53,7 +53,7 @@ def _client():
         return None
 
 
-BUCKET   = os.environ.get("R2_BUCKET_NAME", "kartavya-uploads")
+BUCKET   = os.environ.get("R2_BUCKET_NAME", "Kartavaya-uploads")
 PUB_URL  = os.environ.get("R2_PUBLIC_URL", "").rstrip("/")
 
 

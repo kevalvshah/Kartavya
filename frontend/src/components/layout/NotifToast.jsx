@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+﻿import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Bell, X } from 'lucide-react';
 
@@ -48,7 +48,7 @@ function NotifToast({ notif, onDismiss }) {
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--k-primary)', marginBottom: 2, display: 'flex', alignItems: 'center', gap: 5 }}>
-            <span>KARTAVYA</span>
+            <span>Kartavaya</span>
             <span style={{ fontFamily: 'var(--font-hindi)', fontWeight: 400, textTransform: 'none', letterSpacing: 0, fontSize: 11 }}>· सूचना</span>
           </div>
           <div style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 500, color: 'var(--ink)', lineHeight: 1.3, marginBottom: 3 }}>
@@ -133,7 +133,7 @@ export function NotifPermissionPrompt({ onAllow, onDismiss }) {
         </button>
       </div>
       <div style={{ fontSize: 12, color: 'var(--ink-2)', lineHeight: 1.5, marginBottom: 12 }}>
-        Get notified about approvals, task updates, and team activity — even when Kartavya is in the background.
+        Get notified about approvals, task updates, and team activity — even when Kartavaya is in the background.
       </div>
       <div style={{ display: 'flex', gap: 7 }}>
         <button onClick={onDismiss} className="k-btn k-btn--ghost k-btn--sm" style={{ flex: 1 }}>Not now</button>

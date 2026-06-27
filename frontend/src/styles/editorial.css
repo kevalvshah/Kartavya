@@ -1,7 +1,7 @@
-/* editorial.css — Kartavya editorial design system
+﻿/* editorial.css — Kartavaya editorial design system
    Merged from design handoff: styles.css + styles-2.css + styles-modals.css
    Import LAST in App.js so these definitions take precedence.
-   Tokens live in kartavya-design.css; this file adds component classes. */
+   Tokens live in Kartavaya-design.css; this file adds component classes. */
 
 /* ── Base overrides ────────────────────────────────────────────────────── */
 * { box-sizing: border-box; }

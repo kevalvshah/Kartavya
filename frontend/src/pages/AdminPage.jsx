@@ -1,4 +1,4 @@
-/**
+﻿/**
  * AdminPage.jsx — k-* design system.
  * Invite form: Full Name, Email, Account Type, Role title, Client Approval toggle.
  * User list: inline role select + Edit slide-over + Remove.
@@ -328,7 +328,7 @@ export default function AdminPage() {
   const [confirmState, setConfirmState] = useState(null);
 
   const me = useMemo(() => {
-    try { return JSON.parse(localStorage.getItem('kartavya_user') || 'null'); } catch { return null; }
+    try { return JSON.parse(localStorage.getItem('Kartavaya_user') || 'null'); } catch { return null; }
   }, []);
 
   const load = () => Promise.all([

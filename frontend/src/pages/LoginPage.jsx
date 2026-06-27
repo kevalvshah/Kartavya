@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useToast } from '../components/ui/toast';
 import AuthShell, { authInput, authLabel, authBtn } from '../components/layout/AuthShell';
@@ -72,7 +72,7 @@ export function LoginPage() {
       <div style={{ marginBottom: 28 }}>
         <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: 3.5, textTransform: 'uppercase', color: K.mid, marginBottom: 8 }}>Welcome back</div>
         <h1 style={{ fontSize: 28, fontWeight: 800, color: '#0a1628', letterSpacing: -0.5, lineHeight: 1.2 }}>
-          Sign in to<br /><span style={{ color: K.blue }}>Kartavya</span>
+          Sign in to<br /><span style={{ color: K.blue }}>Kartavaya</span>
         </h1>
       </div>
       <form onSubmit={submit}>
@@ -126,7 +126,7 @@ export function AcceptInvitePage() {
     setLoading(true);
     try {
       const data = await apiAcceptInvite(token, form.name, form.password);
-      pushToast({ type: 'success', title: 'Welcome to Kartavya!' });
+      pushToast({ type: 'success', title: 'Welcome to Kartavaya!' });
       navigate(data.user?.role === 'client' ? '/client' : '/dashboard', { replace: true });
     } catch (err) {
       const detail = err?.response?.data?.detail || '';
@@ -147,7 +147,7 @@ export function AcceptInvitePage() {
       <div style={{ marginBottom: 28 }}>
         <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: 3.5, textTransform: 'uppercase', color: K.mid, marginBottom: 8 }}>Create your account</div>
         <h1 style={{ fontSize: 28, fontWeight: 800, color: '#0a1628', letterSpacing: -0.5, lineHeight: 1.2 }}>
-          Join<br /><span style={{ color: K.blue }}>Kartavya</span>
+          Join<br /><span style={{ color: K.blue }}>Kartavaya</span>
         </h1>
       </div>
       <form onSubmit={submit}>

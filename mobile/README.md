@@ -1,6 +1,6 @@
-# Kartavya Mobile (React Native)
+﻿# Kartavaya Mobile (React Native)
 
-Android + iOS app for [Kartavya](https://kartavya-aekam.vercel.app) by Aekam Inc.
+Android + iOS app for [Kartavaya](https://Kartavaya-aekam.vercel.app) by Aekam Inc.
 
 ## Setup
 
@@ -44,7 +44,7 @@ This builds in the cloud and emails you a download link for the APK in ~5 minute
 
 ## Backend
 
-All API calls hit `https://kartavya-production.up.railway.app/api`.
+All API calls hit `https://Kartavaya-production.up.railway.app/api`.
 Change `BACKEND_URL` in `src/config.js` if you redeploy the backend.
 
 ## Get APK via EAS (step by step)
