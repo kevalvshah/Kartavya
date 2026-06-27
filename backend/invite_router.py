@@ -16,7 +16,7 @@ from db import get_pool
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
-FRONTEND_URL = os.environ.get("FRONTEND_URL", "https://kartavya-aekam.vercel.app")
+FRONTEND_URL = os.environ.get("FRONTEND_URL", "https://kartavaya.com")
 
 
 # ── Schemas ───────────────────────────────────────────────────────────────────

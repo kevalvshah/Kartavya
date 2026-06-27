@@ -9,8 +9,8 @@ from html import escape as _h
 
 logger = logging.getLogger(__name__)
 
-FROM_EMAIL   = os.environ.get("FROM_EMAIL",   "Kartavya <hello@kartavya.app>")
-FRONTEND_URL = os.environ.get("FRONTEND_URL", "https://kartavya-aekam.vercel.app")
+FROM_EMAIL   = os.environ.get("FROM_EMAIL",   "Kartavya <no-reply@aekaminc.com>")
+FRONTEND_URL = os.environ.get("FRONTEND_URL", "https://kartavaya.com")
 
 # ── Email provider: Resend (primary) or AWS SES (fallback) ────────────────────
 RESEND_API_KEY        = os.environ.get("RESEND_API_KEY")
