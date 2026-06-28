@@ -17,7 +17,7 @@ import React, { Suspense, lazy } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useOutletContext } from 'react-router-dom';
 import './App.css';
 import './styles/index.css';
-import './styles/Kartavaya-design.css';
+import './styles/kartavaya-design.css';
 import './styles/editorial.css';
 
 import { ToastProvider }               from './components/ui/toast';
