@@ -107,10 +107,19 @@ async def upload(
     is_video = ext in VIDEO_EXTENSIONS
     limit    = MAX_BYTES_VIDEO if is_video else MAX_BYTES
 
-    content = await file.read()
-    if len(content) > limit:
-        label = "50 MB" if is_video else "25 MB"
-        raise HTTPException(413, f"File exceeds {label} limit")
+    chunks: list[bytes] = []
+    total_size = 0
+    chunk_size = 1024 * 1024
+    while True:
+        chunk = await file.read(chunk_size)
+        if not chunk:
+            break
+        total_size += len(chunk)
+        if total_size > limit:
+            label = "50 MB" if is_video else "25 MB"
+            raise HTTPException(413, f"File exceeds {label} limit")
+        chunks.append(chunk)
+    content = b"".join(chunks)
 
     claimed_mime = file.content_type or mimetypes.guess_type(file.filename or "")[0] or "application/octet-stream"
     mime = _sniff_mime(content[:16], ext, claimed_mime)
@@ -140,6 +149,11 @@ async def upload(
             folder=folder,
         )
     except Exception as exc:
-        logger.error("R2 upload failed for user=%s file=%s: %s", user["user_id"], file.filename, exc)
-        raise HTTPException(503, "Upload service temporarily unavailable — please try again in a moment.")
+        logger.exception(
+            "R2 upload failed: ext=%s size=%d scope=%s",
+            ext,
+            total_size,
+            "project" if team_id else "personal",
+        )
+        raise HTTPException(503, "Upload service temporarily unavailable — please try again in a moment.") from exc
     return result
