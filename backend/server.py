@@ -121,11 +121,11 @@ api_router = APIRouter(prefix="/api")
 DEFAULT_ORIGINS = [
     "https://kartavaya.com",
     "https://www.kartavaya.com",
-    "https://Kartavaya-aekam.vercel.app",
-    "https://Kartavaya-production.akeam.vercel.app",
-    "https://Kartavaya-kevalvshah03-6145s-projects.vercel.app",
-    "https://Kartavaya-git-main-kevalvshah03-6145s-projects.vercel.app",
-    "https://Kartavaya-git-v2-plan-kevalvshah03-6145s-projects.vercel.app",
+    "https://kartavya-aekam.vercel.app",
+    "https://kartavya-production.akeam.vercel.app",
+    "https://kartavya-kevalvshah03-6145s-projects.vercel.app",
+    "https://kartavya-git-main-kevalvshah03-6145s-projects.vercel.app",
+    "https://kartavya-git-v2-plan-kevalvshah03-6145s-projects.vercel.app",
     "http://localhost:3000",
     "http://localhost:8080",
 ]
@@ -138,8 +138,8 @@ DEFAULT_OWNER_EMAIL = os.environ.get("DEFAULT_OWNER_EMAIL", "admin@aekaminc.com"
 
 # Regex covers PR preview deployments on both Vercel tenants (kevalvshah03 + akeam).
 _VERCEL_PREVIEW_RE = (
-    r"https://Kartavaya-[a-z0-9-]+-kevalvshah03-6145s-projects\.vercel\.app"
-    r"|https://Kartavaya-[a-z0-9-]+\.akeam\.vercel\.app"
+    r"https://kartavya-[a-z0-9-]+-kevalvshah03-6145s-projects\.vercel\.app"
+    r"|https://kartavya-[a-z0-9-]+\.akeam\.vercel\.app"
 )
 
 app.add_middleware(
