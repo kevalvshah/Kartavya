@@ -112,13 +112,13 @@ export function useOfflineMutation<TVariables, TData = unknown, TSnapshot = unkn
     }) as any,
     onError: ((err: Error, vars: TVariables, snapshot: TSnapshot | undefined) => {
       opts.rollback?.(vars, snapshot, qc);
-      opts.onlineOptions?.onError?.(err, vars, snapshot);
+      (opts.onlineOptions?.onError as any)?.(err, vars, snapshot);
     }) as any,
     onSuccess: ((data: TData, vars: TVariables, ctx: TSnapshot | undefined) => {
-      opts.onlineOptions?.onSuccess?.(data, vars, ctx);
+      (opts.onlineOptions?.onSuccess as any)?.(data, vars, ctx);
     }) as any,
     onSettled: ((data: TData | undefined, err: Error | null, vars: TVariables, ctx: TSnapshot | undefined) => {
-      opts.onlineOptions?.onSettled?.(data, err, vars, ctx);
+      (opts.onlineOptions?.onSettled as any)?.(data, err, vars, ctx);
     }) as any,
     ...opts.onlineOptions,
   });
