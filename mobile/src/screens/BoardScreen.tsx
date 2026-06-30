@@ -147,7 +147,7 @@ function BoardCard({ task, col, onPress }: { task: Task; col?: ProjectColumn; on
           </View>
         )}
         {/* Assignee avatars */}
-        {(task.assignee_names ?? []).slice(0, 3).map((name, i) => (
+        {(task.assignee_names ?? []).slice(0, 3).map((name: string, i: number) => (
           <View key={i} style={[bc.avatar, {
             backgroundColor: BC_AVATAR_COLORS[i % BC_AVATAR_COLORS.length],
             marginLeft: i > 0 ? -7 : 0,
@@ -279,7 +279,8 @@ export default function BoardScreen() {
     }
   }, [projects, activeProjectId]);
 
-  const activeProject = projects.find(p => p.team_id === activeProjectId);
+  const activeColId   = activeCol ?? columns[0]?.column_id ?? null;
+  const activeProject = projects.find((p: Project) => p.team_id === activeProjectId);
   const projectId     = activeProjectId ?? '';
   const colColor      = projectColor(projectId, activeProject?.color ?? undefined);
 
@@ -300,8 +301,8 @@ export default function BoardScreen() {
 
   const grouped = useMemo(() => {
     const m: Record<string, Task[]> = {};
-    columns.forEach(c => { m[c.column_id] = []; });
-    tasks.forEach(task => {
+    columns.forEach((c: ProjectColumn) => { m[c.column_id] = []; });
+    tasks.forEach((task: Task) => {
       const key = task.column_id && m[task.column_id] !== undefined
         ? task.column_id : columns[0]?.column_id;
       if (key) { m[key] = m[key] || []; m[key].push(task); }
@@ -321,7 +322,7 @@ export default function BoardScreen() {
   // ── Views ────────────────────────────────────────────────────────────────────
   const renderBoard = useCallback(() => {
     // Show single active column (swipe-style, filtered by column tab)
-    const col = columns.find(c => c.column_id === activeColId) ?? columns[0];
+    const col = columns.find((c: ProjectColumn) => c.column_id === activeColId) ?? columns[0];
     if (!col) return null;
     const colCards = grouped[col.column_id] ?? [];
     const isApprovalCol = col.name?.toLowerCase().includes('approval');
@@ -384,7 +385,7 @@ export default function BoardScreen() {
       ListEmptyComponent={<Text style={[s.empty, { color: t.ink3 }]}>No tasks yet.</Text>}
       refreshControl={<RefreshControl refreshing={isFetching && !isLoading} onRefresh={refetch} tintColor={t.primary} />}
       renderItem={({ item }) => {
-        const col = columns.find(c => c.column_id === item.column_id);
+        const col = columns.find((c: ProjectColumn) => c.column_id === item.column_id);
         const pri = PRIORITY_COLOR[item.priority] ?? '#636366';
         return (
           <TouchableOpacity style={[s.listRow, { backgroundColor: t.surface, borderColor: t.outline }]}
@@ -410,7 +411,7 @@ export default function BoardScreen() {
         contentContainerStyle={{ padding: 16, paddingBottom: 32, gap: 8 }}
         ListEmptyComponent={<Text style={[s.empty, { color: t.ink3 }]}>No tasks with due dates.</Text>}
         renderItem={({ item }) => {
-          const col = columns.find(c => c.column_id === item.column_id);
+          const col = columns.find((c: ProjectColumn) => c.column_id === item.column_id);
           const d = new Date(item.due_at!); const isLate = isPast(d) && !isToday(d);
           return (
             <TouchableOpacity style={[s.schedRow, { backgroundColor: t.surface, borderColor: t.outline }]}
@@ -433,7 +434,7 @@ export default function BoardScreen() {
 
   const renderTracker = useCallback(() => (
     <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 40 }}>
-      {columns.map(col => {
+      {columns.map((col: ProjectColumn) => {
         const count = (grouped[col.column_id] ?? []).length;
         const pct   = tasks.length ? count / tasks.length : 0;
         return (
@@ -470,8 +471,6 @@ export default function BoardScreen() {
       </View>
     );
   }
-
-  const activeColId = activeCol ?? columns[0]?.column_id ?? null;
 
   return (
     <View style={[s.root, { backgroundColor: t.bg }]}>
@@ -543,7 +542,7 @@ export default function BoardScreen() {
       {view === 'Board' && columns.length > 0 && (
         <ScrollView horizontal showsHorizontalScrollIndicator={false}
           contentContainerStyle={{ paddingHorizontal: 16, gap: 6, paddingVertical: 6 }}>
-          {columns.map(col => {
+          {columns.map((col: ProjectColumn) => {
             const isActiveC = col.column_id === activeColId;
             const count     = grouped[col.column_id]?.length ?? 0;
             return (
@@ -670,11 +669,6 @@ const s = StyleSheet.create({
   colDot:       { width: 8, height: 8, borderRadius: 4 },
   colName:      { fontSize: 13, fontWeight: '800', flex: 1 },
   colBadge:     { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 99 },
-  approvalHint: { flexDirection: 'row', alignItems: 'center', gap: 6, padding: '8px 10px' as any, borderRadius: 10, marginBottom: 8, paddingHorizontal: 10, paddingVertical: 8 },
-  approvalHintText: { fontSize: 11, color: '#B06A00', lineHeight: 15, flex: 1 },
-  emptyCol:     { fontSize: 11, textAlign: 'center', paddingVertical: 20 },
-  addCardBtn:   { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingVertical: 12, borderRadius: 12, borderWidth: 1.5, borderStyle: 'dashed', marginTop: 4, marginBottom: 8 },
-  addCardText:  { fontSize: 12, fontWeight: '600' },
   // List
   listRow:      { flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: 12, padding: 12, borderWidth: 1 },
   listStatus:   { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, minWidth: 64, alignItems: 'center' },

@@ -29,7 +29,7 @@
  */
 
 import { useRef } from 'react';
-import { useMutation, useQueryClient, type UseMutationOptions, type QueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient, type UseMutationOptions, type QueryClient, type Mutation } from '@tanstack/react-query';
 import NetInfo from '@react-native-community/netinfo';
 import { enqueueMutation, type EnqueueOptions } from '../offline/mutationQueue';
 
@@ -95,9 +95,9 @@ export function useOfflineMutation<TVariables, TData = unknown, TSnapshot = unkn
   const qc = useQueryClient();
   const isQueuedRef = useRef(false);
 
-  const mutation = useMutation<TData, Error, TVariables, TSnapshot>({
+  const mutation = useMutation<TData, Error, TVariables, TSnapshot | undefined>({
     mutationFn: opts.mutationFn,
-    onMutate: async (vars) => {
+    onMutate: async (vars): Promise<TSnapshot | undefined> => {
       // Cancel any in-flight refetches so they don't overwrite our optimistic update
       if (opts.snapshotKey) {
         const key = opts.snapshotKey(vars);
@@ -107,17 +107,17 @@ export function useOfflineMutation<TVariables, TData = unknown, TSnapshot = unkn
         return snapshot;
       }
       opts.optimisticUpdate?.(vars, qc);
-      return undefined as unknown as TSnapshot;
+      return undefined;
     },
-    onError: (err, vars, snapshot) => {
+    onError: (err, vars, snapshot, _mut: Mutation<TData, Error, TVariables, TSnapshot | undefined>) => {
       opts.rollback?.(vars, snapshot, qc);
-      opts.onlineOptions?.onError?.(err, vars, snapshot);
+      opts.onlineOptions?.onError?.(err, vars, snapshot, _mut as any);
     },
-    onSuccess: (data, vars, ctx) => {
-      opts.onlineOptions?.onSuccess?.(data, vars, ctx);
+    onSuccess: (data, vars, ctx, _mut: Mutation<TData, Error, TVariables, TSnapshot | undefined>) => {
+      opts.onlineOptions?.onSuccess?.(data, vars, ctx, _mut as any);
     },
-    onSettled: (data, err, vars, ctx) => {
-      opts.onlineOptions?.onSettled?.(data, err as Error | null, vars, ctx);
+    onSettled: (data, err, vars, ctx, _mut: Mutation<TData, Error, TVariables, TSnapshot | undefined>) => {
+      opts.onlineOptions?.onSettled?.(data, err as Error | null, vars, ctx, _mut as any);
     },
     ...opts.onlineOptions,
   });

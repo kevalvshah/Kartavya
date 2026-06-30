@@ -78,7 +78,7 @@ export default function InboxScreen() {
   const qc      = useQueryClient();
   const [filter, setFilter] = useState<Filter>('all');
 
-  const { data: notifications = [], isLoading, refetch, isFetching } = useQuery({
+  const { data: notifications = [], isLoading, refetch, isFetching } = useQuery<Notification[]>({
     queryKey: ['notifications'],
     queryFn:  () => notificationsApi.list(),
     staleTime: 30_000,

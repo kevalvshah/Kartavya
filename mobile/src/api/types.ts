@@ -82,6 +82,8 @@ export interface Task {
   approval_notes?:      string;
   approved_by?:         string;
   category_id?:         string;
+  comments_count?:      number;
+  assignee_names?:      string[];
 }
 
 export interface Comment {
