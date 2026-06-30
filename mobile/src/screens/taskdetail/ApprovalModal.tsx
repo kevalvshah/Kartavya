@@ -9,7 +9,7 @@ import { s } from './styles';
 
 interface Props {
   visible:   boolean;
-  action:    'request' | 'approve' | 'reject' | 'client' | null;
+  action:    'request' | 'approve' | 'reject' | 'client' | 'client_approve' | 'client_reject' | null;
   onClose:   () => void;
   onConfirm: (notes: string, extra?: { client_email?: string }) => void;
 }
@@ -19,13 +19,15 @@ export function ApprovalModal({ visible, action, onClose, onConfirm }: Props) {
   const [notes, setNotes] = useState('');
   const [email, setEmail] = useState('');
 
-  const title = action === 'request' ? 'Request Approval'
-    : action === 'approve'           ? 'Approve Task'
-    : action === 'reject'            ? 'Reject Task'
-    : action === 'client'            ? 'Send to Client'
+  const title = action === 'request'        ? 'Request Approval'
+    : action === 'approve'                  ? 'Approve Task'
+    : action === 'reject'                   ? 'Reject Task'
+    : action === 'client'                   ? 'Send to Client'
+    : action === 'client_approve'           ? 'Client Approve'
+    : action === 'client_reject'            ? 'Client Reject'
     : '';
 
-  const GRAD: [string, string] = action === 'reject'
+  const GRAD: [string, string] = (action === 'reject' || action === 'client_reject')
     ? ['#ef4444', '#dc2626']
     : ['#0082c6', '#05b7aa'];
 

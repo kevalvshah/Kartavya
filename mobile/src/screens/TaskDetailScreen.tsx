@@ -21,7 +21,7 @@ import { useAuth } from '../hooks/useAuth';
 import { tasksApi } from '../api/tasks';
 import { projectsApi } from '../api/projects';
 import { PRIORITY_COLOR } from '../theme/tokens';
-import type { Task, Comment, TeamMember, Priority } from '../api/types';
+import type { Task, Comment, TeamMember, Priority, Subtask, Attachment } from '../api/types';
 import type { RootStackParamList } from '../nav/RootStack';
 
 import { s } from './taskdetail/styles';
@@ -120,9 +120,9 @@ export default function TaskDetailScreen() {
     onMutate: async (subtaskId) => {
       await qc.cancelQueries({ queryKey: ['task', taskId] });
       const prev = qc.getQueryData<Task>(['task', taskId]);
-      qc.setQueryData<Task>(['task', taskId], old => old ? {
+      qc.setQueryData<Task>(['task', taskId], (old: Task | undefined) => old ? {
         ...old,
-        subtasks: old.subtasks.map(s =>
+        subtasks: old.subtasks.map((s: Subtask) =>
           s.subtask_id === subtaskId ? { ...s, is_done: !s.is_done } : s
         ),
       } : old);
@@ -154,7 +154,7 @@ export default function TaskDetailScreen() {
         user_id:    user?.user_id ?? '',
         body,
         created_at: new Date().toISOString(),
-        author_name: userName(user ?? {}),
+        user_name: userName(user ?? {}),
       } as Comment;
       qc.setQueryData<Comment[]>(['comments', taskId], [...prev, optimistic]);
       setCommentText('');
@@ -248,7 +248,7 @@ export default function TaskDetailScreen() {
     if (!task) return;
     const current = task.assignee_user_ids ?? [];
     const updated  = current.includes(uid)
-      ? current.filter(id => id !== uid)
+      ? current.filter((id: string) => id !== uid)
       : [...current, uid];
     updateTask.mutate({ assignee_user_ids: updated });
   };
@@ -306,7 +306,7 @@ export default function TaskDetailScreen() {
   const isClient        = user?.role === 'client';
   const canEdit         = !isClient && (user?.role === 'admin' || user?.role === 'owner' || task.created_by_user_id === user?.user_id);
   const priColor        = PRIORITY_COLOR[task.priority] ?? '#636366';
-  const assignedMembers = members.filter(m => (task.assignee_user_ids ?? []).includes(memberId(m)));
+  const assignedMembers = members.filter((m: TeamMember) => (task.assignee_user_ids ?? []).includes(memberId(m)));
 
   return (
     <View style={[s.root, { backgroundColor: t.bg }]}>
@@ -364,7 +364,7 @@ export default function TaskDetailScreen() {
               }}
               style={[s.metaChip, { backgroundColor: priColor + '22', borderColor: priColor }]}
             >
-              <Ionicons name={PRI_ICONS[task.priority] as any} size={12} color={priColor} />
+              <Ionicons name={PRI_ICONS[task.priority as Priority] as any} size={12} color={priColor} />
               <Text style={[s.metaChipText, { color: priColor }]}>{task.priority}</Text>
             </TouchableOpacity>
 
@@ -431,7 +431,7 @@ export default function TaskDetailScreen() {
               </TouchableOpacity>
             ) : (
               <View style={s.assigneeRow}>
-                {assignedMembers.map(m => {
+                {assignedMembers.map((m: TeamMember) => {
                   const uid = memberId(m);
                   const nm  = memberName(m);
                   return (
@@ -454,19 +454,19 @@ export default function TaskDetailScreen() {
 
           {/* ══ SUBTASKS ══ */}
           <Section
-            label={`SUBTASKS  ${task.subtasks.length > 0 ? `${task.subtasks.filter(s => s.is_done).length}/${task.subtasks.length}` : ''}`}
+            label={`SUBTASKS  ${task.subtasks.length > 0 ? `${task.subtasks.filter((s: Subtask) => s.is_done).length}/${task.subtasks.length}` : ''}`}
             t={t}
           >
             {task.subtasks.length > 0 && (
               <View style={[s.subtaskProgress, { backgroundColor: t.outline }]}>
                 <View style={[s.subtaskProgressFill, {
-                  width: `${(task.subtasks.filter(s => s.is_done).length / task.subtasks.length) * 100}%`,
-                  backgroundColor: task.subtasks.every(s => s.is_done) ? '#22c55e' : t.primary,
+                  width: `${(task.subtasks.filter((s: Subtask) => s.is_done).length / task.subtasks.length) * 100}%`,
+                  backgroundColor: task.subtasks.every((s: Subtask) => s.is_done) ? '#22c55e' : t.primary,
                 }]} />
               </View>
             )}
 
-            {task.subtasks.map(sub => (
+            {task.subtasks.map((sub: Subtask) => (
               <SubtaskRow
                 key={sub.subtask_id}
                 sub={sub}
@@ -533,7 +533,7 @@ export default function TaskDetailScreen() {
               </View>
             )}
             <View style={s.attachGrid}>
-              {task.attachments.map((a, i) => {
+              {task.attachments.map((a: Attachment, i: number) => {
                 const isImage = /\.(jpg|jpeg|png|gif|webp|heic)$/i.test(a.name);
                 return (
                   <TouchableOpacity
@@ -569,7 +569,7 @@ export default function TaskDetailScreen() {
             {comments.length === 0 && (
               <Text style={[s.emptyHint, { color: t.ink4 }]}>No comments yet.</Text>
             )}
-            {comments.map(c => (
+            {comments.map((c: Comment) => (
               <CommentRow
                 key={c.comment_id}
                 comment={c}
@@ -589,14 +589,14 @@ export default function TaskDetailScreen() {
           {mentionQuery !== null && (
             <View style={[mentionStyles.list, { backgroundColor: t.surface, borderColor: t.outline }]}>
               {members
-                .filter(m => {
+                .filter((m: TeamMember) => {
                   const n = memberName(m).toLowerCase();
                   const e = (m.email ?? '').toLowerCase();
                   const q = mentionQuery.toLowerCase();
                   return q === '' || n.includes(q) || e.includes(q);
                 })
                 .slice(0, 6)
-                .map(m => (
+                .map((m: TeamMember) => (
                   <TouchableOpacity
                     key={memberId(m)}
                     style={[mentionStyles.row, { borderBottomColor: t.outline }]}
@@ -615,7 +615,7 @@ export default function TaskDetailScreen() {
                     {m.email ? <Text style={[mentionStyles.email, { color: t.ink3 }]}>{m.email}</Text> : null}
                   </TouchableOpacity>
                 ))}
-              {members.filter(m => {
+              {members.filter((m: TeamMember) => {
                 const n = memberName(m).toLowerCase();
                 const e = (m.email ?? '').toLowerCase();
                 const q = mentionQuery.toLowerCase();

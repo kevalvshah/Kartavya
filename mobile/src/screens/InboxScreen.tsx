@@ -80,7 +80,7 @@ export default function InboxScreen() {
 
   const { data: notifications = [], isLoading, refetch, isFetching } = useQuery({
     queryKey: ['notifications'],
-    queryFn:  notificationsApi.list,
+    queryFn:  () => notificationsApi.list(),
     staleTime: 30_000,
   });
 
@@ -243,7 +243,7 @@ function InboxRow({
   t: any;
   onPress: () => void;
 }) {
-  const tone    = KIND_TONE[(n as any).kind ?? n.type] ?? 'neutral';
+  const tone    = KIND_TONE[n.type] ?? 'neutral';
   const iconName = TONE_ICON[tone] ?? 'ellipse-outline';
   // Extract actor name: title is typically "Name did something"
   const actorName = (n as any).actor_name ?? n.title?.split(' ')[0] ?? 'Someone';
@@ -293,7 +293,7 @@ function InboxRow({
           s.unreadDot,
           IS_ANDROID
             ? { left: 8, top: '50%' as any, width: 4, height: 28, borderRadius: 2, backgroundColor: t.primary }
-            : { left: IS_ANDROID ? 8 : (n.priority === 'urgent' ? -2 : 2), top: 18, width: 6, height: 6, borderRadius: 99, backgroundColor: t.primary },
+            : { left: 2, top: 18, width: 6, height: 6, borderRadius: 99, backgroundColor: t.primary },
         ]} />
       )}
 
@@ -305,7 +305,7 @@ function InboxRow({
         {/* Type badge */}
         <View style={[s.typeBadge, {
           backgroundColor: badge.bg,
-          borderColor: IS_ANDROID ? (n.is_read ? t.surfaceLow : t.surfaceLow) : t.surface,
+          borderColor: t.surfaceLow,
         }]}>
           <Ionicons name={iconName as any} size={IS_ANDROID ? 12 : 11} color={badge.fg} />
         </View>
