@@ -151,7 +151,7 @@ export default function ProjectBoardPage() {
 
   const [newFieldType,  setNewFieldType]  = useState('text');
 
-  const [newTaskEditor, setNewTaskEditor] = useState({ open: false, columnId: null });
+  const [newTaskEditor, setNewTaskEditor] = useState({ open: false, columnId: null, dueAt: '' });
 
 
 
@@ -262,7 +262,7 @@ export default function ProjectBoardPage() {
 
   const handleColumnChange = (action, payload) => {
 
-    if (action === 'new_task') setNewTaskEditor({ open: true, columnId: payload });
+    if (action === 'new_task') setNewTaskEditor({ open: true, columnId: payload, dueAt: '' });
 
   };
 
@@ -687,7 +687,15 @@ export default function ProjectBoardPage() {
 
       {view === 'calendar' && (
 
-        <CalendarView tasks={tasks} teamMembers={teamMembers} onTasksChange={setTasks} />
+        <CalendarView
+        tasks={tasks}
+        teamMembers={teamMembers}
+        onTasksChange={setTasks}
+        onDayClick={date => {
+          const p = n => String(n).padStart(2, '0');
+          setNewTaskEditor({ open: true, columnId: null, dueAt: `${date.getFullYear()}-${p(date.getMonth()+1)}-${p(date.getDate())}T12:00` });
+        }}
+      />
 
       )}
 
@@ -723,7 +731,7 @@ export default function ProjectBoardPage() {
 
         open={newTaskEditor.open}
 
-        onOpenChange={(v) => { if (!v) setNewTaskEditor({ open: false, columnId: null }); }}
+        onOpenChange={(v) => { if (!v) setNewTaskEditor({ open: false, columnId: null, dueAt: '' }); }}
 
         editing={null}
 
@@ -733,6 +741,8 @@ export default function ProjectBoardPage() {
 
         defaultColumnId={newTaskEditor.columnId}
 
+        defaultDueAt={newTaskEditor.dueAt}
+
         lockToProject
 
         clientMode={me?.role === 'client'}
@@ -741,7 +751,7 @@ export default function ProjectBoardPage() {
 
           setTasks((prev) => [task, ...prev]);
 
-          setNewTaskEditor({ open: false, columnId: null });
+          setNewTaskEditor({ open: false, columnId: null, dueAt: '' });
 
         }}
 

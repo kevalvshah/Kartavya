@@ -17,6 +17,7 @@ export default function TaskEditor({
   teams = [],
   defaultTeamId,
   defaultColumnId = null,
+  defaultDueAt = '',
   lockToProject = false,
   onSaved,
   clientMode = false,
@@ -70,13 +71,13 @@ export default function TaskEditor({
     } else {
       setForm({
         title: '', description: '', priority: 'medium',
-        team_id: defaultTeamId || '', due_at: '',
+        team_id: defaultTeamId || '', due_at: defaultDueAt || '',
         assignee_user_ids: [],
       });
     }
     setAttachments([]);
     setTimeout(() => titleRef.current?.focus(), 60);
-  }, [open, editing, defaultTeamId]);
+  }, [open, editing, defaultTeamId, defaultDueAt]);
 
   const upd = (k) => (e) => setForm(f => ({ ...f, [k]: e?.target ? e.target.value : e }));
 

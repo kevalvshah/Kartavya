@@ -52,7 +52,7 @@ export default function BoardsPage() {
   const [teamMembers, setTeamMembers] = useState([]);
   const [loading,     setLoading]     = useState(true);
   const [view,        setView]        = useState('kanban');
-  const [newTaskEditor, setNewTaskEditor] = useState({ open: false, columnId: null });
+  const [newTaskEditor, setNewTaskEditor] = useState({ open: false, columnId: null, dueAt: '' });
 
   const { defs: fieldDefs, createField, deleteField } = useFields(activeId);
   const { pushToast } = useToast();
@@ -101,11 +101,11 @@ export default function BoardsPage() {
     setActiveId(id);
     setShowFieldMgr(false);
     setShowAutomations(false);
-    setNewTaskEditor({ open: false, columnId: null });
+    setNewTaskEditor({ open: false, columnId: null, dueAt: '' });
   };
 
   const handleColumnChange = useCallback((action, payload) => {
-    if (action === 'new_task') setNewTaskEditor({ open: true, columnId: payload });
+    if (action === 'new_task') setNewTaskEditor({ open: true, columnId: payload, dueAt: '' });
   }, []);
 
   const addField = async () => {
@@ -304,6 +304,10 @@ export default function BoardsPage() {
               tasks={tasks}
               teamMembers={teamMembers}
               onTasksChange={handleTasksChange}
+              onDayClick={date => {
+                const p = n => String(n).padStart(2, '0');
+                setNewTaskEditor({ open: true, columnId: null, dueAt: `${date.getFullYear()}-${p(date.getMonth()+1)}-${p(date.getDate())}T12:00` });
+              }}
             />
           )}
           {view === 'timeline' && (
@@ -340,15 +344,16 @@ export default function BoardsPage() {
 
       <TaskEditor
         open={newTaskEditor.open}
-        onOpenChange={v => { if (!v) setNewTaskEditor({ open: false, columnId: null }); }}
+        onOpenChange={v => { if (!v) setNewTaskEditor({ open: false, columnId: null, dueAt: '' }); }}
         editing={null}
         teams={[]}
         defaultTeamId={activeId}
         defaultColumnId={newTaskEditor.columnId}
+        defaultDueAt={newTaskEditor.dueAt}
         lockToProject
         onSaved={task => {
           setTasks(prev => [task, ...prev]);
-          setNewTaskEditor({ open: false, columnId: null });
+          setNewTaskEditor({ open: false, columnId: null, dueAt: '' });
         }}
       />
     </div>

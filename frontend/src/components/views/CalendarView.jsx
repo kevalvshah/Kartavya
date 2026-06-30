@@ -12,6 +12,7 @@ export default function CalendarView({ tasks, teamMembers, onDayClick, onTasksCh
   const [month,  setMonth]  = useState(now.getMonth());
   const [drawer, setDrawer] = useState(null);
   const [dragOver, setDragOver] = useState(null);
+  const [hoveredDay, setHoveredDay] = useState(null);
   const draggingId = useRef(null);
 
   const firstDay = new Date(year, month, 1).getDay();
@@ -97,19 +98,27 @@ export default function CalendarView({ tasks, teamMembers, onDayClick, onTasksCh
             <div key={cell.day}
               style={{
                 background: isOver || isToday ? "color-mix(in srgb, var(--k-primary) 8%, var(--surface))" : "var(--surface)",
-                minHeight: 90, padding: "6px 8px", cursor: "pointer", position: "relative",
+                minHeight: 90, padding: "6px 8px", cursor: "default", position: "relative",
                 outline: isOver ? `2px solid var(--k-primary)` : "none", transition: "background 0.1s",
               }}
-              onClick={() => onDayClick?.(new Date(year, month, cell.day))}
+              onDoubleClick={() => onDayClick?.(new Date(year, month, cell.day, 12, 0))}
+              onMouseEnter={() => setHoveredDay(cell.day)}
+              onMouseLeave={() => setHoveredDay(null)}
               onDragOver={e => handleDragOver(e, cell.day)}
               onDragLeave={handleDragLeave}
               onDrop={e => handleDrop(e, cell.day)}
             >
-              <div style={{ fontSize: 11, fontWeight: isToday ? 700 : 500, color: isToday ? "var(--k-primary)" : "var(--ink-3)", marginBottom: 4 }}>{cell.day}</div>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+                <div style={{ fontSize: 11, fontWeight: isToday ? 700 : 500, color: isToday ? "var(--k-primary)" : "var(--ink-3)" }}>{cell.day}</div>
+                {hoveredDay === cell.day && onDayClick && (
+                  <span style={{ fontSize: 15, lineHeight: 1, color: "var(--k-primary)", opacity: 0.65, pointerEvents: "none" }} title="Double-click to add a task">+</span>
+                )}
+              </div>
               {visible.map(task => (
                 <div key={task.task_id} draggable style={pill(task.priority)}
                   onDragStart={e => { e.stopPropagation(); handleDragStart(e, task.task_id); }}
                   onClick={e => { e.stopPropagation(); setDrawer(task.task_id); }}
+                  onDoubleClick={e => e.stopPropagation()}
                   title={`${task.title} — drag to reschedule`}
                 >
                   <span style={{ width: 6, height: 6, borderRadius: "50%", background: PCOLOR[task.priority] || "#94a3b8", flexShrink: 0 }} />
@@ -130,7 +139,7 @@ export default function CalendarView({ tasks, teamMembers, onDayClick, onTasksCh
             <span style={{ width: 8, height: 8, borderRadius: "50%", background: c }} />{p}
           </span>
         ))}
-        <span style={{ opacity: 0.5 }}>Drag a task to reschedule</span>
+        <span style={{ opacity: 0.5 }}>Drag to reschedule · Double-click a date to create task</span>
       </div>
 
       <TaskDrawer taskId={drawer} open={!!drawer} onClose={() => setDrawer(null)}
