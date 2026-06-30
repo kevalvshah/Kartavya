@@ -306,7 +306,7 @@ export default function BoardsPage() {
               onTasksChange={handleTasksChange}
               onDayClick={date => {
                 const p = n => String(n).padStart(2, '0');
-                setNewTaskEditor({ open: true, columnId: null, dueAt: `${date.getFullYear()}-${p(date.getMonth()+1)}-${p(date.getDate())}T12:00` });
+                setNewTaskEditor({ open: true, columnId: null, dueAt: `${date.getFullYear()}-${p(date.getMonth()+1)}-${p(date.getDate())}T${p(date.getHours())}:${p(date.getMinutes())}` });
               }}
             />
           )}
