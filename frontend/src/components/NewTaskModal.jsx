@@ -32,7 +32,7 @@ const PRIORITY_DOTS = {
 
 
 
-export default function NewTaskModal({ open, onClose, onCreated }) {
+export default function NewTaskModal({ open, onClose, onCreated, defaultProjectId = '', defaultDueAt = '', defaultColumnId = null }) {
 
   const isClient = currentUser()?.role === 'client';
 
@@ -87,9 +87,10 @@ export default function NewTaskModal({ open, onClose, onCreated }) {
 
     if (!open) return;
 
-    setTitle(''); setProjectId(''); setStatus('todo'); setPriority('medium');
+    setTitle(''); setProjectId(defaultProjectId || ''); setStatus('todo'); setPriority('medium');
 
-    setDueAt(''); setReminders([]); setDescription(''); setAssignees([]); setFiles([]);
+    const dateOnly = defaultDueAt ? defaultDueAt.split('T')[0] : '';
+    setDueAt(dateOnly); setReminders(dateOnly ? DEFAULT_REMINDERS : []); setDescription(''); setAssignees([]); setFiles([]);
 
     setTitleError(false); setAssigneeOpen(false); setTemplates([]); setSubtasks([]); setShowTemplatePicker(false); setUploadError('');
 
@@ -250,6 +251,8 @@ export default function NewTaskModal({ open, onClose, onCreated }) {
 
       if (projectId)        payload.team_id           = projectId;
 
+      if (defaultColumnId)  payload.column_id         = defaultColumnId;
+
       if (dueAt) {
         // date-only input ("2026-06-20") → treat as 16:00 IST (UTC+5:30)
         payload.due_at = new Date(dueAt + 'T16:00:00+05:30').toISOString();
@@ -266,9 +269,9 @@ export default function NewTaskModal({ open, onClose, onCreated }) {
       if (files.length)     payload.attachments        = files.map(f => ({ name: f.name, url: f.url, key: f.key || null }));
       if (subtasks.length)  payload.subtasks           = subtasks;
 
-      await (isClient ? api.post('/client/tasks/request', payload) : api.post('/tasks', payload));
+      const res = await (isClient ? api.post('/client/tasks/request', payload) : api.post('/tasks', payload));
 
-      onCreated?.();
+      onCreated?.(res.data);
 
       onClose();
 

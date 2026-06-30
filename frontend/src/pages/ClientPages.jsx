@@ -8,7 +8,7 @@ import { relTime } from '../lib/utils';
 import { useToast } from '../components/ui/toast';
 import { PageHeader, StatTile } from '../components/editorial';
 import KanbanView from '../components/views/KanbanView';
-import TaskEditor from '../components/TaskEditor';
+import NewTaskModal from '../components/NewTaskModal';
 import { useRealtimeTasks } from '../hooks/useRealtimeTasks';
 import { useFields } from '../hooks/useFields';
 
@@ -127,18 +127,14 @@ export function ClientProjectsPage() {
         ))}
       </div>
 
-      <TaskEditor
+      <NewTaskModal
         open={newTaskEditor.open}
-        onOpenChange={(v) => { if (!v) setNewTaskEditor({ open: false }); }}
-        editing={null}
-        teams={projects}
-        defaultTeamId={projects[0]?.team_id || ''}
-        lockToProject={false}
-        clientMode
-        onSaved={() => {
+        onClose={() => setNewTaskEditor({ open: false })}
+        onCreated={() => {
           setNewTaskEditor({ open: false });
           api.get('/client/tasks').then(r => setAllTasks(r.data || [])).catch(() => {});
         }}
+        defaultProjectId={projects[0]?.team_id || ''}
       />
     </div>
   );
@@ -232,19 +228,15 @@ export function ClientProjectBoardPage() {
         currentUserRole={me?.role}
       />
 
-      <TaskEditor
+      <NewTaskModal
         open={newTaskEditor.open}
-        onOpenChange={(v) => { if (!v) setNewTaskEditor({ open: false, columnId: null }); }}
-        editing={null}
-        teams={[]}
-        defaultTeamId={projectId}
-        defaultColumnId={newTaskEditor.columnId}
-        lockToProject
-        clientMode
-        onSaved={() => {
+        onClose={() => setNewTaskEditor({ open: false, columnId: null })}
+        onCreated={() => {
           setNewTaskEditor({ open: false, columnId: null });
           load();
         }}
+        defaultProjectId={projectId}
+        defaultColumnId={newTaskEditor.columnId}
       />
     </div>
   );
