@@ -111,7 +111,16 @@ export default function CalendarView({ tasks, teamMembers, onDayClick, onTasksCh
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
                 <div style={{ fontSize: 11, fontWeight: isToday ? 700 : 500, color: isToday ? "var(--k-primary)" : "var(--ink-3)" }}>{cell.day}</div>
                 {hoveredDay === cell.day && onDayClick && (
-                  <span style={{ fontSize: 15, lineHeight: 1, color: "var(--k-primary)", opacity: 0.65, pointerEvents: "none" }} title="Double-click to add a task">+</span>
+                  <button
+                    onClick={e => { e.stopPropagation(); onDayClick(new Date(year, month, cell.day, 12, 0)); }}
+                    title="Add task"
+                    style={{
+                      background: "var(--k-primary)", color: "#fff", border: "none", borderRadius: "50%",
+                      width: 16, height: 16, fontSize: 14, lineHeight: 1, cursor: "pointer",
+                      display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+                      padding: 0, fontFamily: "inherit",
+                    }}
+                  >+</button>
                 )}
               </div>
               {visible.map(task => (
@@ -139,7 +148,7 @@ export default function CalendarView({ tasks, teamMembers, onDayClick, onTasksCh
             <span style={{ width: 8, height: 8, borderRadius: "50%", background: c }} />{p}
           </span>
         ))}
-        <span style={{ opacity: 0.5 }}>Drag to reschedule · Double-click a date to create task</span>
+        <span style={{ opacity: 0.5 }}>Drag to reschedule · Click + or double-click a date to create task</span>
       </div>
 
       <TaskDrawer taskId={drawer} open={!!drawer} onClose={() => setDrawer(null)}
