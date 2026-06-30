@@ -279,7 +279,6 @@ export default function BoardScreen() {
     }
   }, [projects, activeProjectId]);
 
-  const activeColId   = activeCol ?? columns[0]?.column_id ?? null;
   const activeProject = projects.find((p: Project) => p.team_id === activeProjectId);
   const projectId     = activeProjectId ?? '';
   const colColor      = projectColor(projectId, activeProject?.color ?? undefined);
@@ -297,7 +296,8 @@ export default function BoardScreen() {
     enabled:  !!projectId,
   });
 
-  const isLoading = colsLoading || tasksLoading;
+  const isLoading   = colsLoading || tasksLoading;
+  const activeColId = activeCol ?? columns[0]?.column_id ?? null;
 
   const grouped = useMemo(() => {
     const m: Record<string, Task[]> = {};

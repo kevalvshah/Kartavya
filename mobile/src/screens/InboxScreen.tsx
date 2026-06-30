@@ -93,14 +93,14 @@ export default function InboxScreen() {
     const chip = FILTER_CHIPS.find(c => c.id === filter);
     if (!chip?.kinds) return notifications;
     // API returns 'type' field (NotifKind)
-    return notifications.filter(n => chip.kinds!.includes(n.type as any));
+    return notifications.filter((n: Notification) => chip.kinds!.includes(n.type as any));
   }, [notifications, filter]);
 
   // Group by day
   type Group = { dayLabel: string; dayHi: string; dayKey: string; items: Notification[] };
   const groups = useMemo((): Group[] => {
     const map = new Map<string, Group>();
-    filtered.forEach(n => {
+    filtered.forEach((n: Notification) => {
       const key = format(new Date(n.created_at), 'yyyy-MM-dd');
       if (!map.has(key)) {
         const dl = dayLabel(n.created_at);
@@ -111,7 +111,7 @@ export default function InboxScreen() {
     return Array.from(map.values());
   }, [filtered]);
 
-  const unreadCount = notifications.filter(n => !n.read_at).length;
+  const unreadCount = notifications.filter((n: Notification) => !n.read_at).length;
 
   return (
     <View style={[s.root, { backgroundColor: t.bg }]}>
