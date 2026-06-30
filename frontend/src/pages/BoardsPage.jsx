@@ -20,7 +20,7 @@ import { PageHeader, AvatarStack } from '../components/editorial';
 import { useToast } from '../components/ui/toast';
 import { AVATAR_COLORS } from '../lib/utils';
 import AutomationsPage from './AutomationsPage';
-import TaskEditor from '../components/TaskEditor';
+import NewTaskModal from '../components/NewTaskModal';
 
 const VIEWS = [
   { id: 'kanban',   label: 'Board',
@@ -342,19 +342,16 @@ export default function BoardsPage() {
         </Suspense>
       )}
 
-      <TaskEditor
+      <NewTaskModal
         open={newTaskEditor.open}
-        onOpenChange={v => { if (!v) setNewTaskEditor({ open: false, columnId: null, dueAt: '' }); }}
-        editing={null}
-        teams={[]}
-        defaultTeamId={activeId}
-        defaultColumnId={newTaskEditor.columnId}
-        defaultDueAt={newTaskEditor.dueAt}
-        lockToProject
-        onSaved={task => {
-          setTasks(prev => [task, ...prev]);
+        onClose={() => setNewTaskEditor({ open: false, columnId: null, dueAt: '' })}
+        onCreated={task => {
+          if (task) setTasks(prev => [task, ...prev]);
           setNewTaskEditor({ open: false, columnId: null, dueAt: '' });
         }}
+        defaultProjectId={activeId}
+        defaultColumnId={newTaskEditor.columnId}
+        defaultDueAt={newTaskEditor.dueAt}
       />
     </div>
   );

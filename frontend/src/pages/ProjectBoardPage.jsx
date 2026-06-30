@@ -64,7 +64,7 @@ import PriorityView  from '../components/views/PriorityView';
 
 import MyTasksView   from '../components/views/MyTasksView';
 
-import TaskEditor    from '../components/TaskEditor';
+import NewTaskModal from '../components/NewTaskModal';
 
 import { AVATAR_COLORS, logger } from '../lib/utils';
 
@@ -727,34 +727,16 @@ export default function ProjectBoardPage() {
 
       {/* ── Task editor (new task from column button) ─────────────── */}
 
-      <TaskEditor
-
+      <NewTaskModal
         open={newTaskEditor.open}
-
-        onOpenChange={(v) => { if (!v) setNewTaskEditor({ open: false, columnId: null, dueAt: '' }); }}
-
-        editing={null}
-
-        teams={[]}
-
-        defaultTeamId={projectId}
-
-        defaultColumnId={newTaskEditor.columnId}
-
-        defaultDueAt={newTaskEditor.dueAt}
-
-        lockToProject
-
-        clientMode={me?.role === 'client'}
-
-        onSaved={(task) => {
-
-          setTasks((prev) => [task, ...prev]);
-
+        onClose={() => setNewTaskEditor({ open: false, columnId: null, dueAt: '' })}
+        onCreated={task => {
+          if (task) setTasks(prev => [task, ...prev]);
           setNewTaskEditor({ open: false, columnId: null, dueAt: '' });
-
         }}
-
+        defaultProjectId={projectId}
+        defaultColumnId={newTaskEditor.columnId}
+        defaultDueAt={newTaskEditor.dueAt}
       />
 
     </div>
