@@ -95,10 +95,11 @@ export function useOfflineMutation<TVariables, TData = unknown, TSnapshot = unkn
   const qc = useQueryClient();
   const isQueuedRef = useRef(false);
 
-  const mutation = useMutation<TData, Error, TVariables, TSnapshot>({
+  const mutation = useMutation<TData, Error, TVariables, TSnapshot | undefined>({
     mutationFn: opts.mutationFn,
-    onMutate: async (vars) => {
-      // Cancel any in-flight refetches so they don't overwrite our optimistic update
+    // Cast callbacks as `any` — TQ v5.51's MutationFunctionContext context type
+    // doesn't align with older generic signatures under TS 5.3.3 strict mode.
+    onMutate: (async (vars: TVariables) => {
       if (opts.snapshotKey) {
         const key = opts.snapshotKey(vars);
         await qc.cancelQueries({ queryKey: key });
@@ -107,18 +108,18 @@ export function useOfflineMutation<TVariables, TData = unknown, TSnapshot = unkn
         return snapshot;
       }
       opts.optimisticUpdate?.(vars, qc);
-      return undefined as unknown as TSnapshot;
-    },
-    onError: (err, vars, snapshot) => {
+      return undefined;
+    }) as any,
+    onError: ((err: Error, vars: TVariables, snapshot: TSnapshot | undefined) => {
       opts.rollback?.(vars, snapshot, qc);
-      opts.onlineOptions?.onError?.(err, vars, snapshot);
-    },
-    onSuccess: (data, vars, ctx) => {
-      opts.onlineOptions?.onSuccess?.(data, vars, ctx);
-    },
-    onSettled: (data, err, vars, ctx) => {
-      opts.onlineOptions?.onSettled?.(data, err as Error | null, vars, ctx);
-    },
+      (opts.onlineOptions?.onError as any)?.(err, vars, snapshot);
+    }) as any,
+    onSuccess: ((data: TData, vars: TVariables, ctx: TSnapshot | undefined) => {
+      (opts.onlineOptions?.onSuccess as any)?.(data, vars, ctx);
+    }) as any,
+    onSettled: ((data: TData | undefined, err: Error | null, vars: TVariables, ctx: TSnapshot | undefined) => {
+      (opts.onlineOptions?.onSettled as any)?.(data, err, vars, ctx);
+    }) as any,
     ...opts.onlineOptions,
   });
 
