@@ -13,7 +13,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { api } from '../../lib/api';
 import { NotificationsModal } from '../NotificationsModal';
-import NewTaskModal from '../NewTaskModal';
+import TaskEditor from '../TaskEditor';
 import Sidebar from './Sidebar';
 import Topbar  from './Topbar';
 import { NotifToastContainer, NotifPermissionPrompt } from './NotifToast';
@@ -206,7 +206,7 @@ export default function AppShell() {
       </div>
 
       <NotificationsModal open={notifOpen} onOpenChange={setNotifOpen} />
-      <NewTaskModal open={newTaskOpen} onClose={() => setNewTaskOpen(false)} onCreated={() => setNewTaskOpen(false)} />
+      <TaskEditor open={newTaskOpen} onOpenChange={setNewTaskOpen} teams={teams} defaultTeamId={teamId ?? undefined} onSaved={() => setNewTaskOpen(false)} />
 
       {/* Corner notification permission prompt */}
       {notifPrompt && (
