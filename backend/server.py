@@ -1162,7 +1162,34 @@ async def is_project_member(pool, team_id: str, user: dict) -> dict | None:
     # that is the access `get_visible_team_ids` already grants them, and before
     # this change the two disagreed about it.
     org_row = await pool.fetchrow("SELECT org_id FROM teams WHERE team_id=$1", team_id)
-    org_id = org_row["org_id"] if org_row else None
+
+    # ⚠ A TEAM THAT DOES NOT EXIST IS NOT ADMINISTRABLE, AND THIS USED TO SAY
+    # IT WAS. `org_row is None` and `org_row["org_id"] is None` both collapsed
+    # into `org_id = None`, which then reached `is_org_admin(user, None)` — the
+    # UNSCOPED call, whose own docstring says it "preserves the previous global
+    # behaviour". So any org admin got `{"role": "admin"}` for ANY string in the
+    # path, including one naming no team at all.
+    #
+    # The frontend sent `undefined` (the JS value, stringified into the URL) and
+    # `GET /api/projects/undefined/columns` therefore passed the membership gate
+    # and reached `ensure_default_columns`, which INSERTs with
+    # `(SELECT org_id FROM teams WHERE team_id=$2)` — NULL for a team that is
+    # not there — and died on `CHECK (org_id IS NOT NULL)`. Sentry
+    # PYTHON-FASTAPI-1H, 8 events.
+    #
+    # ⚠ THE 500 IS THE SMALL HALF. Ten routes are gated on this helper and five
+    # test `mem["role"] in ("owner","admin")`; every one of them was answering
+    # "yes, you administer it" about a project that does not exist.
+    #
+    # THE NULL-ORG FALL-THROUGH BELOW IS DELIBERATELY LEFT ALONE. The docstring
+    # above defends it for teams that exist with no org, and
+    # `get_visible_team_ids` relies on the same shape. (Measured 2026-09-05:
+    # 41 teams, ZERO with a null org — so that branch is unreachable today and
+    # the docstring's "2 of the 29 live teams" is stale. Narrowing it is a
+    # separate decision from fixing a missing row, and is not made here.)
+    if org_row is None:
+        return None
+    org_id = org_row["org_id"]
     if await is_org_admin(user["user_id"], str(org_id) if org_id else None):
         # "admin" is the label `get_team` already synthesises for org-level
         # access, so the frontend's `your_role` handling needs no new branch.
