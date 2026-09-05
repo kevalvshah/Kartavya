@@ -2167,15 +2167,22 @@ def _subtasks_of(task) -> list:
 
     Two reasons, both measured, so removing it would be wrong:
 
-      · **54 of 485 live `tasks` rows hold `subtasks` as a jsonb STRING, not an
-        array** (2026-08-27, `jsonb_typeof`: 431 array, 54 string). Every one of
-        the 54 is the text `'[]'` — double-encoded rows left over from before
-        the encoder fix `db.py::_json_encoder` describes, dumped once by a
-        caller and once more by the codec. The codec decodes those to a Python
-        `str`. They are also why `jsonb_array_length(subtasks)` cannot be run
-        over this table without a `CASE` guard, and they will not repair
-        themselves: **only a data migration can, and that is a WRITE against the
-        shared production database**, so it is recorded here rather than done.
+      · ✅ **REPAIRED 2026-09-05 by migration 270** — but the branch stays, and
+        the reason is the next bullet, not this one.
+
+        It read: "54 of 485 live `tasks` rows hold `subtasks` as a jsonb STRING,
+        not an array (2026-08-27, `jsonb_typeof`: 431 array, 54 string). Every
+        one of the 54 is the text `'[]'` — double-encoded rows left over from
+        before the encoder fix `db.py::_json_encoder` describes, dumped once by
+        a caller and once more by the codec … only a data migration can repair
+        them, and that is a WRITE against the shared production database, so it
+        is recorded here rather than done."
+
+        It was still exactly 54 when re-measured on 2026-09-05, all of them the
+        empty `'"[]"'`. The column is now one shape: **434 rows, 434 array,
+        0 string**. `jsonb_array_length(subtasks)` runs over the whole table
+        without a `CASE` guard — 53 subtasks across 13 tasks, 5 on the busiest —
+        which it could not do before.
       · `_init_conn` WARNS rather than raises when PgBouncer kills the codec
         handshake three times, and hands the connection out anyway. A connection
         with no codec returns every jsonb column as text.
