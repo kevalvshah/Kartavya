@@ -7,7 +7,7 @@ import logging
 import os
 import re
 import secrets
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 from urllib.parse import urlencode
 from uuid import UUID
@@ -1779,6 +1779,35 @@ async def list_publish_queue(
 
 # ── Content Calendar ────────────────────────────────────────
 
+def _month_window(month: Optional[str]) -> tuple[date, date]:
+    """The first of `month` and the first of the next, as real `date` objects.
+
+    Half-open [start, end) so the caller's `>= $2 AND < $3` needs no knowledge
+    of month lengths or leap years.
+
+    `date(int(y), int(m), 1)` does the validating: it raises ValueError for a
+    non-numeric part, for month 0 or 13, and for a year outside 1..9999 — so
+    "2026-13" is refused here rather than becoming the string "2026-14-01" and
+    failing later as something harder to read.
+    """
+    if month:
+        try:
+            year_s, month_s = month.split("-")
+            start = date(int(year_s), int(month_s), 1)
+        except (ValueError, TypeError) as exc:
+            raise HTTPException(
+                400,
+                f"'{month}' is not a month this can read. Use YYYY-MM, "
+                f"for example 2026-09.",
+            ) from exc
+    else:
+        start = date.today().replace(day=1)
+
+    end = (date(start.year + 1, 1, 1) if start.month == 12
+           else date(start.year, start.month + 1, 1))
+    return start, end
+
+
 @router.get("/clients/{client_id}/calendar")
 async def content_calendar(
     client_id: UUID,
@@ -1792,18 +1821,25 @@ async def content_calendar(
     cid = str(client_id)
     await _require_client_in_org(pool, cid, org_id)
 
-    if month:
-        year, mo = month.split("-")
-        start = f"{year}-{mo}-01"
-        end = f"{year}-{int(mo)+1:02d}-01" if int(mo) < 12 else f"{int(year)+1}-01-01"
-    else:
-        from datetime import date
-        today = date.today()
-        start = today.replace(day=1).isoformat()
-        if today.month < 12:
-            end = today.replace(month=today.month + 1, day=1).isoformat()
-        else:
-            end = today.replace(year=today.year + 1, month=1, day=1).isoformat()
+    # ⚠ REAL `date` OBJECTS, NOT ISO STRINGS. `$2::date` and `$3::date` below
+    # make asyncpg infer DATE parameters, so binding a `str` is refused by the
+    # date codec with "'str' object has no attribute 'toordinal'" and the
+    # endpoint 500s. **THE CONTENT CALENDAR HAS NEVER ONCE RENDERED** — 36
+    # events on this one issue between 2026-08-29 and 09-01, every call, and
+    # the cast reads as if it were doing the conversion when it is doing the
+    # opposite: it is what tells asyncpg to demand a date.
+    #
+    # THE SAME FAULT, IN THE SAME FAMILY, IS DOCUMENTED IN THREE OTHER PLACES:
+    # `pahchan_attendance.request_regularisation` ("requesting a correction has
+    # never once worked"), the bank statement import (2b864aa8) and the sales
+    # target (eae0b912). Each was fixed the same way — parse at the top of the
+    # handler — and this is the fourth.
+    #
+    # A malformed `?month=` is a 400 THAT QUOTES IT, not a 500. The old code
+    # would also raise bare ValueErrors from `month.split("-")` on "2026" and
+    # from `int(mo)` on "2026-ab", and build the impossible "2026-14-01" for
+    # "2026-13" — three more 500s from a query string a stranger can edit.
+    start, end = _month_window(month)
 
     items = await pool.fetch(
         "SELECT q.id, q.scheduled_for, q.status, q.published_at, "
